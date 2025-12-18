@@ -1,0 +1,134 @@
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+const User = require('../models/User');
+
+const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret';
+const JWT_EXPIRES_IN = '8h';
+
+exports.registerAdmin = async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
+    const existing = await User.findOne({ email });
+    if (existing) {
+      return res.status(400).json({ message: 'Email already registered' });
+    }
+    const passwordHash = await bcrypt.hash(password, 10);
+    const user = await User.create({ name, email, passwordHash, role: 'admin' });
+    res.status(201).json({ id: user._id, email: user.email });
+  } catch (err) {
+    console.error('registerAdmin error', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+exports.registerUser = async (req, res) => {
+  try {
+    const { name, email, password, role = 'user', departmentId } = req.body;
+    const existing = await User.findOne({ email });
+    if (existing) {
+      return res.status(400).json({ message: 'Email already registered' });
+    }
+    const passwordHash = await bcrypt.hash(password, 10);
+    const user = await User.create({
+      name,
+      email,
+      passwordHash,
+      role,
+      department: role === 'user' ? departmentId : undefined,
+    });
+    const populated = await User.findById(user._id).populate('department');
+    res.status(201).json({
+      id: user._id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      department: populated.department,
+    });
+  } catch (err) {
+    console.error('registerUser error', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+exports.login = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    const user = await User.findOne({ email, isActive: true }).populate('department');
+    if (!user) {
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
+    const match = await bcrypt.compare(password, user.passwordHash);
+    if (!match) {
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
+
+    const token = jwt.sign(
+      { sub: user._id, role: user.role, email: user.email },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN }
+    );
+
+    res.json({
+      token,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        department: user.department
+          ? { id: user.department._id, name: user.department.name, code: user.department.code }
+          : null,
+      },
+    });
+  } catch (err) {
+    console.error('login error', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+exports.listUsers = async (req, res) => {
+  try {
+    const users = await User.find()
+      .select('-passwordHash')
+      .populate('department', 'name code')
+      .sort({ createdAt: -1 });
+    res.json(users);
+  } catch (err) {
+    console.error('listUsers error', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+exports.updateUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, email, role, isActive, departmentId } = req.body;
+    const update = { name, email, role, isActive };
+    if (role === 'user' && departmentId) {
+      update.department = departmentId;
+    } else if (role === 'admin') {
+      update.department = undefined;
+    }
+    const user = await User.findByIdAndUpdate(id, update, { new: true })
+      .select('-passwordHash')
+      .populate('department', 'name code');
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    res.json(user);
+  } catch (err) {
+    console.error('updateUser error', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+exports.deleteUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+    await User.findByIdAndDelete(id);
+    res.status(204).send();
+  } catch (err) {
+    console.error('deleteUser error', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+
