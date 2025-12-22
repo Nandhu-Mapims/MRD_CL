@@ -82,9 +82,10 @@ exports.submitAudit = async (req, res) => {
 // User: fetch previous submissions for a department (or all)
 exports.getSubmissions = async (req, res) => {
   try {
-    const { departmentId } = req.query;
+    const { departmentId, uhid } = req.query;
     const filter = {};
     if (departmentId) filter.department = departmentId;
+    if (uhid) filter.uhid = uhid.trim().toUpperCase();
 
     const submissions = await AuditSubmission.find(filter)
       .populate('department')
@@ -309,6 +310,286 @@ exports.getSubmissionsByUHID = async (req, res) => {
     res.status(500).json({ 
       message: err.message || 'Server error while fetching patient report. Please try again.' 
     });
+  }
+};
+
+// Get recent submissions grouped by UHID for a department (for edit selection)
+exports.getRecentSubmissions = async (req, res) => {
+  try {
+    const { departmentId, limit = 20 } = req.query;
+    
+    if (!departmentId) {
+      return res.status(400).json({ message: 'Department ID is required' });
+    }
+
+    const userId = req.user.sub;
+    const user = await require('../models/User').findById(userId);
+
+    // Build filter - users can only see their own, admins can see all
+    const filter = { department: departmentId };
+    if (user.role !== 'admin') {
+      filter.submittedBy = userId;
+    }
+
+    // Get unique UHIDs with their latest submission time
+    const uniqueSubmissions = await AuditSubmission.aggregate([
+      { $match: filter },
+      {
+        $group: {
+          _id: {
+            uhid: '$uhid',
+            submittedAt: '$submittedAt',
+          },
+          patientName: { $first: '$patientName' },
+          submittedBy: { $first: '$submittedBy' },
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { '_id.submittedAt': -1 } },
+      { $limit: parseInt(limit) },
+    ]);
+
+    // Get full submission details for each unique UHID
+    const result = await Promise.all(
+      uniqueSubmissions.map(async (item) => {
+        const submissions = await AuditSubmission.find({
+          uhid: item._id.uhid,
+          department: departmentId,
+          submittedAt: item._id.submittedAt,
+        })
+          .populate('submittedBy', 'name email')
+          .limit(1);
+
+        return {
+          uhid: item._id.uhid,
+          patientName: item.patientName,
+          submittedAt: item._id.submittedAt,
+          submittedBy: submissions[0]?.submittedBy || null,
+          itemCount: item.count,
+        };
+      })
+    );
+
+    res.json(result);
+  } catch (err) {
+    console.error('getRecentSubmissions error', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Get submissions for editing (by UHID and department)
+exports.getSubmissionsForEdit = async (req, res) => {
+  try {
+    const { uhid, departmentId } = req.query;
+    
+    if (!uhid || !uhid.trim()) {
+      return res.status(400).json({ message: 'UHID is required' });
+    }
+    if (!departmentId) {
+      return res.status(400).json({ message: 'Department ID is required' });
+    }
+
+    const userId = req.user.sub;
+    const user = await require('../models/User').findById(userId);
+    const normalizedUHID = uhid.trim().toUpperCase();
+
+    // Get all submissions for this UHID and department, sorted by submission time
+    const allSubmissions = await AuditSubmission.find({
+      uhid: normalizedUHID,
+      department: departmentId,
+    })
+      .populate('submittedBy', 'name email')
+      .populate('patient', 'uhid patientName')
+      .sort({ submittedAt: -1 });
+
+    if (!allSubmissions || allSubmissions.length === 0) {
+      return res.status(404).json({ message: 'No submissions found for this UHID and department' });
+    }
+
+    // Get the most recent submission set (in case there are multiple submissions at the same time)
+    const latestSubmissionTime = allSubmissions[0].submittedAt;
+    const latestSubmissions = allSubmissions.filter(
+      sub => sub.submittedAt.getTime() === latestSubmissionTime.getTime()
+    );
+
+    // Check if user can edit (must be admin or original submitter)
+    const originalSubmitter = latestSubmissions[0].submittedBy?._id?.toString();
+    const isAdmin = user.role === 'admin';
+    const isOriginalSubmitter = originalSubmitter === userId;
+
+    if (!isAdmin && !isOriginalSubmitter) {
+      return res.status(403).json({ 
+        message: 'You can only edit your own submissions. Only admins can edit submissions from other users.' 
+      });
+    }
+
+    // Populate checklist items for the latest submissions
+    const latestSubmissionsWithItems = await AuditSubmission.find({
+      _id: { $in: latestSubmissions.map(s => s._id) }
+    })
+      .populate('checklistItemId', 'label section responseType order')
+      .sort({ 'checklistItemId.order': 1 });
+
+    // Format for frontend
+    const patient = latestSubmissions[0].patient;
+    const items = latestSubmissionsWithItems.map(sub => ({
+      checklistItemId: sub.checklistItemId._id?.toString() || sub.checklistItemId.toString(),
+      yesNoNa: sub.yesNoNa || sub.responseValue || '',
+      responseValue: sub.responseValue || sub.yesNoNa || '',
+      remarks: sub.remarks || '',
+      responsibility: sub.responsibility || '',
+      status: sub.status || 'OPEN',
+    }));
+
+    res.json({
+      uhid: patient.uhid,
+      patientName: patient.patientName,
+      departmentId,
+      submittedAt: latestSubmissionTime,
+      submittedBy: latestSubmissions[0].submittedBy,
+      items,
+    });
+  } catch (err) {
+    console.error('getSubmissionsForEdit error', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Update audit submissions (edit existing form)
+exports.updateAudit = async (req, res) => {
+  try {
+    const { departmentId, formTemplateId, uhid, patientName, items } = req.body;
+    // items: [{ checklistItemId, yesNoNa, remarks, responsibility, status }]
+
+    // Validate mandatory fields
+    if (!uhid || !uhid.trim()) {
+      return res.status(400).json({ message: 'UHID is required' });
+    }
+    if (!patientName || !patientName.trim()) {
+      return res.status(400).json({ message: 'Patient Name is required' });
+    }
+    if (!departmentId) {
+      return res.status(400).json({ message: 'Department ID is required' });
+    }
+
+    const userId = req.user.sub;
+    const user = await require('../models/User').findById(userId);
+
+    // Verify user can only update for their assigned department (unless admin)
+    if (user.role === 'user' && user.department && user.department.toString() !== departmentId) {
+      return res.status(403).json({ message: 'You can only update audits for your assigned department' });
+    }
+
+    // Normalize UHID (uppercase, trimmed)
+    const normalizedUHID = uhid.trim().toUpperCase();
+    const normalizedPatientName = patientName.trim();
+
+    // Find existing submissions for this UHID and department
+    const existingSubmissions = await AuditSubmission.find({
+      uhid: normalizedUHID,
+      department: departmentId,
+    }).populate('submittedBy');
+
+    if (!existingSubmissions || existingSubmissions.length === 0) {
+      return res.status(404).json({ message: 'No submissions found to update. Please submit a new form instead.' });
+    }
+
+    // Check if user can edit (must be admin or original submitter)
+    const originalSubmitter = existingSubmissions[0].submittedBy?._id?.toString();
+    const isAdmin = user.role === 'admin';
+    const isOriginalSubmitter = originalSubmitter === userId;
+
+    if (!isAdmin && !isOriginalSubmitter) {
+      return res.status(403).json({ 
+        message: 'You can only edit your own submissions. Only admins can edit submissions from other users.' 
+      });
+    }
+
+    // Update patient name if it has changed
+    const patient = await Patient.findOne({ uhid: normalizedUHID });
+    if (patient && patient.patientName !== normalizedPatientName) {
+      patient.patientName = normalizedPatientName;
+      await patient.save();
+    }
+
+    // Get the most recent submission set (in case there are multiple)
+    const latestSubmissionTime = existingSubmissions[0].submittedAt;
+    const latestSubmissions = existingSubmissions.filter(
+      sub => sub.submittedAt.getTime() === latestSubmissionTime.getTime()
+    );
+
+    // Create a map of checklistItemId to submission for quick lookup
+    const submissionMap = new Map();
+    latestSubmissions.forEach(sub => {
+      submissionMap.set(sub.checklistItemId.toString(), sub);
+    });
+
+    // Update or create submissions for each item
+    const updatePromises = items.map(async (it) => {
+      const existingSub = submissionMap.get(it.checklistItemId.toString());
+      
+      if (existingSub) {
+        // Update existing submission
+        existingSub.yesNoNa = it.yesNoNa || undefined;
+        existingSub.responseValue = it.responseValue || it.yesNoNa || '';
+        existingSub.remarks = it.remarks || '';
+        existingSub.responsibility = it.responsibility || '';
+        existingSub.status = it.status || 'OPEN';
+        existingSub.patientName = normalizedPatientName; // Update patient name
+        existingSub.submittedAt = new Date(); // Update timestamp to reflect edit
+        return existingSub.save();
+      } else {
+        // Create new submission if checklist item was added
+        return AuditSubmission.create({
+          department: departmentId,
+          formTemplate: formTemplateId || undefined,
+          patient: patient._id,
+          uhid: normalizedUHID,
+          patientName: normalizedPatientName,
+          checklistItemId: it.checklistItemId,
+          yesNoNa: it.yesNoNa || undefined,
+          responseValue: it.responseValue || it.yesNoNa || '',
+          remarks: it.remarks || '',
+          responsibility: it.responsibility || '',
+          status: it.status || 'OPEN',
+          submittedBy: userId,
+          submittedAt: new Date(),
+        });
+      }
+    });
+
+    // Remove submissions for checklist items that are no longer in the form
+    const currentItemIds = new Set(items.map(it => it.checklistItemId.toString()));
+    const toDelete = latestSubmissions.filter(
+      sub => !currentItemIds.has(sub.checklistItemId.toString())
+    );
+    
+    if (toDelete.length > 0) {
+      await AuditSubmission.deleteMany({
+        _id: { $in: toDelete.map(sub => sub._id) }
+      });
+    }
+
+    // Wait for all updates to complete
+    await Promise.all(updatePromises);
+
+    // Fetch updated submissions
+    const updated = await AuditSubmission.find({
+      uhid: normalizedUHID,
+      department: departmentId,
+    })
+      .populate('patient', 'uhid patientName')
+      .populate('checklistItemId')
+      .populate('submittedBy', 'name email')
+      .sort({ 'checklistItemId.order': 1 });
+
+    res.json({
+      message: 'Audit updated successfully',
+      submissions: updated,
+    });
+  } catch (err) {
+    console.error('updateAudit error', err);
+    res.status(500).json({ message: 'Server error' });
   }
 };
 

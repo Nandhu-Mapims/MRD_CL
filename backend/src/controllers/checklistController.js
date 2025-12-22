@@ -122,17 +122,26 @@ exports.getChecklistForDepartment = async (req, res) => {
     }
 
     // Otherwise, get items assigned to this department OR items from form templates assigned to this department
-    // First, get all form templates assigned to this department (only explicitly assigned, not common)
+    // First, get all form templates assigned to this department (explicitly assigned)
     const formTemplates = await FormTemplate.find({
       isActive: true,
       departments: departmentId, // Only forms explicitly assigned to this department
     });
 
-    const formTemplateIds = formTemplates.map((ft) => ft._id);
+    // Also get common forms (isCommon = true) - these are available to all departments
+    const commonForms = await FormTemplate.find({
+      isActive: true,
+      isCommon: true,
+    });
+
+    // Combine both types of form templates
+    const allFormTemplates = [...formTemplates, ...commonForms];
+    const formTemplateIds = allFormTemplates.map((ft) => ft._id);
 
     // Get items that are:
     // 1. Directly assigned to this department (SINGLE scope)
     // 2. OR belong to a form template assigned to this department
+    // 3. OR belong to a common form template (available to all departments)
     const items = await ChecklistItem.find({
       isActive: true,
       $or: [
@@ -142,9 +151,9 @@ exports.getChecklistForDepartment = async (req, res) => {
     })
       .sort({ section: 1, order: 1, createdAt: 1 })
       .populate('department')
-      .populate('formTemplate', 'name');
+      .populate('formTemplate', 'name isCommon');
 
-    console.log(`[DEBUG] getChecklistForDepartment: departmentId=${departmentId}, forms=${formTemplates.length}, items=${items.length}`);
+    console.log(`[DEBUG] getChecklistForDepartment: departmentId=${departmentId}, assignedForms=${formTemplates.length}, commonForms=${commonForms.length}, items=${items.length}`);
     
     res.json(items);
   } catch (err) {

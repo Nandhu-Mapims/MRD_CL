@@ -1,13 +1,19 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { apiClient } from '../../api/client'
 import jsPDF from 'jspdf'
 import 'jspdf-autotable'
+import { EditAuditModal } from '../../components/EditAuditModal'
 
 export function PatientReport() {
   const [uhid, setUhid] = useState('')
   const [loading, setLoading] = useState(false)
   const [reportData, setReportData] = useState(null)
   const [error, setError] = useState('')
+  const [consultantName, setConsultantName] = useState('')
+  const [ward, setWard] = useState('')
+  const [unitNo, setUnitNo] = useState('')
+  const [editModalOpen, setEditModalOpen] = useState(false)
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState('')
 
   const handleSearch = async (e) => {
     e.preventDefault()
@@ -23,7 +29,6 @@ export function PatientReport() {
     try {
       const data = await apiClient.get(`/audits/uhid/${uhid.trim().toUpperCase()}`)
       setReportData(data)
-      // If patient found but no submissions, show info message
       if (data.message) {
         setError(data.message)
       } else {
@@ -50,292 +55,357 @@ export function PatientReport() {
       format: 'a4',
     })
 
-    // Elegant Header with gradient effect
-    doc.setFillColor(239, 68, 68)
-    doc.rect(0, 0, 210, 25, 'F')
-    
-    // White text on red background
-    doc.setTextColor(255, 255, 255)
-    doc.setFontSize(22)
+    // Header matching template
+    doc.setFontSize(14)
     doc.setFont(undefined, 'bold')
-    doc.text('HOSPITAL AUDIT SYSTEM', 105, 12, { align: 'center' })
+    doc.setTextColor(0, 0, 0)
+    doc.text('MAPIMS - CASECHEET AUDIT CHECKLIST', 105, 15, { align: 'center' })
     
-    doc.setFontSize(11)
+    doc.setFontSize(8)
     doc.setFont(undefined, 'normal')
-    doc.text('Medical Records Department', 105, 18, { align: 'center' })
-    
-    // Decorative line
-    doc.setDrawColor(239, 68, 68)
-    doc.setLineWidth(0.5)
-    doc.line(20, 28, 190, 28)
-    
-    // Patient Information Box - Elegant Design
-    doc.setFillColor(254, 242, 242) // Light red background
-    doc.roundedRect(20, 32, 170, 20, 3, 3, 'F')
-    
-    doc.setFontSize(13)
-    doc.setFont(undefined, 'bold')
-    doc.setTextColor(220, 38, 38)
-    doc.text('PATIENT INFORMATION', 105, 38, { align: 'center' })
-    
-    doc.setFontSize(10)
-    doc.setFont(undefined, 'normal')
-    doc.setTextColor(30, 41, 59)
-    
-    // Patient details in two columns
-    doc.text(`UHID: ${reportData.patient.uhid}`, 25, 44)
-    doc.text(`Patient Name: ${reportData.patient.patientName}`, 25, 48)
-    doc.text(`Total Submissions: ${reportData.totalSubmissions}`, 110, 44)
-    doc.text(`Report Date: ${new Date().toLocaleDateString('en-GB', { 
-      day: '2-digit', 
-      month: 'short', 
-      year: 'numeric' 
-    })}`, 110, 48)
+    doc.text('DOCUMENT ID: CS/OG MAPIMS/01', 20, 22)
+    doc.text('DOCUMENT CATEGORY: CHECKLIST', 20, 26)
+    doc.text('DOCUMENT: 1', 100, 22)
+    doc.text('VERSION:', 100, 26)
+    doc.text('ISSUES DATE:', 150, 22)
 
-    let yPos = 58
+    // Consultant, Ward, Unit fields
+    let yPos = 32
+    doc.setFontSize(9)
+    doc.text('CONSULTANT NAME:', 20, yPos)
+    doc.text(consultantName || '_______________________', 60, yPos)
+    doc.text('WARD:', 130, yPos)
+    doc.text(ward || '___________', 145, yPos)
+    doc.text('UNIT NO:', 170, yPos)
+    doc.text(unitNo || '____', 185, yPos)
+
+    yPos = 40
+
+    // Patient Information
+    doc.setFontSize(10)
+    doc.setFont(undefined, 'bold')
+    doc.text('PATIENT INFORMATION', 20, yPos)
+    yPos += 5
+    doc.setFont(undefined, 'normal')
+    doc.setFontSize(9)
+    doc.text(`UHID: ${reportData.patient.uhid}`, 20, yPos)
+    doc.text(`Patient Name: ${reportData.patient.patientName}`, 100, yPos)
+    yPos += 8
+
+    // Main table header
+    doc.setFontSize(8)
+    doc.setFont(undefined, 'bold')
+    doc.setFillColor(240, 240, 240)
+    doc.rect(20, yPos, 170, 6, 'F')
+    
+    // Table headers
+    doc.text('STANDARD & OBJECTIVE ELEMENTS', 22, yPos + 4)
+    doc.text('Yes', 120, yPos + 4)
+    doc.text('No', 135, yPos + 4)
+    doc.text('COMPLIANCE', 145, yPos + 2)
+    doc.text('Remarks (NA)', 145, yPos + 4.5)
+    doc.text('Responsibility', 165, yPos + 4)
+    doc.text('Status', 180, yPos + 4)
+
+    yPos += 7
 
     // Department-wise checklist
-    reportData.departments.forEach((deptData, deptIndex) => {
-      // Check if we need a new page
-      if (yPos > 250) {
+    reportData.departments.forEach((deptData) => {
+      // Check page break
+      if (yPos > 270) {
         doc.addPage()
-        // Redraw header on new page
-        doc.setFillColor(239, 68, 68)
-        doc.rect(0, 0, 210, 25, 'F')
-        doc.setTextColor(255, 255, 255)
-        doc.setFontSize(22)
-        doc.setFont(undefined, 'bold')
-        doc.text('HOSPITAL AUDIT SYSTEM', 105, 12, { align: 'center' })
-        doc.setFontSize(11)
-        doc.setFont(undefined, 'normal')
-        doc.text('Medical Records Department', 105, 18, { align: 'center' })
-        doc.setDrawColor(239, 68, 68)
-        doc.line(20, 28, 190, 28)
-        yPos = 32
+        yPos = 20
       }
 
-      // Elegant Department Header Box
-      doc.setFillColor(239, 68, 68)
-      doc.roundedRect(20, yPos, 170, 8, 2, 2, 'F')
-      
-      doc.setFontSize(12)
+      // Department header
+      doc.setFontSize(10)
       doc.setFont(undefined, 'bold')
-      doc.setTextColor(255, 255, 255)
-      doc.text(`${deptData.department.name} (${deptData.department.code})`, 25, yPos + 5.5)
-      yPos += 10
+      doc.setTextColor(0, 0, 0)
+      doc.text(`${deptData.department.name} (${deptData.department.code})`, 20, yPos)
+      yPos += 5
 
-      // Sections within department
+      // Sections
       deptData.sections.forEach((section) => {
-        if (yPos > 250) {
+        if (yPos > 270) {
           doc.addPage()
-          // Redraw header on new page
-          doc.setFillColor(239, 68, 68)
-          doc.rect(0, 0, 210, 25, 'F')
-          doc.setTextColor(255, 255, 255)
-          doc.setFontSize(22)
-          doc.setFont(undefined, 'bold')
-          doc.text('HOSPITAL AUDIT SYSTEM', 105, 12, { align: 'center' })
-          doc.setFontSize(11)
-          doc.setFont(undefined, 'normal')
-          doc.text('Medical Records Department', 105, 18, { align: 'center' })
-          doc.setDrawColor(239, 68, 68)
-          doc.line(20, 28, 190, 28)
-          yPos = 32
+          yPos = 20
         }
 
-        // Elegant Section Header
-        doc.setFillColor(254, 242, 242)
-        doc.roundedRect(25, yPos, 165, 6, 2, 2, 'F')
-        
-        doc.setFontSize(10)
+        // Section name
+        doc.setFontSize(9)
         doc.setFont(undefined, 'bold')
-        doc.setTextColor(185, 28, 28)
-        doc.text(section.sectionName, 28, yPos + 4)
-        yPos += 8
+        doc.text(section.sectionName, 22, yPos)
+        yPos += 4
 
-        // Checklist Items Table
-        const tableData = section.items.map((item) => {
-          const responseValue = item.responseValue || item.yesNoNa || 'N/A'
+        // Checklist items
+        section.items.forEach((item, idx) => {
+          if (yPos > 270) {
+            doc.addPage()
+            yPos = 20
+          }
+
+          const label = item.checklistItemId?.label || 'N/A'
+          const responseValue = item.responseValue || item.yesNoNa || ''
+          const isYes = responseValue === 'YES' || responseValue === 'Yes'
+          const isNo = responseValue === 'NO' || responseValue === 'No'
+          const remarks = item.remarks || ''
+          const responsibility = item.responsibility || ''
           const status = item.status || 'OPEN'
-          const remarks = item.remarks || '-'
-          const responsibility = item.responsibility || '-'
-          
-          return [
-            item.checklistItemId?.label || 'N/A',
-            responseValue,
-            status,
-            responsibility,
-            remarks,
-          ]
+
+          // Item label
+          doc.setFontSize(8)
+          doc.setFont(undefined, 'normal')
+          doc.text(`${idx + 1}. ${label}`, 22, yPos)
+
+          // Yes checkbox
+          doc.rect(120, yPos - 3, 3, 3, isYes ? 'F' : 'S')
+          if (isYes) {
+            doc.setFontSize(6)
+            doc.text('✓', 120.5, yPos - 1.5)
+          }
+
+          // No checkbox
+          doc.rect(135, yPos - 3, 3, 3, isNo ? 'F' : 'S')
+          if (isNo) {
+            doc.setFontSize(6)
+            doc.text('✓', 135.5, yPos - 1.5)
+          }
+
+          // Remarks
+          doc.setFontSize(7)
+          const remarksLines = doc.splitTextToSize(remarks || '-', 20)
+          doc.text(remarksLines[0] || '-', 145, yPos)
+
+          // Responsibility
+          doc.text(responsibility || '-', 165, yPos)
+
+          // Status
+          doc.text(status || 'OPEN', 180, yPos)
+
+          yPos += 5
         })
 
-        doc.autoTable({
-          startY: yPos,
-          head: [['Checklist Item', 'Response', 'Status', 'Responsibility', 'Remarks']],
-          body: tableData,
-          theme: 'striped',
-          headStyles: {
-            fillColor: [220, 38, 38],
-            textColor: [255, 255, 255],
-            fontStyle: 'bold',
-            fontSize: 9,
-            halign: 'center',
-            valign: 'middle',
-            cellPadding: 3,
-          },
-          bodyStyles: {
-            fontSize: 8,
-            textColor: [30, 41, 59],
-            cellPadding: 2.5,
-            lineColor: [241, 245, 249],
-            lineWidth: 0.3,
-          },
-          alternateRowStyles: {
-            fillColor: [255, 255, 255],
-          },
-          columnStyles: {
-            0: { 
-              cellWidth: 60,
-              halign: 'left',
-              fontStyle: 'normal',
-            },
-            1: { 
-              cellWidth: 25,
-              halign: 'center',
-              fontStyle: 'bold',
-            },
-            2: { 
-              cellWidth: 25,
-              halign: 'center',
-            },
-            3: { 
-              cellWidth: 30,
-              halign: 'center',
-            },
-            4: { 
-              cellWidth: 50,
-              halign: 'left',
-            },
-          },
-          margin: { left: 25, right: 20, top: 5 },
-          styles: { 
-            overflow: 'linebreak', 
-            cellPadding: 2.5,
-            lineColor: [226, 232, 240],
-            lineWidth: 0.5,
-          },
-          didParseCell: function (data) {
-            // Color code responses
-            if (data.column.index === 1 && data.cell.text) {
-              const response = data.cell.text[0]
-              if (response === 'YES') {
-                data.cell.styles.fillColor = [220, 252, 231]
-                data.cell.styles.textColor = [22, 163, 74]
-              } else if (response === 'NO') {
-                data.cell.styles.fillColor = [254, 226, 226]
-                data.cell.styles.textColor = [220, 38, 38]
-              } else {
-                data.cell.styles.fillColor = [254, 243, 199]
-                data.cell.styles.textColor = [217, 119, 6]
-              }
-            }
-            // Color code status
-            if (data.column.index === 2 && data.cell.text) {
-              const status = data.cell.text[0]
-              if (status === 'CLOSED') {
-                data.cell.styles.fillColor = [220, 252, 231]
-                data.cell.styles.textColor = [22, 163, 74]
-              } else if (status === 'IN_PROGRESS') {
-                data.cell.styles.fillColor = [254, 243, 199]
-                data.cell.styles.textColor = [217, 119, 6]
-              } else {
-                data.cell.styles.fillColor = [254, 226, 226]
-                data.cell.styles.textColor = [220, 38, 38]
-              }
-            }
-          },
-        })
-
-        yPos = doc.lastAutoTable.finalY + 5
+        yPos += 2
       })
 
-      // Add spacing between departments
-      if (deptIndex < reportData.departments.length - 1) {
-        yPos += 5
-      }
+      yPos += 3
     })
 
-    // Elegant Footer on each page
+    // Remarks & Observation section
+    if (yPos > 250) {
+      doc.addPage()
+      yPos = 20
+    }
+
+    doc.setFontSize(10)
+    doc.setFont(undefined, 'bold')
+    doc.text('REMARKS & OBSERVATION', 20, yPos)
+    yPos += 5
+
+    doc.setFontSize(8)
+    doc.setFont(undefined, 'normal')
+    doc.text('S.NO', 20, yPos)
+    doc.text('REMARKS', 50, yPos)
+    
+    // Draw table for remarks
+    for (let i = 0; i < 5; i++) {
+      yPos += 5
+      doc.rect(20, yPos - 4, 170, 4, 'S')
+      doc.text(`${i + 1}`, 22, yPos - 1.5)
+    }
+
+    yPos += 8
+
+    // Name & Signature of Audit Members
+    if (yPos > 250) {
+      doc.addPage()
+      yPos = 20
+    }
+
+    doc.setFontSize(10)
+    doc.setFont(undefined, 'bold')
+    doc.text('NAME & SIGNATURE OF AUDIT MEMBERS', 20, yPos)
+    yPos += 5
+
+    // Table header
+    doc.setFontSize(8)
+    doc.setFont(undefined, 'bold')
+    doc.setFillColor(240, 240, 240)
+    doc.rect(20, yPos, 170, 5, 'F')
+    doc.text('S.NO', 22, yPos + 3)
+    doc.text('NAME', 40, yPos + 3)
+    doc.text('DEPARTMENT', 80, yPos + 3)
+    doc.text('DESIGINATION', 130, yPos + 3)
+    doc.text('SIGNATURE', 165, yPos + 3)
+
+    yPos += 6
+
+    // Signature rows
+    for (let i = 0; i < 4; i++) {
+      doc.rect(20, yPos, 170, 8, 'S')
+      doc.setFont(undefined, 'normal')
+      doc.text(`${i + 1}`, 22, yPos + 4)
+      yPos += 8
+    }
+
+    // Footer
     const pageCount = doc.internal.getNumberOfPages()
     for (let i = 1; i <= pageCount; i++) {
       doc.setPage(i)
-      
-      // Footer line
-      doc.setDrawColor(226, 232, 240)
-      doc.setLineWidth(0.5)
-      doc.line(20, 280, 190, 280)
-      
-      // Footer text
-      doc.setFontSize(8)
-      doc.setTextColor(148, 163, 184)
-      doc.setFont(undefined, 'normal')
+      doc.setFontSize(7)
+      doc.setTextColor(128, 128, 128)
       doc.text(
-        `Page ${i} of ${pageCount}`,
+        `Page ${i} of ${pageCount} | Generated: ${new Date().toLocaleString('en-GB')}`,
         105,
         285,
         { align: 'center' }
       )
-      
-      // Hospital name and date
-      doc.text(
-        `Hospital Audit System - Medical Records Department | Generated: ${new Date().toLocaleString('en-GB')}`,
-        105,
-        290,
-        { align: 'center' }
-      )
     }
 
-    // Save PDF
     doc.save(`Patient_Report_${reportData.patient.uhid}_${Date.now()}.pdf`)
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      {/* Header */}
-      <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 border-l-4 border-red-600">
-        <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-800 mb-2">
-          Patient Report Dashboard
-        </h2>
-        <p className="text-xs sm:text-sm text-slate-600">
-          Enter UHID to view complete checklist report for a patient
-        </p>
-      </div>
+    <>
+      {/* Print Styles */}
+      <style>{`
+        @media print {
+          @page {
+            size: A4;
+            margin: 10mm;
+          }
+          
+          body {
+            margin: 0;
+            padding: 0;
+            background: white;
+          }
+          
+          .no-print {
+            display: none !important;
+          }
+          
+          .print-container {
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            box-shadow: none !important;
+            border: none !important;
+          }
+          
+          .print-page {
+            page-break-after: auto;
+            page-break-inside: avoid;
+          }
+          
+          table {
+            page-break-inside: auto;
+            border-collapse: collapse !important;
+          }
+          
+          tr {
+            page-break-inside: avoid;
+            page-break-after: auto;
+          }
+          
+          thead {
+            display: table-header-group;
+          }
+          
+          tfoot {
+            display: table-footer-group;
+          }
+          
+          .section-header {
+            page-break-after: avoid;
+          }
+          
+          .dept-header {
+            page-break-after: avoid;
+          }
+        }
+      `}</style>
+
+      <div className="space-y-4 sm:space-y-6">
+        {/* Header */}
+        <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 border-l-4 border-red-600 no-print">
+          <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-800 mb-2">
+            Patient Report Dashboard
+          </h2>
+          <p className="text-xs sm:text-sm text-slate-600">
+            Enter UHID to view complete checklist report matching MAPIMS template
+          </p>
+        </div>
 
       {/* Search Form */}
-      <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
-        <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-          <div className="flex-1">
-            <label className="block text-xs sm:text-sm font-medium text-slate-700 mb-2">
-              Enter UHID
-            </label>
-            <input
-              type="text"
-              value={uhid}
-              onChange={(e) => setUhid(e.target.value.toUpperCase())}
-              placeholder="Enter UHID (e.g., UHID12345)"
-              className="w-full border-2 border-slate-300 rounded-lg px-4 py-2.5 sm:py-3 text-sm sm:text-base focus:ring-2 focus:ring-red-500 focus:border-red-500"
-              required
-            />
+      <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 no-print">
+        <form onSubmit={handleSearch} className="space-y-4">
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+            <div className="flex-1">
+              <label className="block text-xs sm:text-sm font-medium text-slate-700 mb-2">
+                Enter UHID
+              </label>
+              <input
+                type="text"
+                value={uhid}
+                onChange={(e) => setUhid(e.target.value.toUpperCase())}
+                placeholder="Enter UHID (e.g., 234567)"
+                className="w-full border-2 border-slate-300 rounded-lg px-4 py-2.5 sm:py-3 text-sm sm:text-base focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                required
+              />
+            </div>
+            <div className="flex items-end">
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full sm:w-auto bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-semibold px-6 sm:px-8 py-2.5 sm:py-3 rounded-lg shadow-lg transition-all disabled:opacity-60 disabled:cursor-not-allowed transform hover:scale-[1.02] text-sm sm:text-base"
+              >
+                {loading ? 'Searching...' : 'Search'}
+              </button>
+            </div>
           </div>
-          <div className="flex items-end">
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full sm:w-auto bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-semibold px-6 sm:px-8 py-2.5 sm:py-3 rounded-lg shadow-lg transition-all disabled:opacity-60 disabled:cursor-not-allowed transform hover:scale-[1.02] text-sm sm:text-base"
-            >
-              {loading ? 'Searching...' : 'Search'}
-            </button>
-          </div>
+
+          {/* Additional Fields */}
+          {reportData && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-slate-200">
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">
+                  Consultant Name
+                </label>
+                <input
+                  type="text"
+                  value={consultantName}
+                  onChange={(e) => setConsultantName(e.target.value)}
+                  placeholder="Enter consultant name"
+                  className="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">
+                  Ward
+                </label>
+                <input
+                  type="text"
+                  value={ward}
+                  onChange={(e) => setWard(e.target.value)}
+                  placeholder="Enter ward"
+                  className="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">
+                  Unit No
+                </label>
+                <input
+                  type="text"
+                  value={unitNo}
+                  onChange={(e) => setUnitNo(e.target.value)}
+                  placeholder="Enter unit number"
+                  className="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                />
+              </div>
+            </div>
+          )}
         </form>
 
         {error && (
@@ -361,11 +431,11 @@ export function PatientReport() {
         )}
       </div>
 
-      {/* Report Display - A4 Printable Format */}
+      {/* Report Display - Matching Template Format */}
       {reportData && reportData.totalSubmissions > 0 && (
         <div className="space-y-4 sm:space-y-6">
           {/* Action Buttons */}
-          <div className="bg-white rounded-lg shadow-md p-4 flex flex-wrap gap-3 justify-end">
+          <div className="bg-white rounded-lg shadow-md p-4 flex flex-wrap gap-3 justify-end no-print">
             <button
               onClick={handleExportPDF}
               className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-semibold px-6 py-2.5 rounded-lg shadow-lg transition-all transform hover:scale-[1.02] text-sm sm:text-base"
@@ -380,11 +450,10 @@ export function PatientReport() {
             </button>
           </div>
 
-          {/* A4 Printable Report */}
-          <div className="bg-white shadow-lg rounded-lg overflow-hidden print:shadow-none print:rounded-none">
-            {/* Printable Content - A4 Size */}
+          {/* A4 Printable Report - Template Format */}
+          <div className="bg-white shadow-lg rounded-lg overflow-hidden print-container">
             <div
-              className="p-6 sm:p-8 md:p-10 print:p-8"
+              className="p-6 sm:p-8 md:p-10 print:p-8 print-page"
               style={{
                 width: '210mm',
                 minHeight: '297mm',
@@ -392,190 +461,275 @@ export function PatientReport() {
                 backgroundColor: 'white',
               }}
             >
-              {/* Elegant Header */}
-              <div className="bg-gradient-to-r from-red-600 to-red-700 text-white rounded-t-lg print:rounded-none p-6 print:p-4 mb-6 print:mb-4 shadow-lg print:shadow-none">
-                <div className="text-center">
-                  <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-2 print:text-3xl drop-shadow-md">
-                    HOSPITAL AUDIT SYSTEM
-                  </h1>
-                  <p className="text-sm sm:text-base text-red-100 print:text-sm">
-                    Medical Records Department
-                  </p>
-                </div>
-                <div className="mt-4 pt-4 border-t border-red-500 border-opacity-30 print:border-t-0 print:pt-0 print:mt-0"></div>
-              </div>
-
-              {/* Elegant Patient Information Box */}
-              <div className="mb-6 print:mb-4 bg-gradient-to-br from-red-50 to-white p-5 print:p-4 rounded-xl print:rounded-lg border-2 border-red-200 shadow-md print:shadow-none">
-                <div className="flex items-center gap-3 mb-4 print:mb-3">
-                  <div className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center print:w-8 print:h-8">
-                    <span className="text-white text-xl print:text-base">👤</span>
+              {/* Header matching template */}
+              <div className="text-center mb-4 print:mb-3 border-b-2 border-slate-800 pb-3 print:pb-2">
+                <h1 className="text-lg sm:text-xl font-bold text-slate-900 mb-1 print:text-lg">
+                  MAPIMS - CASECHEET AUDIT CHECKLIST
+                </h1>
+                <div className="text-xs print:text-[10px] text-slate-700 grid grid-cols-3 gap-2 mt-2">
+                  <div className="text-left">
+                    <div>DOCUMENT ID: CS/OG MAPIMS/01</div>
+                    <div>DOCUMENT CATEGORY: CHECKLIST</div>
                   </div>
-                  <h2 className="text-lg sm:text-xl font-bold text-red-700 print:text-lg">
-                    PATIENT INFORMATION
-                  </h2>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-sm print:text-xs bg-white p-4 print:p-3 rounded-lg print:rounded border border-red-100">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-red-600 min-w-[100px] print:min-w-[80px]">UHID:</span>
-                    <span className="text-slate-800 font-semibold">{reportData.patient.uhid}</span>
+                  <div className="text-center">
+                    <div>DOCUMENT: 1</div>
+                    <div>VERSION:</div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-red-600 min-w-[100px] print:min-w-[80px]">Patient Name:</span>
-                    <span className="text-slate-800 font-semibold">{reportData.patient.patientName}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-red-600 min-w-[100px] print:min-w-[80px]">Total Submissions:</span>
-                    <span className="text-slate-800 font-semibold">{reportData.totalSubmissions}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-red-600 min-w-[100px] print:min-w-[80px]">Report Date:</span>
-                    <span className="text-slate-800 font-semibold">
-                      {new Date().toLocaleDateString('en-GB', {
-                        day: '2-digit',
-                        month: 'short',
-                        year: 'numeric',
-                      })}
-                    </span>
+                  <div className="text-right">
+                    <div>ISSUES DATE:</div>
                   </div>
                 </div>
               </div>
 
-              {/* Department-wise Checklists */}
-              <div className="space-y-6 print:space-y-4">
-                {reportData.departments.map((deptData, deptIndex) => (
-                  <div key={deptIndex} className="break-inside-avoid">
-                    {/* Elegant Department Header */}
-                    <div className="bg-gradient-to-r from-red-600 via-red-700 to-red-800 text-white p-4 print:p-3 rounded-t-lg print:rounded-t mb-0 shadow-lg print:shadow-none">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-white bg-opacity-20 rounded-lg flex items-center justify-center print:w-6 print:h-6">
-                          <span className="text-white text-lg print:text-sm">🏥</span>
-                        </div>
-                        <h3 className="text-base sm:text-lg font-bold print:text-base">
-                          {deptData.department.name} ({deptData.department.code})
-                        </h3>
-                      </div>
-                    </div>
+              {/* Consultant, Ward, Unit fields */}
+              <div className="mb-4 print:mb-3 text-xs print:text-[10px] grid grid-cols-3 gap-4">
+                <div>
+                  <span className="font-semibold">CONSULTANT NAME:</span>{' '}
+                  <span className="border-b border-slate-400 inline-block min-w-[150px]">
+                    {consultantName || '_______________________'}
+                  </span>
+                </div>
+                <div>
+                  <span className="font-semibold">WARD:</span>{' '}
+                  <span className="border-b border-slate-400 inline-block min-w-[80px]">
+                    {ward || '___________'}
+                  </span>
+                </div>
+                <div>
+                  <span className="font-semibold">UNIT NO:</span>{' '}
+                  <span className="border-b border-slate-400 inline-block min-w-[60px]">
+                    {unitNo || '____'}
+                  </span>
+                </div>
+              </div>
 
-                    {/* Sections */}
-                    <div className="border-2 border-red-200 border-t-0 rounded-b-lg print:rounded-b overflow-hidden">
-                      {deptData.sections.map((section, sectionIndex) => (
-                        <div
-                          key={sectionIndex}
-                          className={sectionIndex > 0 ? 'border-t-2 border-red-100' : ''}
-                        >
-                          {/* Elegant Section Header */}
-                          <div className="bg-gradient-to-r from-red-50 to-red-100 px-4 py-3 print:px-3 print:py-2 border-l-4 border-red-600">
-                            <h4 className="text-sm sm:text-base font-bold text-red-700 print:text-sm flex items-center gap-2">
-                              <span className="w-1.5 h-1.5 bg-red-600 rounded-full"></span>
-                              {section.sectionName}
-                            </h4>
-                          </div>
+              {/* Patient Information */}
+              <div className="mb-4 print:mb-3 p-3 print:p-2 bg-slate-50 border border-slate-300 rounded">
+                <div className="text-sm print:text-xs font-semibold mb-2">PATIENT INFORMATION</div>
+                <div className="text-xs print:text-[10px] grid grid-cols-2 gap-2">
+                  <div>
+                    <span className="font-semibold">UHID:</span>{' '}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        // Use first department if available
+                        const firstDept = reportData.departments?.[0]?.department?._id || reportData.departments?.[0]?.department
+                        setSelectedDepartmentId(firstDept)
+                        setEditModalOpen(true)
+                      }}
+                      className="text-blue-600 hover:text-blue-800 hover:underline font-semibold no-print"
+                    >
+                      {reportData.patient.uhid}
+                    </button>
+                    <span className="print:inline no-print:hidden">{reportData.patient.uhid}</span>
+                  </div>
+                  <div><span className="font-semibold">Patient Name:</span> {reportData.patient.patientName}</div>
+                </div>
+              </div>
 
-                          {/* Checklist Items Table */}
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-xs print:text-[10px] border-collapse">
-                              <thead>
-                                <tr className="bg-red-50">
-                                  <th className="border border-slate-300 px-2 py-2 print:px-1 print:py-1 text-left font-semibold text-slate-800">
-                                    Checklist Item
-                                  </th>
-                                  <th className="border border-slate-300 px-2 py-2 print:px-1 print:py-1 text-center font-semibold text-slate-800 w-20 print:w-16">
-                                    Response
-                                  </th>
-                                  <th className="border border-slate-300 px-2 py-2 print:px-1 print:py-1 text-center font-semibold text-slate-800 w-20 print:w-16">
-                                    Status
-                                  </th>
-                                  <th className="border border-slate-300 px-2 py-2 print:px-1 print:py-1 text-center font-semibold text-slate-800 w-24 print:w-20">
-                                    Responsibility
-                                  </th>
-                                  <th className="border border-slate-300 px-2 py-2 print:px-1 print:py-1 text-left font-semibold text-slate-800">
-                                    Remarks
-                                  </th>
+              {/* Main Table Header */}
+              <div className="mb-2 print:mb-1">
+                <table className="w-full text-xs print:text-[9px] border-collapse" style={{ border: '1.5px solid #1e293b' }}>
+                  <thead>
+                    <tr className="bg-slate-200" style={{ backgroundColor: '#e2e8f0' }}>
+                      <th className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-left font-bold align-top" style={{ width: '42%', border: '1.5px solid #1e293b', verticalAlign: 'middle' }}>
+                        STANDARD & OBJECTIVE ELEMENTS
+                      </th>
+                      <th className="border border-slate-800 px-1 py-2.5 print:px-0.5 print:py-2 text-center font-bold" style={{ width: '6%', border: '1.5px solid #1e293b', verticalAlign: 'middle' }}>
+                        Yes
+                      </th>
+                      <th className="border border-slate-800 px-1 py-2.5 print:px-0.5 print:py-2 text-center font-bold" style={{ width: '6%', border: '1.5px solid #1e293b', verticalAlign: 'middle' }}>
+                        No
+                      </th>
+                      <th className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-center font-bold align-top" style={{ width: '20%', border: '1.5px solid #1e293b', verticalAlign: 'middle' }}>
+                        COMPLIANCE<br />Remarks (NA)
+                      </th>
+                      <th className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-center font-bold" style={{ width: '13%', border: '1.5px solid #1e293b', verticalAlign: 'middle' }}>
+                        Responsibility
+                      </th>
+                      <th className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-center font-bold" style={{ width: '13%', border: '1.5px solid #1e293b', verticalAlign: 'middle' }}>
+                        Status
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {/* Department-wise Sections */}
+                    {reportData.departments.map((deptData, deptIndex) => (
+                      <React.Fragment key={deptIndex}>
+                        {/* Department Header Row */}
+                        <tr className="dept-header" style={{ backgroundColor: '#fee2e2', pageBreakAfter: 'avoid' }}>
+                          <td colSpan="6" className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 font-bold text-sm print:text-xs" style={{ border: '1.5px solid #1e293b', fontWeight: 'bold' }}>
+                            {deptData.department.name} ({deptData.department.code})
+                          </td>
+                        </tr>
+
+                        {/* Sections */}
+                        {deptData.sections.map((section, sectionIndex) => (
+                          <React.Fragment key={sectionIndex}>
+                            {/* Section Header Row */}
+                            <tr className="section-header" style={{ backgroundColor: '#f1f5f9', pageBreakAfter: 'avoid' }}>
+                              <td colSpan="6" className="border border-slate-800 px-2 py-2 print:px-1.5 print:py-1.5 font-semibold text-xs print:text-[10px]" style={{ border: '1.5px solid #1e293b', fontWeight: '600' }}>
+                                {section.sectionName}
+                              </td>
+                            </tr>
+
+                            {/* Checklist Items */}
+                            {section.items.map((item, itemIndex) => {
+                              const label = item.checklistItemId?.label || 'N/A'
+                              const responseValue = item.responseValue || item.yesNoNa || ''
+                              const isYes = responseValue === 'YES' || responseValue === 'Yes' || responseValue === 'yes'
+                              const isNo = responseValue === 'NO' || responseValue === 'No' || responseValue === 'no'
+                              const remarks = item.remarks || '-'
+                              const responsibility = item.responsibility || '-'
+                              const status = item.status || 'OPEN'
+
+                              return (
+                                <tr key={itemIndex} style={{ backgroundColor: itemIndex % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
+                                  <td className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-slate-700" style={{ border: '1.5px solid #1e293b', verticalAlign: 'top', lineHeight: '1.4' }}>
+                                    <span style={{ fontWeight: '500' }}>{itemIndex + 1}.</span> {label}
+                                  </td>
+                                  <td className="border border-slate-800 px-1 py-2.5 print:px-0.5 print:py-2 text-center" style={{ border: '1.5px solid #1e293b', verticalAlign: 'middle' }}>
+                                    <div className="w-5 h-5 mx-auto border-2 border-slate-800 flex items-center justify-center print:w-4 print:h-4" style={{ width: '20px', height: '20px', border: '2px solid #1e293b', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto' }}>
+                                      {isYes && <span className="text-xs print:text-[10px]" style={{ fontSize: '12px', fontWeight: 'bold' }}>✓</span>}
+                                    </div>
+                                  </td>
+                                  <td className="border border-slate-800 px-1 py-2.5 print:px-0.5 print:py-2 text-center" style={{ border: '1.5px solid #1e293b', verticalAlign: 'middle' }}>
+                                    <div className="w-5 h-5 mx-auto border-2 border-slate-800 flex items-center justify-center print:w-4 print:h-4" style={{ width: '20px', height: '20px', border: '2px solid #1e293b', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto' }}>
+                                      {isNo && <span className="text-xs print:text-[10px]" style={{ fontSize: '12px', fontWeight: 'bold' }}>✓</span>}
+                                    </div>
+                                  </td>
+                                  <td className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-slate-700 text-[10px] print:text-[9px]" style={{ border: '1.5px solid #1e293b', verticalAlign: 'top', lineHeight: '1.3', wordWrap: 'break-word' }}>
+                                    {remarks}
+                                  </td>
+                                  <td className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-center text-slate-700 text-[10px] print:text-[9px]" style={{ border: '1.5px solid #1e293b', verticalAlign: 'middle', lineHeight: '1.3' }}>
+                                    {responsibility}
+                                  </td>
+                                  <td className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-center text-slate-700 text-[10px] print:text-[9px]" style={{ border: '1.5px solid #1e293b', verticalAlign: 'middle', lineHeight: '1.3' }}>
+                                    {status}
+                                  </td>
                                 </tr>
-                              </thead>
-                              <tbody>
-                                {section.items.map((item, itemIndex) => {
-                                  const responseValue = item.responseValue || item.yesNoNa || 'N/A'
-                                  const status = item.status || 'OPEN'
-                                  const remarks = item.remarks || '-'
-                                  const responsibility = item.responsibility || '-'
-                                  
-                                  return (
-                                    <tr
-                                      key={itemIndex}
-                                      className={itemIndex % 2 === 0 ? 'bg-white' : 'bg-slate-50'}
-                                    >
-                                      <td className="border border-slate-300 px-2 py-2 print:px-1 print:py-1 text-slate-700">
-                                        {item.checklistItemId?.label || 'N/A'}
-                                      </td>
-                                      <td className="border border-slate-300 px-2 py-2 print:px-1 print:py-1 text-center">
-                                        <span
-                                          className={`inline-block px-2 py-0.5 rounded text-[10px] print:text-[9px] font-medium ${
-                                            responseValue === 'YES'
-                                              ? 'bg-green-100 text-green-800'
-                                              : responseValue === 'NO'
-                                              ? 'bg-red-100 text-red-800'
-                                              : 'bg-yellow-100 text-yellow-800'
-                                          }`}
-                                        >
-                                          {responseValue}
-                                        </span>
-                                      </td>
-                                      <td className="border border-slate-300 px-2 py-2 print:px-1 print:py-1 text-center">
-                                        <span
-                                          className={`inline-block px-2 py-0.5 rounded text-[10px] print:text-[9px] font-medium ${
-                                            status === 'CLOSED'
-                                              ? 'bg-green-100 text-green-800'
-                                              : status === 'IN_PROGRESS'
-                                              ? 'bg-yellow-100 text-yellow-800'
-                                              : 'bg-red-100 text-red-800'
-                                          }`}
-                                        >
-                                          {status.replace('_', ' ')}
-                                        </span>
-                                      </td>
-                                      <td className="border border-slate-300 px-2 py-2 print:px-1 print:py-1 text-center text-slate-700">
-                                        {responsibility}
-                                      </td>
-                                      <td className="border border-slate-300 px-2 py-2 print:px-1 print:py-1 text-slate-700">
-                                        {remarks}
-                                      </td>
-                                    </tr>
-                                  )
-                                })}
-                              </tbody>
-                            </table>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
+                              )
+                            })}
+                          </React.Fragment>
+                        ))}
+                      </React.Fragment>
+                    ))}
+                  </tbody>
+                </table>
               </div>
 
-              {/* Elegant Footer */}
-              <div className="mt-8 print:mt-6 pt-6 print:pt-4 border-t-2 border-red-200 text-center">
-                <div className="bg-red-50 p-4 print:p-3 rounded-lg print:rounded border border-red-100">
-                  <p className="text-xs print:text-[10px] text-slate-600 font-medium mb-1">
-                    Generated on {new Date().toLocaleString('en-GB', {
-                      day: '2-digit',
-                      month: 'short',
-                      year: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </p>
-                  <p className="text-xs print:text-[10px] text-red-600 font-semibold">
-                    Hospital Audit System - Medical Records Department
-                  </p>
-                </div>
+              {/* Remarks & Observation Section */}
+              <div className="mt-6 print:mt-4">
+                <div className="text-sm print:text-xs font-bold mb-2" style={{ fontWeight: 'bold', marginBottom: '8px' }}>REMARKS & OBSERVATION</div>
+                <table className="w-full text-xs print:text-[9px] border-collapse" style={{ border: '1.5px solid #1e293b' }}>
+                  <thead>
+                    <tr className="bg-slate-200" style={{ backgroundColor: '#e2e8f0' }}>
+                      <th className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-center font-bold" style={{ width: '10%', border: '1.5px solid #1e293b', verticalAlign: 'middle' }}>
+                        S.NO
+                      </th>
+                      <th className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-left font-bold" style={{ border: '1.5px solid #1e293b', verticalAlign: 'middle' }}>
+                        REMARKS
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[1, 2, 3, 4, 5].map((num) => (
+                      <tr key={num}>
+                        <td className="border border-slate-800 px-2 py-4 print:px-1.5 print:py-3 text-center" style={{ border: '1.5px solid #1e293b', verticalAlign: 'middle', fontWeight: '500' }}>
+                          {num}
+                        </td>
+                        <td className="border border-slate-800 px-2 py-4 print:px-1.5 print:py-3" style={{ border: '1.5px solid #1e293b', verticalAlign: 'top', minHeight: '30px' }}>
+                          &nbsp;
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Name & Signature of Audit Members */}
+              <div className="mt-6 print:mt-4">
+                <div className="text-sm print:text-xs font-bold mb-2" style={{ fontWeight: 'bold', marginBottom: '8px' }}>NAME & SIGNATURE OF AUDIT MEMBERS</div>
+                <table className="w-full text-xs print:text-[9px] border-collapse" style={{ border: '1.5px solid #1e293b' }}>
+                  <thead>
+                    <tr className="bg-slate-200" style={{ backgroundColor: '#e2e8f0' }}>
+                      <th className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-center font-bold" style={{ width: '8%', border: '1.5px solid #1e293b', verticalAlign: 'middle' }}>
+                        S.NO
+                      </th>
+                      <th className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-left font-bold" style={{ width: '25%', border: '1.5px solid #1e293b', verticalAlign: 'middle' }}>
+                        NAME
+                      </th>
+                      <th className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-left font-bold" style={{ width: '30%', border: '1.5px solid #1e293b', verticalAlign: 'middle' }}>
+                        DEPARTMENT
+                      </th>
+                      <th className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-left font-bold" style={{ width: '20%', border: '1.5px solid #1e293b', verticalAlign: 'middle' }}>
+                        DESIGINATION
+                      </th>
+                      <th className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-center font-bold" style={{ width: '17%', border: '1.5px solid #1e293b', verticalAlign: 'middle' }}>
+                        SIGNATURE
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[1, 2, 3, 4].map((num) => (
+                      <tr key={num}>
+                        <td className="border border-slate-800 px-2 py-5 print:px-1.5 print:py-4 text-center" style={{ border: '1.5px solid #1e293b', verticalAlign: 'middle', fontWeight: '500' }}>
+                          {num}
+                        </td>
+                        <td className="border border-slate-800 px-2 py-5 print:px-1.5 print:py-4" style={{ border: '1.5px solid #1e293b', verticalAlign: 'middle', minHeight: '40px' }}>
+                          &nbsp;
+                        </td>
+                        <td className="border border-slate-800 px-2 py-5 print:px-1.5 print:py-4" style={{ border: '1.5px solid #1e293b', verticalAlign: 'middle' }}>
+                          &nbsp;
+                        </td>
+                        <td className="border border-slate-800 px-2 py-5 print:px-1.5 print:py-4" style={{ border: '1.5px solid #1e293b', verticalAlign: 'middle' }}>
+                          &nbsp;
+                        </td>
+                        <td className="border border-slate-800 px-2 py-5 print:px-1.5 print:py-4" style={{ border: '1.5px solid #1e293b', verticalAlign: 'middle' }}>
+                          &nbsp;
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Footer */}
+              <div className="mt-6 print:mt-4 pt-4 print:pt-3 border-t border-slate-300 text-center">
+                <p className="text-xs print:text-[9px] text-slate-600">
+                  Generated on {new Date().toLocaleString('en-GB')} | Hospital Audit System - Medical Records Department
+                </p>
               </div>
             </div>
           </div>
         </div>
       )}
-    </div>
+
+      {/* Edit Modal */}
+      {reportData && (
+        <EditAuditModal
+          isOpen={editModalOpen}
+          onClose={() => {
+            setEditModalOpen(false)
+            setSelectedDepartmentId('')
+          }}
+          uhid={reportData?.patient?.uhid || uhid}
+          departmentId={selectedDepartmentId}
+          onSuccess={async () => {
+            // Reload the report data after successful edit
+            if (uhid.trim()) {
+              try {
+                const data = await apiClient.get(`/audits/uhid/${uhid.trim().toUpperCase()}`)
+                setReportData(data)
+                setError('')
+              } catch (err) {
+                console.error('Error reloading report:', err)
+              }
+            }
+          }}
+        />
+      )}
+      </div>
+    </>
   )
 }
-

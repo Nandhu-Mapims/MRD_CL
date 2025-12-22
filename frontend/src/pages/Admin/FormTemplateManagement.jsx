@@ -166,12 +166,17 @@ export function FormTemplateManagement() {
             </div>
 
             <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
-              <label className="block text-sm font-medium text-slate-700 mb-3">
-                Assign to Departments *
-              </label>
+              <div className="flex items-center justify-between mb-3">
+                <label className="block text-sm font-medium text-slate-700">
+                  Assign to Departments *
+                </label>
+                <span className="text-xs text-slate-500 bg-blue-50 px-2 py-1 rounded">
+                  💡 Multiple forms can be assigned to one department
+                </span>
+              </div>
               <div className="space-y-2">
                 {departments
-                  .filter((d) => d.code !== 'ANAE' && d.code !== 'NUS')
+                  .filter((d) => d.isActive !== false)
                   .map((dept) => (
                     <label
                       key={dept._id}
@@ -205,6 +210,12 @@ export function FormTemplateManagement() {
               {formData.departmentIds.length === 0 && (
                 <p className="text-sm text-red-600 mt-2">
                   ⚠️ Please select at least one department
+                </p>
+              )}
+              {formData.departmentIds.length > 0 && (
+                <p className="text-xs text-slate-600 mt-2">
+                  ✓ {formData.departmentIds.length} department{formData.departmentIds.length !== 1 ? 's' : ''} selected. 
+                  This form will be available to all selected departments.
                 </p>
               )}
             </div>
@@ -274,22 +285,27 @@ export function FormTemplateManagement() {
                       {assignedDepts.length === 0 ? (
                         <span className="text-sm text-red-600 font-medium">⚠️ Not Assigned</span>
                       ) : (
-                        <div className="flex flex-wrap gap-2">
-                          {assignedDepts.map((dept) => (
-                            <span
-                              key={dept._id}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 bg-red-50 border border-red-200 text-red-700 rounded-full text-xs font-medium shadow-sm"
-                            >
-                              {dept.name} ({dept.code})
-                              <button
-                                onClick={() => handleQuickAssign(form._id, dept._id, true)}
-                                className="ml-1 hover:text-red-600 transition-colors"
-                                title="Remove from this department"
+                        <div className="space-y-2">
+                          <div className="flex flex-wrap gap-2">
+                            {assignedDepts.map((dept) => (
+                              <span
+                                key={dept._id}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 bg-red-50 border border-red-200 text-red-700 rounded-full text-xs font-medium shadow-sm"
                               >
-                                ×
-                              </button>
-                            </span>
-                          ))}
+                                {dept.name} ({dept.code})
+                                <button
+                                  onClick={() => handleQuickAssign(form._id, dept._id, true)}
+                                  className="ml-1 hover:text-red-600 transition-colors"
+                                  title="Remove from this department"
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                          <div className="text-[10px] text-slate-500 italic">
+                            {assignedDepts.length} department{assignedDepts.length !== 1 ? 's' : ''} can access this form
+                          </div>
                         </div>
                       )}
                       <div className="mt-2">
@@ -306,8 +322,7 @@ export function FormTemplateManagement() {
                           {departments
                             .filter(
                               (d) =>
-                                d.code !== 'ANAE' &&
-                                d.code !== 'NUS' &&
+                                d.isActive !== false &&
                                 !isDepartmentAssigned(form, d._id)
                             )
                             .map((dept) => (

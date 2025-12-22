@@ -10,6 +10,7 @@ import { UserManagement } from './pages/Admin/UserManagement'
 import { Dashboard } from './pages/Admin/Dashboard'
 import { ExportSubmissions } from './pages/Admin/ExportSubmissions'
 import { PatientReport } from './pages/Admin/PatientReport'
+import { DepartmentLogs } from './pages/Admin/DepartmentLogs'
 import { AuditForm } from './pages/User/AuditForm'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { HomeRedirect } from './components/HomeRedirect'
@@ -74,6 +75,14 @@ function App() {
             element={
               <ProtectedRoute roles={['admin', 'user']}>
                 <PatientReport />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/department-logs"
+            element={
+              <ProtectedRoute roles={['admin', 'user']}>
+                <DepartmentLogs />
               </ProtectedRoute>
             }
           />

@@ -8,6 +8,7 @@ export function SimpleFormBuilder() {
   const [formName, setFormName] = useState('')
   const [formDescription, setFormDescription] = useState('')
   const [selectedDepartments, setSelectedDepartments] = useState([])
+  const [isCommon, setIsCommon] = useState(false)
   const [sections, setSections] = useState([
     { name: '', description: '', order: 1, items: [] },
   ])
@@ -19,12 +20,28 @@ export function SimpleFormBuilder() {
   }, [])
 
   const loadData = async () => {
-    const [deptsData, formsData] = await Promise.all([
-      apiClient.get('/departments'),
-      apiClient.get('/form-templates'),
-    ])
-    setDepartments(deptsData.filter((d) => d.code !== 'ANAE' && d.code !== 'NUS'))
-    setForms(formsData)
+    try {
+      const [deptsData, formsData] = await Promise.all([
+        apiClient.get('/departments'),
+        apiClient.get('/form-templates'),
+      ])
+      // Show all active departments (isActive is true or undefined for new departments)
+      // ANAE and NUS are now included - they can be used for common forms
+      const activeDepts = deptsData.filter(
+        (d) => d.isActive === true || d.isActive === undefined
+      )
+      console.log('Form Builder - Loaded departments:', {
+        total: deptsData.length,
+        active: activeDepts.length,
+        filtered: deptsData.length - activeDepts.length,
+        departments: deptsData.map(d => ({ name: d.name, code: d.code, isActive: d.isActive }))
+      })
+      setDepartments(activeDepts)
+      setForms(formsData)
+    } catch (err) {
+      console.error('Error loading data:', err)
+      alert('Error loading departments and forms. Please refresh the page.')
+    }
   }
 
   const handleAddSection = () => {
@@ -93,6 +110,7 @@ export function SimpleFormBuilder() {
     setSelectedDepartments(
       form.departments?.map((d) => (typeof d === 'object' ? d._id : d)) || []
     )
+    setIsCommon(form.isCommon || false)
 
     const items = await apiClient.get(
       `/checklists/department/${form.departments[0]?._id || ''}?formTemplateId=${formId}`
@@ -185,12 +203,20 @@ export function SimpleFormBuilder() {
 
       let formTemplateId
 
+      // Check if ANAE or NUS is selected - auto-suggest common form
+      const selectedDeptCodes = departments
+        .filter((d) => selectedDepartments.includes(d._id))
+        .map((d) => d.code)
+      const hasANAEorNUS = selectedDeptCodes.includes('ANAE') || selectedDeptCodes.includes('NUS')
+      const shouldBeCommon = isCommon || hasANAEorNUS
+
       if (editingFormId) {
         await apiClient.put(`/form-templates/${editingFormId}`, {
           name: formName,
           description: formDescription,
           departmentIds: selectedDepartments,
           sections: sectionsData,
+          isCommon: shouldBeCommon,
           isActive: true,
         })
         formTemplateId = editingFormId
@@ -207,6 +233,7 @@ export function SimpleFormBuilder() {
           description: formDescription,
           departmentIds: selectedDepartments,
           sections: sectionsData,
+          isCommon: shouldBeCommon,
           isActive: true,
         })
         formTemplateId = newForm._id
@@ -238,6 +265,7 @@ export function SimpleFormBuilder() {
       setFormName('')
       setFormDescription('')
       setSelectedDepartments([])
+      setIsCommon(false)
       setSections([{ name: '', description: '', order: 1, items: [] }])
       setEditingFormId(null)
       setSelectedForm(null)
@@ -254,11 +282,18 @@ export function SimpleFormBuilder() {
     setFormName('')
     setFormDescription('')
     setSelectedDepartments([])
+    setIsCommon(false)
     setSections([{ name: '', description: '', order: 1, items: [] }])
     setEditingFormId(null)
     setSelectedForm(null)
     setActiveSection(0)
   }
+
+  // Auto-detect if ANAE or NUS is selected
+  const selectedDeptCodes = departments
+    .filter((d) => selectedDepartments.includes(d._id))
+    .map((d) => d.code)
+  const hasANAEorNUS = selectedDeptCodes.includes('ANAE') || selectedDeptCodes.includes('NUS')
 
   const totalItems = sections.reduce((sum, sec) => sum + sec.items.length, 0)
 
@@ -335,31 +370,54 @@ export function SimpleFormBuilder() {
 
               {/* Departments */}
               <div className="lg:col-span-2">
-                <label className="block text-[11px] sm:text-xs font-semibold text-slate-700 mb-1 sm:mb-1.5 flex items-center gap-1">
-                  <span className="text-red-600">*</span>
-                  Assign to Departments
-                </label>
-                <select
-                  multiple
-                  value={selectedDepartments}
-                  onChange={(e) => {
-                    const values = Array.from(e.target.selectedOptions, (opt) => opt.value)
-                    setSelectedDepartments(values)
-                  }}
-                  className="w-full border border-slate-300 rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm h-16 sm:h-20 focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-white hover:border-red-300 transition-all"
-                  required
-                >
-                  {departments.map((dept) => (
-                    <option key={dept._id} value={dept._id}>
-                      {dept.name} ({dept.code})
-                    </option>
-                  ))}
-                </select>
+                <div className="flex items-center justify-between mb-1 sm:mb-1.5">
+                  <label className="block text-[11px] sm:text-xs font-semibold text-slate-700 flex items-center gap-1">
+                    <span className="text-red-600">*</span>
+                    Assign to Departments
+                  </label>
+                  <button
+                    type="button"
+                    onClick={loadData}
+                    className="text-[10px] sm:text-xs text-red-600 hover:text-red-700 font-medium underline"
+                    title="Refresh departments list"
+                  >
+                    🔄 Refresh
+                  </button>
+                </div>
+                {departments.length === 0 ? (
+                  <div className="w-full border-2 border-dashed border-red-300 rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm bg-red-50 text-red-700">
+                    No active departments found. Please create departments in Department Management.
+                  </div>
+                ) : (
+                  <select
+                    multiple
+                    value={selectedDepartments}
+                    onChange={(e) => {
+                      const values = Array.from(e.target.selectedOptions, (opt) => opt.value)
+                      setSelectedDepartments(values)
+                    }}
+                    className="w-full border border-slate-300 rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm h-16 sm:h-20 focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-white hover:border-red-300 transition-all"
+                    required
+                  >
+                    {departments.map((dept) => (
+                      <option key={dept._id} value={dept._id}>
+                        {dept.name} ({dept.code})
+                      </option>
+                    ))}
+                  </select>
+                )}
                 <div className="mt-1 sm:mt-1.5 flex flex-wrap items-center gap-1 sm:gap-2">
-                  <span className="text-[10px] sm:text-xs text-slate-500">Hold Ctrl/Cmd to select multiple</span>
+                  <span className="text-[10px] sm:text-xs text-slate-500">
+                    {departments.length > 0 ? 'Hold Ctrl/Cmd to select multiple' : 'Create departments in Department Management page'}
+                  </span>
                   {selectedDepartments.length > 0 && (
                     <span className="text-[10px] sm:text-xs font-semibold text-red-600 bg-red-50 px-1.5 sm:px-2 py-0.5 rounded">
                       {selectedDepartments.length} selected
+                    </span>
+                  )}
+                  {departments.length > 0 && (
+                    <span className="text-[10px] sm:text-xs text-slate-600 font-medium">
+                      {departments.length} department{departments.length !== 1 ? 's' : ''} available
                     </span>
                   )}
                 </div>
@@ -378,6 +436,33 @@ export function SimpleFormBuilder() {
                 rows="2"
                 placeholder="Add a brief description..."
               />
+            </div>
+
+            {/* Common Form Option */}
+            <div className="mt-3 sm:mt-4 p-3 sm:p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <label className="flex items-start gap-2 sm:gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isCommon || hasANAEorNUS}
+                  onChange={(e) => setIsCommon(e.target.checked)}
+                  disabled={hasANAEorNUS}
+                  className="mt-0.5 w-4 h-4 sm:w-5 sm:h-5 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
+                />
+                <div className="flex-1">
+                  <div className="text-xs sm:text-sm font-semibold text-slate-800">
+                    Common Form (Accessible by All Departments)
+                  </div>
+                  <div className="text-[10px] sm:text-xs text-slate-600 mt-1">
+                    {hasANAEorNUS ? (
+                      <span className="text-blue-700 font-medium">
+                        ✓ ANAE/NUS forms are automatically marked as common forms
+                      </span>
+                    ) : (
+                      'Check this to make this form available to all departments (e.g., ANAE, NUS forms)'
+                    )}
+                  </div>
+                </div>
+              </label>
             </div>
           </div>
         </div>

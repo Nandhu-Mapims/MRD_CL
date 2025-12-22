@@ -125,19 +125,54 @@ export function Layout({ children }) {
                     <span className="hidden sm:inline">📋 Patient Report</span>
                     <span className="sm:hidden">📋</span>
                   </Link>
+                  <Link
+                    to="/admin/department-logs"
+                    className={`px-3 py-1.5 sm:px-4 sm:py-2 md:px-5 md:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
+                      isActive('/admin/department-logs')
+                        ? 'bg-red-600 text-white shadow-md'
+                        : 'text-slate-700 hover:bg-red-50 hover:text-red-600'
+                    }`}
+                  >
+                    <span className="hidden sm:inline">📊 Department Logs</span>
+                    <span className="sm:hidden">📊</span>
+                  </Link>
                 </>
               ) : (
-                <Link
-                  to="/"
-                  className={`px-3 py-1.5 sm:px-4 sm:py-2 md:px-5 md:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
-                    isActive('/')
-                      ? 'bg-red-600 text-white shadow-md'
-                      : 'text-slate-700 hover:bg-red-50 hover:text-red-600'
-                  }`}
-                >
-                  <span className="hidden sm:inline">📝 Audit Form</span>
-                  <span className="sm:hidden">📝</span>
-                </Link>
+                <>
+                  <Link
+                    to="/"
+                    className={`px-3 py-1.5 sm:px-4 sm:py-2 md:px-5 md:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
+                      isActive('/')
+                        ? 'bg-red-600 text-white shadow-md'
+                        : 'text-slate-700 hover:bg-red-50 hover:text-red-600'
+                    }`}
+                  >
+                    <span className="hidden sm:inline">📝 Audit Form</span>
+                    <span className="sm:hidden">📝</span>
+                  </Link>
+                  <Link
+                    to="/admin/patient-report"
+                    className={`px-3 py-1.5 sm:px-4 sm:py-2 md:px-5 md:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
+                      isActive('/admin/patient-report')
+                        ? 'bg-red-600 text-white shadow-md'
+                        : 'text-slate-700 hover:bg-red-50 hover:text-red-600'
+                    }`}
+                  >
+                    <span className="hidden sm:inline">📋 Patient Report</span>
+                    <span className="sm:hidden">📋</span>
+                  </Link>
+                  <Link
+                    to="/admin/department-logs"
+                    className={`px-3 py-1.5 sm:px-4 sm:py-2 md:px-5 md:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
+                      isActive('/admin/department-logs')
+                        ? 'bg-red-600 text-white shadow-md'
+                        : 'text-slate-700 hover:bg-red-50 hover:text-red-600'
+                    }`}
+                  >
+                    <span className="hidden sm:inline">📊 Department Logs</span>
+                    <span className="sm:hidden">📊</span>
+                  </Link>
+                </>
               )}
             </nav>
           )}
