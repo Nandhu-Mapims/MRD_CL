@@ -254,8 +254,9 @@ export function FormTemplateManagement() {
         </div>
       )}
 
-      <div className="bg-white rounded-lg shadow-md overflow-hidden">
-        <table className="w-full">
+      {!showForm && (
+        <div className="bg-white rounded-lg shadow-md overflow-hidden">
+          <table className="w-full">
           <thead className="bg-gradient-to-r from-red-700 via-red-600 to-red-500 text-white shadow-md">
             <tr>
               <th className="text-left px-6 py-4 font-semibold">Form Name</th>
@@ -293,13 +294,6 @@ export function FormTemplateManagement() {
                                 className="inline-flex items-center gap-1 px-2.5 py-1 bg-red-50 border border-red-200 text-red-700 rounded-full text-xs font-medium shadow-sm"
                               >
                                 {dept.name} ({dept.code})
-                                <button
-                                  onClick={() => handleQuickAssign(form._id, dept._id, true)}
-                                  className="ml-1 hover:text-red-600 transition-colors"
-                                  title="Remove from this department"
-                                >
-                                  ×
-                                </button>
                               </span>
                             ))}
                           </div>
@@ -308,30 +302,6 @@ export function FormTemplateManagement() {
                           </div>
                         </div>
                       )}
-                      <div className="mt-2">
-                        <select
-                          onChange={(e) => {
-                            if (e.target.value) {
-                              handleQuickAssign(form._id, e.target.value, false)
-                              e.target.value = ''
-                            }
-                          }}
-                          className="text-xs border border-slate-300 rounded px-2 py-1 text-slate-600"
-                        >
-                          <option value="">+ Add Department</option>
-                          {departments
-                            .filter(
-                              (d) =>
-                                d.isActive !== false &&
-                                !isDepartmentAssigned(form, d._id)
-                            )
-                            .map((dept) => (
-                              <option key={dept._id} value={dept._id}>
-                                {dept.name} ({dept.code})
-                              </option>
-                            ))}
-                        </select>
-                      </div>
                     </td>
                     <td className="px-6 py-4">
                       <span
@@ -366,7 +336,8 @@ export function FormTemplateManagement() {
             )}
           </tbody>
         </table>
-      </div>
+        </div>
+      )}
     </div>
   )
 }

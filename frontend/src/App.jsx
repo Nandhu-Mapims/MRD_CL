@@ -11,7 +11,7 @@ import { Dashboard } from './pages/Admin/Dashboard'
 import { ExportSubmissions } from './pages/Admin/ExportSubmissions'
 import { PatientReport } from './pages/Admin/PatientReport'
 import { DepartmentLogs } from './pages/Admin/DepartmentLogs'
-import { AuditForm } from './pages/User/AuditForm'
+import { Form } from './pages/User/Form'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { HomeRedirect } from './components/HomeRedirect'
 
@@ -88,10 +88,10 @@ function App() {
           />
 
           <Route
-            path="/audit/:departmentId"
+            path="/form/:formTemplateId"
             element={
               <ProtectedRoute roles={['admin', 'user']}>
-                <AuditForm />
+                <Form />
               </ProtectedRoute>
             }
           />

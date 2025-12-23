@@ -6,9 +6,10 @@ import { EditAuditModal } from '../../components/EditAuditModal'
 
 const STATUS_OPTIONS = ['OPEN', 'IN_PROGRESS', 'CLOSED']
 
-export function AuditForm() {
-  const { departmentId } = useParams()
+export function Form() {
+  const { formTemplateId } = useParams()
   const { user } = useAuth()
+  const [formTemplate, setFormTemplate] = useState(null)
   const [department, setDepartment] = useState(null)
   const [items, setItems] = useState([])
   const [answers, setAnswers] = useState({})
@@ -23,6 +24,8 @@ export function AuditForm() {
   const [loadingRecent, setLoadingRecent] = useState(false)
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [selectedUhid, setSelectedUhid] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(null)
 
   // Auto-fill patient name when UHID is entered (if patient exists)
   useEffect(() => {
@@ -55,31 +58,168 @@ export function AuditForm() {
 
   useEffect(() => {
     ;(async () => {
-      const [depts, checklist] = await Promise.all([
-        apiClient.get('/departments'),
-        apiClient.get(`/checklists/department/${departmentId}`),
-      ])
-      setDepartment(depts.find((d) => d._id === departmentId) || null)
-      setItems(checklist)
-      const init = {}
-      checklist.forEach((it) => {
-        init[it._id] = {
-          yesNoNa: it.isMandatory ? 'YES' : 'NA',
-          responseValue: it.isMandatory ? 'YES' : '',
-          remarks: '',
-          responsibility: '',
-          status: 'OPEN',
+      if (!formTemplateId) {
+        setLoading(false)
+        return
+      }
+
+      setLoading(true)
+      setLoadError(null)
+      setMessage('')
+
+      try {
+        console.log('Loading form template:', formTemplateId)
+        
+        // Load form template first
+        const form = await apiClient.get(`/form-templates/${formTemplateId}`)
+        console.log('Form template loaded:', form)
+        setFormTemplate(form)
+
+        // Get user's department - handle both object and string formats
+        let userDeptId = null
+        if (user?.department) {
+          userDeptId = typeof user.department === 'object' 
+            ? (user.department.id || user.department._id) 
+            : user.department
+          console.log('User department ID:', userDeptId)
         }
-      })
-      setAnswers(init)
+
+        // For admin users or if no department, try to get department from form
+        if (!userDeptId && user?.role === 'admin' && form.departments && form.departments.length > 0) {
+          // Admin can use first department from form
+          userDeptId = typeof form.departments[0] === 'object' 
+            ? (form.departments[0]._id || form.departments[0].id)
+            : form.departments[0]
+          console.log('Admin using form department:', userDeptId)
+        }
+
+        if (!userDeptId && user?.role === 'user') {
+          setLoadError('No department assigned. Please contact your administrator.')
+          setLoading(false)
+          return
+        }
+
+        // Get departments list
+        const depts = await apiClient.get('/departments')
+        const userDept = userDeptId 
+          ? depts.find((d) => {
+              const dId = d._id?.toString() || d._id
+              const uId = userDeptId?.toString() || userDeptId
+              return dId === uId
+            }) || null
+          : null
+        setDepartment(userDept)
+        console.log('User department found:', userDept)
+
+        // Load checklist items for this form template
+        if (userDeptId) {
+          try {
+            console.log(`[DEBUG] Loading checklist items for department: ${userDeptId}, formTemplate: ${formTemplateId}`)
+            const checklist = await apiClient.get(
+              `/checklists/department/${userDeptId}?formTemplateId=${formTemplateId}`
+            )
+            console.log('[DEBUG] Checklist items response:', checklist)
+            console.log('[DEBUG] Checklist items loaded:', checklist?.length || 0)
+            
+            if (!checklist || !Array.isArray(checklist)) {
+              console.warn('[DEBUG] Invalid checklist response:', checklist)
+              setItems([])
+              setAnswers({})
+              setMessage('Warning: Invalid response from server. Please check backend logs.')
+              return
+            }
+            
+            setItems(checklist || [])
+
+            // Initialize answers
+            const init = {}
+            if (checklist && Array.isArray(checklist) && checklist.length > 0) {
+              checklist.forEach((it) => {
+                init[it._id] = {
+                  yesNoNa: it.isMandatory ? 'YES' : 'NA',
+                  responseValue: it.isMandatory ? 'YES' : '',
+                  remarks: '',
+                  responsibility: '',
+                  status: 'OPEN',
+                }
+              })
+            } else {
+              // No items found - check if form is assigned to department
+              console.warn('[DEBUG] No checklist items found. This could mean:')
+              console.warn('[DEBUG] 1. Form template is not assigned to this department')
+              console.warn('[DEBUG] 2. No items have been created for this form')
+              console.warn('[DEBUG] 3. All items are inactive')
+              setMessage('Warning: No checklist items found. The form may not be assigned to your department, or no items have been created yet.')
+            }
+            setAnswers(init)
+          } catch (checklistErr) {
+            console.error('[DEBUG] Error loading checklist items:', checklistErr)
+            console.error('[DEBUG] Error details:', {
+              message: checklistErr.message,
+              response: checklistErr.response?.data,
+              status: checklistErr.response?.status,
+              statusText: checklistErr.response?.statusText
+            })
+            // Still show form even if items fail to load
+            setItems([])
+            setAnswers({})
+            const errorMsg = checklistErr.response?.data?.message || checklistErr.message || 'Unknown error'
+            setMessage(`Warning: Could not load checklist items: ${errorMsg}. Please check if the form is assigned to your department.`)
+          }
+        } else {
+          // No department, but still show form (admin case)
+          setItems([])
+          setAnswers({})
+        }
+        
+        setLoading(false)
+      } catch (err) {
+        console.error('[ERROR] Error loading form:', err)
+        console.error('[ERROR] Error response:', err.response)
+        console.error('[ERROR] Error status:', err.response?.status)
+        console.error('[ERROR] Error data:', err.response?.data)
+        
+        let errorMsg = err.response?.data?.message || err.response?.data?.error || err.message || 'Error loading form'
+        
+        // Handle HTML error responses (backend not running or route not found)
+        if (typeof errorMsg === 'string' && errorMsg.includes('<!DOCTYPE html>')) {
+          errorMsg = 'Backend server error. Please ensure the backend server is running and restart it if needed.'
+        } else if (err.response?.status === 404) {
+          errorMsg = 'Form template not found. The form may have been deleted or the ID is invalid.'
+          setFormTemplate(null)
+        } else if (err.response?.status === 401) {
+          errorMsg = 'Authentication failed. Please log in again.'
+        } else if (err.response?.status === 403) {
+          errorMsg = 'You do not have permission to access this form.'
+        } else if (err.response?.status === 500) {
+          errorMsg = `Server error: ${errorMsg}. Please check the backend console for details.`
+        }
+        
+        setLoadError(`Error loading form: ${errorMsg}. Please try again.`)
+        setLoading(false)
+      }
     })()
-  }, [departmentId])
+  }, [formTemplateId, user])
 
   // Load recent submissions
   const loadRecentSubmissions = async () => {
+    if (!formTemplateId) return
+    
+    // Get user department ID
+    let userDeptId = null
+    if (user?.department) {
+      userDeptId = typeof user.department === 'object' 
+        ? (user.department.id || user.department._id) 
+        : user.department
+    }
+    
+    if (!userDeptId) return
+    
     setLoadingRecent(true)
     try {
-      const data = await apiClient.get(`/audits/recent?departmentId=${departmentId}&limit=10`)
+      const data = await apiClient.get(
+        `/audits/recent?departmentId=${userDeptId}&formTemplateId=${formTemplateId}&limit=10`
+      )
       setRecentSubmissions(data)
     } catch (err) {
       console.error('Error loading recent submissions:', err)
@@ -90,8 +230,25 @@ export function AuditForm() {
 
   // Load submission for editing
   const loadSubmissionForEdit = async (editUhid) => {
+    if (!formTemplateId) return
+
+    // Get user department ID
+    let userDeptId = null
+    if (user?.department) {
+      userDeptId = typeof user.department === 'object' 
+        ? (user.department.id || user.department._id) 
+        : user.department
+    }
+    
+    if (!userDeptId) {
+      setMessage('No department assigned. Cannot load submission.')
+      return
+    }
+
     try {
-      const data = await apiClient.get(`/audits/edit?uhid=${editUhid}&departmentId=${departmentId}`)
+      const data = await apiClient.get(
+        `/audits/edit?uhid=${editUhid}&departmentId=${userDeptId}&formTemplateId=${formTemplateId}`
+      )
       
       // Set form data
       setUhid(data.uhid)
@@ -99,9 +256,24 @@ export function AuditForm() {
       setIsEditMode(true)
       setShowRecentSubmissions(false)
 
-      // Wait for items to be loaded if not already
-      if (items.length === 0) {
-        const checklist = await apiClient.get(`/checklists/department/${departmentId}`)
+        // Wait for items to be loaded if not already
+        if (items.length === 0) {
+          // Get user department ID
+          let userDeptId = null
+          if (user?.department) {
+            userDeptId = typeof user.department === 'object' 
+              ? (user.department.id || user.department._id) 
+              : user.department
+          }
+          
+          if (!userDeptId) {
+            setMessage('No department assigned. Cannot load submission.')
+            return
+          }
+          
+          const checklist = await apiClient.get(
+            `/checklists/department/${userDeptId}?formTemplateId=${formTemplateId}`
+          )
         setItems(checklist)
         
         // Map existing answers
@@ -218,11 +390,30 @@ export function AuditForm() {
       return
     }
 
+    if (!formTemplateId) {
+      setMessage('Missing form information. Please refresh the page.')
+      return
+    }
+
+    // Get user department ID
+    let userDeptId = null
+    if (user?.department) {
+      userDeptId = typeof user.department === 'object' 
+        ? (user.department.id || user.department._id) 
+        : user.department
+    }
+    
+    if (!userDeptId && user?.role === 'user') {
+      setMessage('No department assigned. Please contact your administrator.')
+      return
+    }
+
     setSubmitting(true)
     setMessage('')
     try {
       const payload = {
-        departmentId,
+        departmentId: userDeptId,
+        formTemplateId: formTemplateId,
         uhid: uhid.trim(),
         patientName: patientName.trim(),
         items: items.map((it) => ({
@@ -234,11 +425,11 @@ export function AuditForm() {
       if (isEditMode) {
         // Update existing submission
         await apiClient.put('/audits', payload)
-        setMessage('Audit updated successfully!')
+        setMessage('Form updated successfully!')
       } else {
         // Create new submission
         await apiClient.post('/audits', payload)
-        setMessage('Audit submitted successfully!')
+        setMessage('Form submitted successfully!')
       }
       
       // Reset form
@@ -246,7 +437,7 @@ export function AuditForm() {
       // Reload recent submissions
       await loadRecentSubmissions()
     } catch (err) {
-      const errorMsg = err.response?.data?.message || (isEditMode ? 'Failed to update audit' : 'Failed to submit audit')
+      const errorMsg = err.response?.data?.message || (isEditMode ? 'Failed to update form' : 'Failed to submit form')
       if (errorMsg.includes('UHID already exists') || errorMsg.includes('duplicate')) {
         setMessage('This UHID already exists in the system. Please verify the UHID or contact admin.')
       } else {
@@ -257,100 +448,41 @@ export function AuditForm() {
     }
   }
 
-  return (
-    <div className="max-w-7xl mx-auto space-y-3">
-      {/* Compact Header */}
-      <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-3">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-          <div>
-            <h2 className="text-base sm:text-lg font-bold text-slate-800">
-              {isEditMode ? 'Edit' : 'New'} Audit Form {department ? `- ${department.name}` : ''}
-            </h2>
-            <p className="text-[10px] sm:text-xs text-slate-500 mt-0.5">
-              {isEditMode ? 'Update the checklist items below' : 'Complete all checklist items for your department'}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            {!isEditMode && (
-              <button
-                type="button"
-                onClick={() => {
-                  setShowRecentSubmissions(!showRecentSubmissions)
-                  if (!showRecentSubmissions && recentSubmissions.length === 0) {
-                    loadRecentSubmissions()
-                  }
-                }}
-                className="text-[10px] sm:text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded transition-all"
-              >
-                {showRecentSubmissions ? 'Hide Recent' : 'Edit Recent'}
-              </button>
-            )}
-            {isEditMode && (
-              <button
-                type="button"
-                onClick={resetToNewForm}
-                className="text-[10px] sm:text-xs bg-slate-600 hover:bg-slate-700 text-white px-3 py-1.5 rounded transition-all"
-              >
-                New Form
-              </button>
-            )}
-            {user && (
-              <div className="text-[10px] sm:text-xs text-slate-600 bg-slate-50 px-2 py-1 rounded">
-                Logged in as <span className="font-semibold">{user.name}</span>
-              </div>
-            )}
-          </div>
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto space-y-3">
+        <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-4 text-center">
+          <div className="text-slate-600">Loading form...</div>
         </div>
       </div>
+    )
+  }
 
-      {/* Recent Submissions Panel */}
-      {showRecentSubmissions && !isEditMode && (
-        <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-3">
-          <h3 className="text-xs font-bold text-slate-800 mb-2">Recent Submissions</h3>
-          {loadingRecent ? (
-            <div className="text-xs text-slate-500 py-2">Loading...</div>
-          ) : recentSubmissions.length === 0 ? (
-            <div className="text-xs text-slate-500 py-2">No recent submissions found.</div>
-          ) : (
-            <div className="space-y-2 max-h-60 overflow-y-auto">
-              {recentSubmissions.map((sub, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-center justify-between p-2 bg-slate-50 rounded border border-slate-200 hover:bg-slate-100"
-                >
-                  <div className="flex-1">
-                    <div className="text-xs font-semibold text-slate-800">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedUhid(sub.uhid)
-                          setEditModalOpen(true)
-                        }}
-                        className="text-blue-600 hover:text-blue-800 hover:underline font-semibold"
-                      >
-                        UHID: {sub.uhid}
-                      </button>
-                      {' - '}
-                      {sub.patientName}
-                    </div>
-                    <div className="text-[10px] text-slate-500">
-                      {new Date(sub.submittedAt).toLocaleString()} • {sub.itemCount} items
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => loadSubmissionForEdit(sub.uhid)}
-                    className="text-[10px] bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded transition-all"
-                  >
-                    Edit
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
+  // Show error state
+  if (loadError) {
+    return (
+      <div className="max-w-7xl mx-auto space-y-3">
+        <div className="bg-white rounded-lg shadow-sm border border-red-200 p-4 text-center">
+          <div className="text-red-600 font-semibold">{loadError}</div>
         </div>
-      )}
+      </div>
+    )
+  }
 
+  // Show not found state
+  if (!formTemplate) {
+    return (
+      <div className="max-w-7xl mx-auto space-y-3">
+        <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-4 text-center">
+          <div className="text-red-600">Form not found. Please select a valid form from the menu.</div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="max-w-7xl mx-auto space-y-3">
       {message && (
         <div
           className={`px-3 py-2 rounded text-xs ${
@@ -405,7 +537,7 @@ export function AuditForm() {
         {/* Checklist Sections - Compact Table Style */}
         {Object.keys(itemsBySection).length === 0 ? (
           <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-4 text-center text-xs text-slate-500">
-            No checklist items available for this department.
+            No checklist items available for this form.
           </div>
         ) : (
           Object.keys(itemsBySection)
@@ -646,7 +778,7 @@ export function AuditForm() {
               disabled={submitting}
               className="bg-red-600 hover:bg-red-700 text-white font-semibold px-6 py-2 rounded text-xs sm:text-sm transition-all disabled:opacity-60 disabled:cursor-not-allowed shadow-sm hover:shadow"
             >
-              {submitting ? (isEditMode ? 'Updating...' : 'Submitting...') : (isEditMode ? 'Update Audit' : 'Submit Audit')}
+              {submitting ? (isEditMode ? 'Updating...' : 'Submitting...') : (isEditMode ? 'Update Form' : 'Submit Form')}
             </button>
           </div>
         )}
@@ -660,7 +792,8 @@ export function AuditForm() {
           setSelectedUhid('')
         }}
         uhid={selectedUhid}
-        departmentId={departmentId}
+        departmentId={user?.department ? (typeof user.department === 'object' ? (user.department.id || user.department._id) : user.department) : null}
+        formTemplateId={formTemplateId}
         onSuccess={() => {
           loadRecentSubmissions()
         }}
@@ -668,3 +801,4 @@ export function AuditForm() {
     </div>
   )
 }
+

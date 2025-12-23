@@ -33,27 +33,57 @@ router.get('/', auth(['admin', 'user']), async (_req, res) => {
   }
 });
 
+// Get single form template by ID
+router.get('/:id', auth(['admin', 'user']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const form = await FormTemplate.findById(id).populate('departments');
+    if (!form) {
+      return res.status(404).json({ message: 'Form template not found' });
+    }
+    res.json(form);
+  } catch (err) {
+    console.error('getFormTemplate error', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 router.put('/:id', auth('admin'), async (req, res) => {
   try {
     const { id } = req.params;
     const { name, description, departmentIds, isCommon, isActive, sections } = req.body;
+    
+    console.log(`[DEBUG] Updating form template ${id} with departmentIds:`, departmentIds);
+    
+    const updateData = {
+      name,
+      description,
+      departments: departmentIds || [], // Ensure it's an array
+      isCommon: isCommon !== undefined ? isCommon : false,
+      sections: sections || [],
+      isActive: isActive !== undefined ? isActive : true,
+    };
+    
+    console.log(`[DEBUG] Update data:`, JSON.stringify(updateData, null, 2));
+    
     const form = await FormTemplate.findByIdAndUpdate(
       id,
-      {
-        name,
-        description,
-        departments: departmentIds,
-        isCommon,
-        sections: sections || [],
-        isActive,
-      },
+      updateData,
       { new: true }
-    );
+    ).populate('departments');
+    
     if (!form) return res.status(404).json({ message: 'Form template not found' });
+    
+    console.log(`[DEBUG] Updated form template:`, {
+      id: form._id,
+      name: form.name,
+      departments: form.departments?.map(d => ({ id: d._id, name: d.name })) || []
+    });
+    
     res.json(form);
   } catch (err) {
     console.error('updateFormTemplate error', err);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
 

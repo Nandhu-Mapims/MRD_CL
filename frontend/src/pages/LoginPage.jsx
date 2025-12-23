@@ -1,13 +1,20 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
 export function LoginPage() {
-  const { login, loading } = useAuth()
+  const { login, loading, user, initializing } = useAuth()
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+
+  // Redirect if user is already logged in
+  useEffect(() => {
+    if (!initializing && user) {
+      navigate('/', { replace: true })
+    }
+  }, [user, initializing, navigate])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -18,6 +25,15 @@ export function LoginPage() {
     } catch (err) {
       setError('Invalid credentials or server error')
     }
+  }
+
+  // Show loading while checking auth state
+  if (initializing) {
+    return (
+      <div className="flex items-center justify-center min-h-[70vh]">
+        <div className="text-slate-600">Loading...</div>
+      </div>
+    )
   }
 
   return (

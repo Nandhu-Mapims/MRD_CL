@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext'
 
 const STATUS_OPTIONS = ['OPEN', 'IN_PROGRESS', 'CLOSED']
 
-export function EditAuditModal({ isOpen, onClose, uhid, departmentId, onSuccess }) {
+export function EditAuditModal({ isOpen, onClose, uhid, departmentId, formTemplateId, onSuccess }) {
   const { user } = useAuth()
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -76,10 +76,18 @@ export function EditAuditModal({ isOpen, onClose, uhid, departmentId, onSuccess 
     setLoading(true)
     setMessage('')
     try {
+      const editUrl = formTemplateId 
+        ? `/audits/edit?uhid=${uhid}&departmentId=${selectedDeptId}&formTemplateId=${formTemplateId}`
+        : `/audits/edit?uhid=${uhid}&departmentId=${selectedDeptId}`
+      
+      const checklistUrl = formTemplateId
+        ? `/checklists/department/${selectedDeptId}?formTemplateId=${formTemplateId}`
+        : `/checklists/department/${selectedDeptId}`
+      
       const [data, depts, checklist] = await Promise.all([
-        apiClient.get(`/audits/edit?uhid=${uhid}&departmentId=${selectedDeptId}`),
+        apiClient.get(editUrl),
         apiClient.get('/departments'),
-        apiClient.get(`/checklists/department/${selectedDeptId}`),
+        apiClient.get(checklistUrl),
       ])
 
       setDepartment(depts.find((d) => d._id === selectedDeptId) || null)
@@ -147,6 +155,7 @@ export function EditAuditModal({ isOpen, onClose, uhid, departmentId, onSuccess 
     try {
       const payload = {
         departmentId: selectedDeptId,
+        formTemplateId: formTemplateId || undefined,
         uhid: uhid.trim(),
         patientName: patientName.trim(),
         items: items.map((it) => ({

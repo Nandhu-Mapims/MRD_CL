@@ -316,7 +316,7 @@ exports.getSubmissionsByUHID = async (req, res) => {
 // Get recent submissions grouped by UHID for a department (for edit selection)
 exports.getRecentSubmissions = async (req, res) => {
   try {
-    const { departmentId, limit = 20 } = req.query;
+    const { departmentId, formTemplateId, limit = 20 } = req.query;
     
     if (!departmentId) {
       return res.status(400).json({ message: 'Department ID is required' });
@@ -327,6 +327,9 @@ exports.getRecentSubmissions = async (req, res) => {
 
     // Build filter - users can only see their own, admins can see all
     const filter = { department: departmentId };
+    if (formTemplateId) {
+      filter.formTemplate = formTemplateId;
+    }
     if (user.role !== 'admin') {
       filter.submittedBy = userId;
     }
@@ -380,7 +383,7 @@ exports.getRecentSubmissions = async (req, res) => {
 // Get submissions for editing (by UHID and department)
 exports.getSubmissionsForEdit = async (req, res) => {
   try {
-    const { uhid, departmentId } = req.query;
+    const { uhid, departmentId, formTemplateId } = req.query;
     
     if (!uhid || !uhid.trim()) {
       return res.status(400).json({ message: 'UHID is required' });
@@ -393,11 +396,17 @@ exports.getSubmissionsForEdit = async (req, res) => {
     const user = await require('../models/User').findById(userId);
     const normalizedUHID = uhid.trim().toUpperCase();
 
-    // Get all submissions for this UHID and department, sorted by submission time
-    const allSubmissions = await AuditSubmission.find({
+    // Build query filter
+    const queryFilter = {
       uhid: normalizedUHID,
       department: departmentId,
-    })
+    };
+    if (formTemplateId) {
+      queryFilter.formTemplate = formTemplateId;
+    }
+
+    // Get all submissions for this UHID and department, sorted by submission time
+    const allSubmissions = await AuditSubmission.find(queryFilter)
       .populate('submittedBy', 'name email')
       .populate('patient', 'uhid patientName')
       .sort({ submittedAt: -1 });
