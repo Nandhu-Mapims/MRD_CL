@@ -130,7 +130,7 @@ export function FormTemplateManagement() {
               isActive: true,
             })
           }}
-          className="bg-red-600 hover:bg-red-700 text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg shadow-md transition-colors text-xs sm:text-sm font-medium"
+          className="bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg shadow-md transition-colors text-xs sm:text-sm font-medium"
         >
           + Create New Form
         </button>
@@ -149,7 +149,7 @@ export function FormTemplateManagement() {
                 required
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 placeholder="e.g., MAPIMS - Case Sheet Audit Checklist"
               />
             </div>
@@ -159,7 +159,7 @@ export function FormTemplateManagement() {
               <textarea
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 rows="3"
                 placeholder="Brief description of this form template"
               />
@@ -198,7 +198,7 @@ export function FormTemplateManagement() {
                             })
                           }
                         }}
-                        className="w-5 h-5 text-red-600 border-slate-300 rounded focus:ring-red-500"
+                        className="w-5 h-5 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
                       />
                       <div className="flex-1">
                         <span className="font-medium text-slate-800">{dept.name}</span>
@@ -208,7 +208,7 @@ export function FormTemplateManagement() {
                   ))}
               </div>
               {formData.departmentIds.length === 0 && (
-                <p className="text-sm text-red-600 mt-2">
+                <p className="text-sm text-blue-600 mt-2">
                   ⚠️ Please select at least one department
                 </p>
               )}
@@ -226,7 +226,7 @@ export function FormTemplateManagement() {
                 id="isActive"
                 checked={formData.isActive}
                 onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-                className="w-4 h-4 text-red-600 border-slate-300 rounded focus:ring-red-500"
+                className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
               />
               <label htmlFor="isActive" className="text-sm text-slate-700">Active</label>
             </div>
@@ -235,7 +235,7 @@ export function FormTemplateManagement() {
               <button
                 type="submit"
                 disabled={formData.departmentIds.length === 0}
-                className="bg-red-600 hover:bg-red-700 disabled:bg-slate-400 disabled:cursor-not-allowed text-white px-6 py-2 rounded-lg shadow-md transition-colors"
+                className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 disabled:cursor-not-allowed text-white px-6 py-2 rounded-lg shadow-md transition-colors"
               >
                 {editingForm ? 'Update' : 'Create'} Form
               </button>
@@ -257,7 +257,7 @@ export function FormTemplateManagement() {
       {!showForm && (
         <div className="bg-white rounded-lg shadow-md overflow-hidden">
           <table className="w-full">
-          <thead className="bg-gradient-to-r from-red-700 via-red-600 to-red-500 text-white shadow-md">
+          <thead className="bg-gradient-to-r from-blue-700 via-blue-600 to-blue-500 text-white shadow-md">
             <tr>
               <th className="text-left px-6 py-4 font-semibold">Form Name</th>
               <th className="text-left px-6 py-4 font-semibold">Description</th>
@@ -284,14 +284,14 @@ export function FormTemplateManagement() {
                     </td>
                     <td className="px-6 py-4">
                       {assignedDepts.length === 0 ? (
-                        <span className="text-sm text-red-600 font-medium">⚠️ Not Assigned</span>
+                        <span className="text-sm text-blue-600 font-medium">⚠️ Not Assigned</span>
                       ) : (
                         <div className="space-y-2">
                           <div className="flex flex-wrap gap-2">
                             {assignedDepts.map((dept) => (
                               <span
                                 key={dept._id}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 bg-red-50 border border-red-200 text-red-700 rounded-full text-xs font-medium shadow-sm"
+                                className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 border border-blue-200 text-blue-700 rounded-full text-xs font-medium shadow-sm"
                               >
                                 {dept.name} ({dept.code})
                               </span>
@@ -307,7 +307,7 @@ export function FormTemplateManagement() {
                       <span
                         className={`px-3 py-1 rounded-full text-xs font-medium ${
                           form.isActive
-                            ? 'bg-red-100 text-red-700'
+                            ? 'bg-blue-100 text-blue-700'
                             : 'bg-slate-100 text-slate-600'
                         }`}
                       >
@@ -318,13 +318,13 @@ export function FormTemplateManagement() {
                       <div className="flex items-center justify-center gap-2">
                         <button
                           onClick={() => handleEdit(form)}
-                          className="text-red-600 hover:text-red-700 text-sm font-medium px-3 py-1 rounded hover:bg-red-50 transition-colors"
+                          className="text-blue-600 hover:text-blue-700 text-sm font-medium px-3 py-1 rounded hover:bg-blue-50 transition-colors"
                         >
                           Edit
                         </button>
                         <button
                           onClick={() => handleDelete(form._id)}
-                          className="text-red-600 hover:text-red-700 text-sm font-medium px-3 py-1 rounded hover:bg-red-50 transition-colors"
+                          className="text-blue-600 hover:text-blue-700 text-sm font-medium px-3 py-1 rounded hover:bg-blue-50 transition-colors"
                         >
                           Delete
                         </button>

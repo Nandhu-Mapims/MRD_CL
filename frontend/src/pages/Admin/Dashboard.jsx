@@ -18,7 +18,7 @@ import {
   AreaChart,
 } from 'recharts'
 
-const COLORS = ['#ef4444', '#dc2626', '#b91c1c', '#991b1b', '#f87171', '#fca5a5', '#fee2e2']
+const COLORS = ['#3b82f6', '#2563eb', '#1d4ed8', '#1e40af', '#60a5fa', '#93c5fd', '#dbeafe']
 
 export function Dashboard() {
   const [stats, setStats] = useState(null)
@@ -60,7 +60,7 @@ export function Dashboard() {
     return (
       <div className="flex items-center justify-center min-h-[500px]">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-red-600 mb-4"></div>
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600 mb-4"></div>
           <div className="text-slate-600 font-medium">Loading dashboard...</div>
         </div>
       </div>
@@ -70,9 +70,9 @@ export function Dashboard() {
   if (!stats || !stats.departmentStats || stats.departmentStats.length === 0) {
     return (
       <div className="space-y-6">
-        <div className="bg-gradient-to-r from-red-600 to-red-700 text-white rounded-xl shadow-xl p-6 sm:p-8">
+        <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl shadow-xl p-6 sm:p-8">
           <h2 className="text-2xl sm:text-3xl font-bold mb-2">Audit Dashboard</h2>
-          <p className="text-red-100">Department-wise compliance and case analytics</p>
+          <p className="text-blue-100">Department-wise compliance and case analytics</p>
         </div>
         <div className="bg-white rounded-xl shadow-lg p-12 text-center border-2 border-dashed border-slate-300">
           <div className="text-6xl mb-4">📊</div>
@@ -117,13 +117,13 @@ export function Dashboard() {
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* Elegant Header */}
-      <div className="bg-gradient-to-r from-red-600 via-red-700 to-red-800 text-white rounded-xl shadow-2xl p-6 sm:p-8 relative overflow-hidden">
+      <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-blue-800 text-white rounded-xl shadow-2xl p-6 sm:p-8 relative overflow-hidden">
         <div className="absolute inset-0 bg-black opacity-5"></div>
         <div className="relative z-10">
           <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-2 drop-shadow-lg">
             Audit Dashboard
           </h2>
-          <p className="text-red-100 text-sm sm:text-base">
+          <p className="text-blue-100 text-sm sm:text-base">
             Comprehensive department-wise compliance and case analytics
           </p>
         </div>
@@ -133,16 +133,16 @@ export function Dashboard() {
 
       {/* Enhanced Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
-        <div className="bg-gradient-to-br from-white to-red-50 rounded-xl shadow-lg p-4 sm:p-6 border border-red-100 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+        <div className="bg-gradient-to-br from-white to-blue-50 rounded-xl shadow-lg p-4 sm:p-6 border border-blue-100 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
           <div className="flex items-center justify-between">
             <div className="min-w-0 flex-1">
               <p className="text-[10px] sm:text-xs text-slate-600 mb-1 font-medium uppercase tracking-wide">
                 Total Cases
               </p>
-              <p className="text-2xl sm:text-3xl md:text-4xl font-bold text-red-600">{totalCases}</p>
+              <p className="text-2xl sm:text-3xl md:text-4xl font-bold text-blue-600">{totalCases}</p>
               <p className="text-[9px] sm:text-xs text-slate-500 mt-1">Unique patients</p>
             </div>
-            <div className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 bg-gradient-to-br from-red-500 to-red-600 rounded-xl flex items-center justify-center flex-shrink-0 ml-3 shadow-lg">
+            <div className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center flex-shrink-0 ml-3 shadow-lg">
               <span className="text-xl sm:text-2xl md:text-3xl">📋</span>
             </div>
           </div>
@@ -209,7 +209,7 @@ export function Dashboard() {
               </h3>
               <p className="text-xs sm:text-sm text-slate-500">Patient cases distribution</p>
             </div>
-            <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
               <span className="text-lg">📊</span>
             </div>
           </div>
@@ -217,8 +217,8 @@ export function Dashboard() {
             <BarChart data={barChartData} margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
               <defs>
                 <linearGradient id="colorCases" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#ef4444" stopOpacity={1} />
-                  <stop offset="100%" stopColor="#dc2626" stopOpacity={0.8} />
+                  <stop offset="0%" stopColor="#3b82f6" stopOpacity={1} />
+                  <stop offset="100%" stopColor="#2563eb" stopOpacity={0.8} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
@@ -253,7 +253,7 @@ export function Dashboard() {
                 fill="url(#colorCases)" 
                 name="Cases" 
                 radius={[8, 8, 0, 0]}
-                stroke="#dc2626"
+                stroke="#2563eb"
                 strokeWidth={1}
               />
             </BarChart>
@@ -269,7 +269,7 @@ export function Dashboard() {
               </h3>
               <p className="text-xs sm:text-sm text-slate-500">Percentage breakdown</p>
             </div>
-            <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
               <span className="text-lg">🥧</span>
             </div>
           </div>
@@ -322,8 +322,8 @@ export function Dashboard() {
           <AreaChart data={complianceData} margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
             <defs>
               <linearGradient id="colorCompliance" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
+                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
@@ -353,7 +353,7 @@ export function Dashboard() {
             <Area
               type="monotone"
               dataKey="compliance"
-              stroke="#ef4444"
+              stroke="#3b82f6"
               strokeWidth={3}
               fill="url(#colorCompliance)"
               name="Compliance %"
@@ -361,9 +361,9 @@ export function Dashboard() {
             <Line
               type="monotone"
               dataKey="compliance"
-              stroke="#dc2626"
+              stroke="#2563eb"
               strokeWidth={2}
-              dot={{ fill: '#dc2626', r: 5, strokeWidth: 2, stroke: '#fff' }}
+              dot={{ fill: '#2563eb', r: 5, strokeWidth: 2, stroke: '#fff' }}
               activeDot={{ r: 7 }}
             />
           </AreaChart>
@@ -372,20 +372,20 @@ export function Dashboard() {
 
       {/* Enhanced Department-wise Detailed Stats */}
       <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-slate-100">
-        <div className="bg-gradient-to-r from-red-700 via-red-600 to-red-500 text-white px-5 sm:px-6 py-4 sm:py-5 shadow-lg">
+        <div className="bg-gradient-to-r from-blue-700 via-blue-600 to-blue-500 text-white px-5 sm:px-6 py-4 sm:py-5 shadow-lg">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
               <span className="text-xl">📋</span>
             </div>
             <div>
               <h3 className="text-base sm:text-lg font-bold">Department-wise Statistics</h3>
-              <p className="text-red-100 text-xs sm:text-sm">Detailed breakdown by department</p>
+              <p className="text-blue-100 text-xs sm:text-sm">Detailed breakdown by department</p>
             </div>
           </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[800px]">
-            <thead className="bg-gradient-to-r from-red-50 to-red-100">
+            <thead className="bg-gradient-to-r from-blue-50 to-blue-100">
               <tr>
                 <th className="px-4 sm:px-6 py-3 text-left text-xs font-bold text-slate-700 uppercase tracking-wider">
                   Department
@@ -414,14 +414,14 @@ export function Dashboard() {
               {barChartData.map((dept, index) => (
                 <tr 
                   key={index} 
-                  className="hover:bg-red-50 transition-colors duration-150"
+                  className="hover:bg-blue-50 transition-colors duration-150"
                 >
                   <td className="px-4 sm:px-6 py-4">
                     <div className="font-semibold text-sm sm:text-base text-slate-800">{dept.fullName}</div>
                     <div className="text-xs text-slate-500">({dept.name})</div>
                   </td>
                   <td className="px-4 sm:px-6 py-4 text-center">
-                    <span className="inline-flex items-center px-3 py-1 bg-red-100 text-red-700 rounded-full text-xs sm:text-sm font-semibold">
+                    <span className="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs sm:text-sm font-semibold">
                       {dept.cases}
                     </span>
                   </td>
@@ -434,7 +434,7 @@ export function Dashboard() {
                     </span>
                   </td>
                   <td className="px-4 sm:px-6 py-4 text-center">
-                    <span className="inline-flex items-center px-3 py-1 bg-red-100 text-red-700 rounded-full text-xs sm:text-sm font-semibold">
+                    <span className="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs sm:text-sm font-semibold">
                       {dept.nonCompliant}
                     </span>
                   </td>
@@ -442,7 +442,7 @@ export function Dashboard() {
                     <div className="flex items-center justify-center gap-2">
                       <div className="w-20 sm:w-24 md:w-32 bg-slate-100 rounded-full h-2 overflow-hidden shadow-inner">
                         <div
-                          className="h-full bg-gradient-to-r from-red-500 via-red-600 to-red-700 rounded-full transition-all duration-500"
+                          className="h-full bg-gradient-to-r from-blue-500 via-blue-600 to-blue-700 rounded-full transition-all duration-500"
                           style={{ width: `${dept.compliance}%` }}
                         />
                       </div>

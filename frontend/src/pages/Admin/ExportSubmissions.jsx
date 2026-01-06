@@ -172,7 +172,7 @@ export function ExportSubmissions() {
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-lg sm:rounded-xl shadow-lg p-4 sm:p-5 md:p-6 border border-red-100">
+      <div className="bg-white rounded-lg sm:rounded-xl shadow-lg p-4 sm:p-5 md:p-6 border border-blue-100">
         <h3 className="text-sm sm:text-base md:text-lg font-semibold text-slate-800 mb-3 sm:mb-4">
           Filter Options
         </h3>
@@ -184,7 +184,7 @@ export function ExportSubmissions() {
             <select
               value={selectedDepartment}
               onChange={(e) => setSelectedDepartment(e.target.value)}
-              className="w-full border border-slate-300 rounded-lg px-3 sm:px-4 py-2 text-xs sm:text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+              className="w-full border border-slate-300 rounded-lg px-3 sm:px-4 py-2 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="">All Departments</option>
               {departments.map((dept) => (
@@ -202,7 +202,7 @@ export function ExportSubmissions() {
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="w-full border border-slate-300 rounded-lg px-3 sm:px-4 py-2 text-xs sm:text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+              className="w-full border border-slate-300 rounded-lg px-3 sm:px-4 py-2 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
           <div>
@@ -213,7 +213,7 @@ export function ExportSubmissions() {
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              className="w-full border border-slate-300 rounded-lg px-3 sm:px-4 py-2 text-xs sm:text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+              className="w-full border border-slate-300 rounded-lg px-3 sm:px-4 py-2 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
         </div>
@@ -223,14 +223,14 @@ export function ExportSubmissions() {
           <button
             onClick={() => handleExport('pdf')}
             disabled={loading}
-            className="flex-1 sm:flex-none px-4 sm:px-6 py-2 sm:py-2.5 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-semibold rounded-lg shadow-md transition-all disabled:opacity-60 disabled:cursor-not-allowed text-xs sm:text-sm"
+            className="flex-1 sm:flex-none px-4 sm:px-6 py-2 sm:py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold rounded-lg shadow-md transition-all disabled:opacity-60 disabled:cursor-not-allowed text-xs sm:text-sm"
           >
             {loading ? 'Exporting...' : '📄 Export as PDF'}
           </button>
           <button
             onClick={() => handleExport('csv')}
             disabled={loading}
-            className="flex-1 sm:flex-none px-4 sm:px-6 py-2 sm:py-2.5 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-semibold rounded-lg shadow-md transition-all disabled:opacity-60 disabled:cursor-not-allowed text-xs sm:text-sm"
+            className="flex-1 sm:flex-none px-4 sm:px-6 py-2 sm:py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold rounded-lg shadow-md transition-all disabled:opacity-60 disabled:cursor-not-allowed text-xs sm:text-sm"
           >
             {loading ? 'Exporting...' : '📊 Export as CSV'}
           </button>
@@ -246,21 +246,21 @@ export function ExportSubmissions() {
 
       {/* Preview Data */}
       {exportData && (
-        <div className="bg-white rounded-lg sm:rounded-xl shadow-lg p-4 sm:p-5 md:p-6 border border-red-100">
+        <div className="bg-white rounded-lg sm:rounded-xl shadow-lg p-4 sm:p-5 md:p-6 border border-blue-100">
           <div className="flex items-center justify-between mb-3 sm:mb-4">
             <h3 className="text-sm sm:text-base md:text-lg font-semibold text-slate-800">
               Preview Data ({exportData.totalRecords} records)
             </h3>
             <button
               onClick={() => setExportData(null)}
-              className="text-red-600 hover:text-red-700 text-xs sm:text-sm"
+              className="text-blue-600 hover:text-blue-700 text-xs sm:text-sm"
             >
               Close
             </button>
           </div>
           <div className="overflow-x-auto -mx-3 sm:mx-0">
             <table className="w-full min-w-[1200px] text-xs sm:text-sm">
-              <thead className="bg-red-50">
+              <thead className="bg-blue-50">
                 <tr>
                   <th className="px-2 sm:px-3 py-2 text-left font-semibold text-slate-700">Date</th>
                   <th className="px-2 sm:px-3 py-2 text-left font-semibold text-slate-700">Department</th>
@@ -274,7 +274,7 @@ export function ExportSubmissions() {
               </thead>
               <tbody className="divide-y divide-slate-200">
                 {exportData.data.slice(0, 50).map((row, idx) => (
-                  <tr key={idx} className="hover:bg-red-50">
+                  <tr key={idx} className="hover:bg-blue-50">
                     <td className="px-2 sm:px-3 py-2">{row['Submission Date']}</td>
                     <td className="px-2 sm:px-3 py-2">{row['Department']}</td>
                     <td className="px-2 sm:px-3 py-2">{row['UHID']}</td>

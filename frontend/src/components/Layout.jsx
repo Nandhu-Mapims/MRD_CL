@@ -120,18 +120,18 @@ export function Layout({ children }) {
   }, [location.pathname])
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-white via-red-50 to-red-100">
+    <div className="min-h-screen bg-gradient-to-br from-white via-blue-50 to-blue-100">
       {/* New Header Design */}
-      <header className="bg-white shadow-lg border-b-4 border-red-600 relative z-50 overflow-visible">
+      <header className="bg-white shadow-lg border-b-4 border-blue-600 relative z-50 overflow-visible">
         <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 overflow-visible">
           {/* Top Bar */}
-          <div className="flex items-center justify-between py-2 sm:py-3 md:py-4 border-b border-red-100">
+          <div className="flex items-center justify-between py-2 sm:py-3 md:py-4 border-b border-blue-100">
             <Link to="/" className="flex items-center gap-2 sm:gap-3 group">
-              <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-gradient-to-br from-red-600 to-red-700 rounded-lg flex items-center justify-center shadow-md group-hover:shadow-lg transition-shadow">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg flex items-center justify-center shadow-md group-hover:shadow-lg transition-shadow">
                 <span className="text-lg sm:text-xl md:text-2xl">🏥</span>
               </div>
               <div>
-                <h1 className="text-sm sm:text-base md:text-lg lg:text-xl font-bold text-slate-800 group-hover:text-red-600 transition-colors">
+                <h1 className="text-sm sm:text-base md:text-lg lg:text-xl font-bold text-slate-800 group-hover:text-blue-600 transition-colors">
                   Hospital Audit System
                 </h1>
                 <p className="text-[10px] sm:text-xs text-slate-500 hidden sm:block">Medical Records Department</p>
@@ -139,13 +139,13 @@ export function Layout({ children }) {
             </Link>
             {user && (
               <div className="flex items-center gap-2 sm:gap-3 md:gap-4">
-                <div className="text-right hidden md:block pr-2 md:pr-4 border-r border-red-100">
+                <div className="text-right hidden md:block pr-2 md:pr-4 border-r border-blue-100">
                   <div className="text-xs sm:text-sm font-semibold text-slate-800">{user.name}</div>
-                  <div className="text-[10px] sm:text-xs text-red-600 capitalize font-medium">{user.role}</div>
+                  <div className="text-[10px] sm:text-xs text-blue-600 capitalize font-medium">{user.role}</div>
                 </div>
                 <button
                   onClick={logout}
-                  className="px-3 py-1.5 sm:px-4 sm:py-2 md:px-5 md:py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs sm:text-sm font-medium transition-all shadow-md hover:shadow-lg transform hover:scale-105"
+                  className="px-3 py-1.5 sm:px-4 sm:py-2 md:px-5 md:py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-medium transition-all shadow-md hover:shadow-lg transform hover:scale-105"
                 >
                   <span className="hidden sm:inline">Logout</span>
                   <span className="sm:hidden">Out</span>
@@ -163,8 +163,8 @@ export function Layout({ children }) {
                     to="/admin/dashboard"
                     className={`px-3 py-1.5 sm:px-4 sm:py-2 md:px-5 md:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
                       isActive('/admin/dashboard')
-                        ? 'bg-red-600 text-white shadow-md'
-                        : 'text-slate-700 hover:bg-red-50 hover:text-red-600'
+                        ? 'bg-blue-600 text-white shadow-md'
+                        : 'text-slate-700 hover:bg-blue-50 hover:text-blue-600'
                     }`}
                   >
                     <span className="hidden sm:inline">📊 Dashboard</span>
@@ -174,8 +174,8 @@ export function Layout({ children }) {
                     to="/admin/export"
                     className={`px-3 py-1.5 sm:px-4 sm:py-2 md:px-5 md:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
                       isActive('/admin/export')
-                        ? 'bg-red-600 text-white shadow-md'
-                        : 'text-slate-700 hover:bg-red-50 hover:text-red-600'
+                        ? 'bg-blue-600 text-white shadow-md'
+                        : 'text-slate-700 hover:bg-blue-50 hover:text-blue-600'
                     }`}
                   >
                     <span className="hidden sm:inline">📥 Export</span>
@@ -185,8 +185,8 @@ export function Layout({ children }) {
                     to="/admin/patient-report"
                     className={`px-3 py-1.5 sm:px-4 sm:py-2 md:px-5 md:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
                       isActive('/admin/patient-report')
-                        ? 'bg-red-600 text-white shadow-md'
-                        : 'text-slate-700 hover:bg-red-50 hover:text-red-600'
+                        ? 'bg-blue-600 text-white shadow-md'
+                        : 'text-slate-700 hover:bg-blue-50 hover:text-blue-600'
                     }`}
                   >
                     <span className="hidden sm:inline">📋 Patient Report</span>
@@ -196,8 +196,8 @@ export function Layout({ children }) {
                     to="/admin/department-logs"
                     className={`px-3 py-1.5 sm:px-4 sm:py-2 md:px-5 md:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
                       isActive('/admin/department-logs')
-                        ? 'bg-red-600 text-white shadow-md'
-                        : 'text-slate-700 hover:bg-red-50 hover:text-red-600'
+                        ? 'bg-blue-600 text-white shadow-md'
+                        : 'text-slate-700 hover:bg-blue-50 hover:text-blue-600'
                     }`}
                   >
                     <span className="hidden sm:inline">📊 Department Logs</span>
@@ -209,8 +209,8 @@ export function Layout({ children }) {
                       onClick={() => setCreateFormsMenuOpen(!createFormsMenuOpen)}
                       className={`px-3 py-1.5 sm:px-4 sm:py-2 md:px-5 md:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap flex items-center gap-1 ${
                         isCreateFormsActive()
-                          ? 'bg-red-600 text-white shadow-md'
-                          : 'text-slate-700 hover:bg-red-50 hover:text-red-600'
+                          ? 'bg-blue-600 text-white shadow-md'
+                          : 'text-slate-700 hover:bg-blue-50 hover:text-blue-600'
                       }`}
                     >
                       <span className="hidden sm:inline">📝 Create Forms</span>
@@ -227,7 +227,7 @@ export function Layout({ children }) {
                     {createFormsMenuOpen && (
                       <div
                         ref={createFormsMenuRef}
-                        className="fixed bg-white rounded-lg shadow-xl border-2 border-red-100 min-w-[180px] z-[9999]"
+                        className="fixed bg-white rounded-lg shadow-xl border-2 border-blue-100 min-w-[180px] z-[9999]"
                         style={{
                           top: `${createFormsDropdownPosition.top}px`,
                           left: `${createFormsDropdownPosition.left}px`
@@ -237,8 +237,8 @@ export function Layout({ children }) {
                           to="/admin/forms"
                           className={`block px-4 py-2.5 text-xs sm:text-sm font-medium transition-all first:rounded-t-lg ${
                             isActive('/admin/forms')
-                              ? 'bg-red-600 text-white'
-                              : 'text-slate-700 hover:bg-red-50 hover:text-red-600'
+                              ? 'bg-blue-600 text-white'
+                              : 'text-slate-700 hover:bg-blue-50 hover:text-blue-600'
                           }`}
                           onClick={() => setCreateFormsMenuOpen(false)}
                         >
@@ -249,10 +249,10 @@ export function Layout({ children }) {
                         </Link>
                         <Link
                           to="/admin/checklists"
-                          className={`block px-4 py-2.5 text-xs sm:text-sm font-medium transition-all border-t border-red-100 last:rounded-b-lg ${
+                          className={`block px-4 py-2.5 text-xs sm:text-sm font-medium transition-all border-t border-blue-100 last:rounded-b-lg ${
                             isActive('/admin/checklists')
-                              ? 'bg-red-600 text-white'
-                              : 'text-slate-700 hover:bg-red-50 hover:text-red-600'
+                              ? 'bg-blue-600 text-white'
+                              : 'text-slate-700 hover:bg-blue-50 hover:text-blue-600'
                           }`}
                           onClick={() => setCreateFormsMenuOpen(false)}
                         >
@@ -270,8 +270,8 @@ export function Layout({ children }) {
                       onClick={() => setConfigMenuOpen(!configMenuOpen)}
                       className={`px-3 py-1.5 sm:px-4 sm:py-2 md:px-5 md:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap flex items-center gap-1 ${
                         isConfigActive()
-                          ? 'bg-red-600 text-white shadow-md'
-                          : 'text-slate-700 hover:bg-red-50 hover:text-red-600'
+                          ? 'bg-blue-600 text-white shadow-md'
+                          : 'text-slate-700 hover:bg-blue-50 hover:text-blue-600'
                       }`}
                     >
                       <span className="hidden sm:inline">⚙️ Configure</span>
@@ -288,7 +288,7 @@ export function Layout({ children }) {
                     {configMenuOpen && (
                       <div
                         ref={configMenuRef}
-                        className="fixed bg-white rounded-lg shadow-xl border-2 border-red-100 min-w-[180px] z-[9999]"
+                        className="fixed bg-white rounded-lg shadow-xl border-2 border-blue-100 min-w-[180px] z-[9999]"
                         style={{
                           top: `${dropdownPosition.top}px`,
                           left: `${dropdownPosition.left}px`
@@ -298,8 +298,8 @@ export function Layout({ children }) {
                           to="/admin/departments"
                           className={`block px-4 py-2.5 text-xs sm:text-sm font-medium transition-all first:rounded-t-lg ${
                             isActive('/admin/departments')
-                              ? 'bg-red-600 text-white'
-                              : 'text-slate-700 hover:bg-red-50 hover:text-red-600'
+                              ? 'bg-blue-600 text-white'
+                              : 'text-slate-700 hover:bg-blue-50 hover:text-blue-600'
                           }`}
                           onClick={() => setConfigMenuOpen(false)}
                         >
@@ -310,10 +310,10 @@ export function Layout({ children }) {
                         </Link>
                         <Link
                           to="/admin/users"
-                          className={`block px-4 py-2.5 text-xs sm:text-sm font-medium transition-all border-t border-red-100 last:rounded-b-lg ${
+                          className={`block px-4 py-2.5 text-xs sm:text-sm font-medium transition-all border-t border-blue-100 last:rounded-b-lg ${
                             isActive('/admin/users')
-                              ? 'bg-red-600 text-white'
-                              : 'text-slate-700 hover:bg-red-50 hover:text-red-600'
+                              ? 'bg-blue-600 text-white'
+                              : 'text-slate-700 hover:bg-blue-50 hover:text-blue-600'
                           }`}
                           onClick={() => setConfigMenuOpen(false)}
                         >
@@ -334,8 +334,8 @@ export function Layout({ children }) {
                       to={`/form/${form._id}`}
                       className={`px-3 py-1.5 sm:px-4 sm:py-2 md:px-5 md:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
                         location.pathname === `/form/${form._id}`
-                          ? 'bg-red-600 text-white shadow-md'
-                          : 'text-slate-700 hover:bg-red-50 hover:text-red-600'
+                          ? 'bg-blue-600 text-white shadow-md'
+                          : 'text-slate-700 hover:bg-blue-50 hover:text-blue-600'
                       }`}
                     >
                       <span className="hidden sm:inline">📝 {form.name}</span>
@@ -346,8 +346,8 @@ export function Layout({ children }) {
                     to="/admin/patient-report"
                     className={`px-3 py-1.5 sm:px-4 sm:py-2 md:px-5 md:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
                       isActive('/admin/patient-report')
-                        ? 'bg-red-600 text-white shadow-md'
-                        : 'text-slate-700 hover:bg-red-50 hover:text-red-600'
+                        ? 'bg-blue-600 text-white shadow-md'
+                        : 'text-slate-700 hover:bg-blue-50 hover:text-blue-600'
                     }`}
                   >
                     <span className="hidden sm:inline">📋 Patient Report</span>
@@ -357,8 +357,8 @@ export function Layout({ children }) {
                     to="/admin/department-logs"
                     className={`px-3 py-1.5 sm:px-4 sm:py-2 md:px-5 md:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
                       isActive('/admin/department-logs')
-                        ? 'bg-red-600 text-white shadow-md'
-                        : 'text-slate-700 hover:bg-red-50 hover:text-red-600'
+                        ? 'bg-blue-600 text-white shadow-md'
+                        : 'text-slate-700 hover:bg-blue-50 hover:text-blue-600'
                     }`}
                   >
                     <span className="hidden sm:inline">📊 Department Logs</span>

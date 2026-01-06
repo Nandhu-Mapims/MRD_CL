@@ -44,6 +44,16 @@ exports.submitAudit = async (req, res) => {
       }
     }
 
+    // Validate that remarks are provided when response is NO
+    for (const it of items) {
+      const responseValue = (it.responseValue || it.yesNoNa || '').toUpperCase();
+      if (responseValue === 'NO' && (!it.remarks || !it.remarks.trim())) {
+        return res.status(400).json({ 
+          message: 'Remarks are required when "NO" is selected. Please provide remarks for all "NO" responses.' 
+        });
+      }
+    }
+
     // Create audit submissions with patient reference
     const docs = items.map((it) => ({
       department: departmentId,
@@ -54,9 +64,9 @@ exports.submitAudit = async (req, res) => {
       checklistItemId: it.checklistItemId,
       yesNoNa: it.yesNoNa || undefined, // Legacy field
       responseValue: it.responseValue || it.yesNoNa || '', // New flexible field
-      remarks: it.remarks,
-      responsibility: it.responsibility,
-      status: it.status || 'OPEN',
+      remarks: it.remarks || '',
+      responsibility: it.responsibility || '',
+      status: it.status && it.status.trim() ? it.status : undefined, // Only use if provided
       submittedBy: userId,
       submittedAt: new Date(),
     }));
@@ -447,7 +457,7 @@ exports.getSubmissionsForEdit = async (req, res) => {
       responseValue: sub.responseValue || sub.yesNoNa || '',
       remarks: sub.remarks || '',
       responsibility: sub.responsibility || '',
-      status: sub.status || 'OPEN',
+      status: sub.status || '',
     }));
 
     res.json({
@@ -543,7 +553,7 @@ exports.updateAudit = async (req, res) => {
         existingSub.responseValue = it.responseValue || it.yesNoNa || '';
         existingSub.remarks = it.remarks || '';
         existingSub.responsibility = it.responsibility || '';
-        existingSub.status = it.status || 'OPEN';
+        existingSub.status = it.status && it.status.trim() ? it.status : undefined;
         existingSub.patientName = normalizedPatientName; // Update patient name
         existingSub.submittedAt = new Date(); // Update timestamp to reflect edit
         return existingSub.save();
@@ -560,7 +570,7 @@ exports.updateAudit = async (req, res) => {
           responseValue: it.responseValue || it.yesNoNa || '',
           remarks: it.remarks || '',
           responsibility: it.responsibility || '',
-          status: it.status || 'OPEN',
+          status: it.status && it.status.trim() ? it.status : undefined,
           submittedBy: userId,
           submittedAt: new Date(),
         });

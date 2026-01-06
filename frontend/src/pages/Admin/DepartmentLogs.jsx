@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react'
 import { apiClient } from '../../api/client'
-import { EditAuditModal } from '../../components/EditAuditModal'
 
 export function DepartmentLogs() {
   const [logs, setLogs] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [expandedDepts, setExpandedDepts] = useState(new Set())
-  const [editModalOpen, setEditModalOpen] = useState(false)
+  const [previewModalOpen, setPreviewModalOpen] = useState(false)
   const [selectedUhid, setSelectedUhid] = useState('')
-  const [selectedDepartmentId, setSelectedDepartmentId] = useState('')
+  const [previewData, setPreviewData] = useState(null)
+  const [loadingPreview, setLoadingPreview] = useState(false)
 
   useEffect(() => {
     loadLogs()
@@ -40,6 +40,31 @@ export function DepartmentLogs() {
       newExpanded.add(deptId)
     }
     setExpandedDepts(newExpanded)
+  }
+
+  const loadPreviewData = async (uhid) => {
+    if (!uhid || !uhid.trim()) return
+    
+    setLoadingPreview(true)
+    setPreviewModalOpen(true)
+    setSelectedUhid(uhid.trim().toUpperCase())
+    setPreviewData(null) // Clear previous data
+    
+    try {
+      // Get all submissions for this UHID grouped by department
+      const data = await apiClient.get(`/audits/uhid/${encodeURIComponent(uhid.trim().toUpperCase())}`)
+      setPreviewData(data)
+    } catch (err) {
+      console.error('Error loading preview data:', err)
+      const errorMessage = err.response?.data?.message || err.message || 'Failed to load data'
+      setPreviewData({ 
+        error: errorMessage,
+        patient: { uhid: uhid.trim().toUpperCase(), patientName: 'N/A' },
+        departments: [] 
+      })
+    } finally {
+      setLoadingPreview(false)
+    }
   }
 
   const formatDate = (dateString) => {
@@ -84,7 +109,7 @@ export function DepartmentLogs() {
     return (
       <div className="flex items-center justify-center min-h-[500px]">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-red-600 mb-4"></div>
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600 mb-4"></div>
           <div className="text-slate-600 font-medium">Loading department logs...</div>
         </div>
       </div>
@@ -94,17 +119,17 @@ export function DepartmentLogs() {
   if (error) {
     return (
       <div className="space-y-6">
-        <div className="bg-gradient-to-r from-red-600 to-red-700 text-white rounded-xl shadow-xl p-6 sm:p-8">
+        <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl shadow-xl p-6 sm:p-8">
           <h2 className="text-2xl sm:text-3xl font-bold mb-2">Department Activity Logs</h2>
-          <p className="text-red-100">Track form submissions and edits across all departments</p>
+          <p className="text-blue-100">Track form submissions and edits across all departments</p>
         </div>
-        <div className="bg-red-50 border-2 border-red-200 rounded-xl p-6 text-center">
+        <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-6 text-center">
           <div className="text-4xl mb-4">⚠️</div>
-          <p className="text-red-800 font-semibold mb-2">Error Loading Department Logs</p>
-          <p className="text-red-600 text-sm mb-4">{error}</p>
+          <p className="text-blue-800 font-semibold mb-2">Error Loading Department Logs</p>
+          <p className="text-blue-600 text-sm mb-4">{error}</p>
           <button
             onClick={loadLogs}
-            className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors"
+            className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
           >
             Retry
           </button>
@@ -116,9 +141,9 @@ export function DepartmentLogs() {
   if (!logs || !logs.departments || logs.departments.length === 0) {
     return (
       <div className="space-y-6">
-        <div className="bg-gradient-to-r from-red-600 to-red-700 text-white rounded-xl shadow-xl p-6 sm:p-8">
+        <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl shadow-xl p-6 sm:p-8">
           <h2 className="text-2xl sm:text-3xl font-bold mb-2">Department Activity Logs</h2>
-          <p className="text-red-100">Track form submissions and edits across all departments</p>
+          <p className="text-blue-100">Track form submissions and edits across all departments</p>
         </div>
         <div className="bg-white rounded-xl shadow-lg p-12 text-center border-2 border-dashed border-slate-300">
           <div className="text-6xl mb-4">📋</div>
@@ -134,13 +159,13 @@ export function DepartmentLogs() {
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="bg-gradient-to-r from-red-600 via-red-700 to-red-800 text-white rounded-xl shadow-2xl p-6 sm:p-8 relative overflow-hidden">
+      <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-blue-800 text-white rounded-xl shadow-2xl p-6 sm:p-8 relative overflow-hidden">
         <div className="absolute inset-0 bg-black opacity-5"></div>
         <div className="relative z-10">
           <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-2 drop-shadow-lg">
             Department Activity Logs
           </h2>
-          <p className="text-red-100 text-sm sm:text-base">
+          <p className="text-blue-100 text-sm sm:text-base">
             Track form submissions, submission dates, and recent edits for all departments
           </p>
         </div>
@@ -209,7 +234,7 @@ export function DepartmentLogs() {
             >
               {/* Department Header */}
               <div
-                className="bg-gradient-to-r from-red-50 to-red-100 p-4 sm:p-6 cursor-pointer hover:from-red-100 hover:to-red-200 transition-colors"
+                className="bg-gradient-to-r from-blue-50 to-blue-100 p-4 sm:p-6 cursor-pointer hover:from-blue-100 hover:to-blue-200 transition-colors"
                 onClick={() => toggleExpand(deptLog.department._id)}
               >
                 <div className="flex items-center justify-between">
@@ -218,7 +243,7 @@ export function DepartmentLogs() {
                       <h3 className="text-lg sm:text-xl font-bold text-slate-800">
                         {deptLog.department.name}
                       </h3>
-                      <span className="px-3 py-1 bg-red-600 text-white text-xs font-semibold rounded-full">
+                      <span className="px-3 py-1 bg-blue-600 text-white text-xs font-semibold rounded-full">
                         {deptLog.department.code}
                       </span>
                     </div>
@@ -301,7 +326,7 @@ export function DepartmentLogs() {
                           {deptLog.patients.map((patient, idx) => (
                             <div
                               key={idx}
-                              className="bg-white p-4 rounded-lg border border-slate-200 hover:border-red-300 transition-colors"
+                              className="bg-white p-4 rounded-lg border border-slate-200 hover:border-blue-300 transition-colors"
                             >
                               <div className="flex items-start justify-between mb-3">
                                 <div className="flex-1">
@@ -309,9 +334,7 @@ export function DepartmentLogs() {
                                     <button
                                       type="button"
                                       onClick={() => {
-                                        setSelectedUhid(patient.uhid)
-                                        setSelectedDepartmentId(deptLog.department._id)
-                                        setEditModalOpen(true)
+                                        loadPreviewData(patient.uhid)
                                       }}
                                       className="font-bold text-lg text-blue-600 hover:text-blue-800 hover:underline transition-colors"
                                     >
@@ -341,43 +364,6 @@ export function DepartmentLogs() {
                                   </div>
                                 </div>
                               </div>
-                              {/* Submissions for this patient */}
-                              <div className="mt-3 pt-3 border-t border-slate-200">
-                                <details className="cursor-pointer">
-                                  <summary className="text-sm font-medium text-slate-700 hover:text-red-600 transition-colors">
-                                    View {patient.submissionCount} submission{patient.submissionCount !== 1 ? 's' : ''} details
-                                  </summary>
-                                  <div className="mt-2 space-y-2">
-                                    {patient.submissions.map((sub, subIdx) => (
-                                      <div
-                                        key={subIdx}
-                                        className="bg-slate-50 p-2 rounded text-xs border border-slate-200"
-                                      >
-                                        <div className="flex items-center justify-between">
-                                          <div>
-                                            <span className="font-medium">Submitted:</span>{' '}
-                                            {formatDate(sub.submittedAt)}
-                                          </div>
-                                          <div className="flex items-center gap-2">
-                                            {sub.isEdited && (
-                                              <span className="px-2 py-0.5 bg-orange-100 text-orange-700 rounded text-xs font-semibold">
-                                                Edited
-                                              </span>
-                                            )}
-                                            <span className="text-slate-500">By: {sub.submittedBy}</span>
-                                          </div>
-                                        </div>
-                                        {sub.isEdited && (
-                                          <div className="mt-1 text-slate-600">
-                                            <span className="font-medium">Last Edited:</span>{' '}
-                                            {formatDate(sub.updatedAt)} ({getTimeAgo(sub.updatedAt)})
-                                          </div>
-                                        )}
-                                      </div>
-                                    ))}
-                                  </div>
-                                </details>
-                              </div>
                             </div>
                           ))}
                         </div>
@@ -396,10 +382,10 @@ export function DepartmentLogs() {
                           {deptLog.submissionDates.map((dateEntry, idx) => (
                             <div
                               key={idx}
-                              className="flex items-center justify-between bg-white p-3 rounded-lg border border-slate-200 hover:border-red-300 transition-colors"
+                              className="flex items-center justify-between bg-white p-3 rounded-lg border border-slate-200 hover:border-blue-300 transition-colors"
                             >
                               <div className="flex items-center gap-3">
-                                <div className="w-2 h-2 bg-red-600 rounded-full"></div>
+                                <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
                                 <span className="font-medium text-slate-700">
                                   {formatDateOnly(dateEntry.date)}
                                 </span>
@@ -408,7 +394,7 @@ export function DepartmentLogs() {
                                 <span className="text-slate-600">
                                   {dateEntry.uniqueForms} form{dateEntry.uniqueForms !== 1 ? 's' : ''}
                                 </span>
-                                <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full font-semibold">
+                                <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full font-semibold">
                                   {dateEntry.count} submission{dateEntry.count !== 1 ? 's' : ''}
                                 </span>
                               </div>
@@ -438,9 +424,7 @@ export function DepartmentLogs() {
                                     <button
                                       type="button"
                                       onClick={() => {
-                                        setSelectedUhid(edited.uhid)
-                                        setSelectedDepartmentId(deptLog.department._id)
-                                        setEditModalOpen(true)
+                                        loadPreviewData(edited.uhid)
                                       }}
                                       className="font-bold text-blue-600 hover:text-blue-800 hover:underline transition-colors"
                                     >
@@ -507,9 +491,7 @@ export function DepartmentLogs() {
                                     <button
                                       type="button"
                                       onClick={() => {
-                                        setSelectedUhid(sub.uhid)
-                                        setSelectedDepartmentId(deptLog.department._id)
-                                        setEditModalOpen(true)
+                                        loadPreviewData(sub.uhid)
                                       }}
                                       className="font-medium text-blue-600 hover:text-blue-800 hover:underline transition-colors"
                                     >
@@ -557,21 +539,135 @@ export function DepartmentLogs() {
         })}
       </div>
 
-      {/* Edit Modal */}
-      <EditAuditModal
-        isOpen={editModalOpen}
-        onClose={() => {
-          setEditModalOpen(false)
-          setSelectedUhid('')
-          setSelectedDepartmentId('')
-        }}
-        uhid={selectedUhid}
-        departmentId={selectedDepartmentId}
-        onSuccess={() => {
-          // Reload logs after successful edit
-          loadLogs()
-        }}
-      />
+      {/* Data Preview Modal - Grouped by UHID and Department */}
+      {previewModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
+            {/* Header */}
+            <div className="bg-blue-600 text-white px-4 py-3 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-bold">Data Preview - UHID: {selectedUhid}</h2>
+                <p className="text-sm text-blue-100">
+                  {previewData?.patient?.patientName ? `Patient: ${previewData.patient.patientName}` : 'Loading...'}
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setPreviewModalOpen(false)
+                  setSelectedUhid('')
+                  setPreviewData(null)
+                }}
+                className="text-white hover:text-blue-200 text-2xl font-bold"
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-4">
+              {loadingPreview ? (
+                <div className="text-center py-8">
+                  <div className="text-slate-500">Loading data...</div>
+                </div>
+              ) : previewData?.error ? (
+                <div className="text-center py-8 text-blue-600">
+                  <p className="font-semibold mb-2">Error loading data</p>
+                  <p className="text-sm">{previewData.error}</p>
+                </div>
+              ) : previewData && previewData.departments && previewData.departments.length > 0 ? (
+                <div className="space-y-6">
+                  {/* Patient Info */}
+                  <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                    <h3 className="font-bold text-slate-800 mb-2">Patient Information</h3>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <span className="font-semibold">UHID:</span> {previewData.patient.uhid}
+                      </div>
+                      <div>
+                        <span className="font-semibold">Patient Name:</span> {previewData.patient.patientName}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Department-wise Data */}
+                  {previewData.departments.map((deptData, deptIdx) => (
+                    <div key={deptIdx} className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+                      <div className="bg-blue-600 text-white px-4 py-2">
+                        <h3 className="font-semibold text-sm">
+                          {deptData.department.name} ({deptData.department.code})
+                        </h3>
+                      </div>
+                      <div className="p-4">
+                        {deptData.sections && deptData.sections.length > 0 ? (
+                          deptData.sections.map((section, sectionIdx) => (
+                            <div key={sectionIdx} className="mb-4">
+                              <h4 className="font-semibold text-slate-700 mb-2 text-sm border-b border-slate-200 pb-1">
+                                {section.sectionName}
+                              </h4>
+                              <div className="overflow-x-auto">
+                                <table className="w-full text-xs">
+                                  <thead className="bg-slate-50">
+                                    <tr>
+                                      <th className="px-2 py-1.5 text-left font-semibold text-slate-700">Item</th>
+                                      <th className="px-2 py-1.5 text-left font-semibold text-slate-700">Response</th>
+                                      <th className="px-2 py-1.5 text-left font-semibold text-slate-700">Remarks</th>
+                                      <th className="px-2 py-1.5 text-left font-semibold text-slate-700">Responsibility</th>
+                                      <th className="px-2 py-1.5 text-left font-semibold text-slate-700">Status</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-slate-100">
+                                    {section.items.map((item, itemIdx) => (
+                                      <tr key={itemIdx} className="hover:bg-slate-50">
+                                        <td className="px-2 py-2">{item.checklistItemId?.label || 'N/A'}</td>
+                                        <td className="px-2 py-2">{item.responseValue || item.yesNoNa || 'N/A'}</td>
+                                        <td className="px-2 py-2">{item.remarks || '-'}</td>
+                                        <td className="px-2 py-2">{item.responsibility || '-'}</td>
+                                        <td className="px-2 py-2">
+                                          <span className={`px-2 py-0.5 rounded text-xs ${
+                                            item.status === 'CLOSED' ? 'bg-green-100 text-green-700' :
+                                            item.status === 'IN_PROGRESS' ? 'bg-yellow-100 text-yellow-700' :
+                                            'bg-blue-100 text-blue-700'
+                                          }`}>
+                                            {item.status || 'OPEN'}
+                                          </span>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <p className="text-slate-500 text-sm">No data available for this department.</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-slate-500">
+                  <p>No data found for UHID: {selectedUhid}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="border-t border-slate-200 px-4 py-3 flex justify-end">
+              <button
+                onClick={() => {
+                  setPreviewModalOpen(false)
+                  setSelectedUhid('')
+                  setPreviewData(null)
+                }}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2 rounded text-sm transition-all"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

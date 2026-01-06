@@ -102,7 +102,7 @@ export function EditAuditModal({ isOpen, onClose, uhid, departmentId, formTempla
           responseValue: item.responseValue || item.yesNoNa || '',
           remarks: item.remarks || '',
           responsibility: item.responsibility || '',
-          status: item.status || 'OPEN',
+          status: item.status || '',
         }
       })
 
@@ -113,11 +113,11 @@ export function EditAuditModal({ isOpen, onClose, uhid, departmentId, formTempla
           allAnswers[it._id] = existingAnswers[it._id]
         } else {
           allAnswers[it._id] = {
-            yesNoNa: it.isMandatory ? 'YES' : 'NA',
-            responseValue: it.isMandatory ? 'YES' : '',
+            yesNoNa: '',
+            responseValue: '',
             remarks: '',
             responsibility: '',
-            status: 'OPEN',
+            status: '',
           }
         }
       })
@@ -148,6 +148,16 @@ export function EditAuditModal({ isOpen, onClose, uhid, departmentId, formTempla
     if (!patientName.trim()) {
       setMessage('Please enter Patient Name')
       return
+    }
+
+    // Validate that remarks are provided when NO is selected
+    for (const it of items) {
+      const answer = answers[it._id]
+      if (answer?.responseValue === 'NO' && (!answer?.remarks || !answer.remarks.trim())) {
+        setMessage(`Remarks are required when "NO" is selected for: ${it.label}`)
+        setSubmitting(false)
+        return
+      }
     }
 
     setSubmitting(true)
@@ -194,14 +204,14 @@ export function EditAuditModal({ isOpen, onClose, uhid, departmentId, formTempla
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="bg-red-600 text-white px-4 py-3 flex items-center justify-between">
+        <div className="bg-blue-600 text-white px-4 py-3 flex items-center justify-between">
           <div>
             <h2 className="text-lg font-bold">Edit Audit Record</h2>
-            <p className="text-sm text-red-100">UHID: {uhid}</p>
+            <p className="text-sm text-blue-100">UHID: {uhid}</p>
           </div>
           <button
             onClick={onClose}
-            className="text-white hover:text-red-200 text-2xl font-bold"
+            className="text-white hover:text-blue-200 text-2xl font-bold"
           >
             ×
           </button>
@@ -220,7 +230,7 @@ export function EditAuditModal({ isOpen, onClose, uhid, departmentId, formTempla
                   className={`mb-4 px-3 py-2 rounded text-sm ${
                     message.includes('successfully')
                       ? 'bg-green-50 border border-green-200 text-green-700'
-                      : 'bg-red-50 border border-red-200 text-red-700'
+                      : 'bg-blue-50 border border-blue-200 text-blue-700'
                   }`}
                 >
                   {message}
@@ -239,7 +249,7 @@ export function EditAuditModal({ isOpen, onClose, uhid, departmentId, formTempla
                       setSelectedDeptId(e.target.value)
                       setAnswers({}) // Clear answers when switching departments
                     }}
-                    className="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                    className="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
                     {availableDepartments.map((dept) => (
                       <option key={dept._id} value={dept._id?.toString() || dept._id}>
@@ -258,14 +268,14 @@ export function EditAuditModal({ isOpen, onClose, uhid, departmentId, formTempla
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 {/* Patient Information */}
-                <div className="bg-slate-50 rounded-lg border-2 border-red-500 p-3">
+                <div className="bg-slate-50 rounded-lg border-2 border-blue-500 p-3">
                   <h3 className="text-sm font-bold text-slate-800 mb-2">
                     Patient Information
                   </h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-medium text-slate-700 mb-1">
-                        UHID <span className="text-red-500">*</span>
+                        UHID <span className="text-blue-500">*</span>
                       </label>
                       <input
                         type="text"
@@ -276,13 +286,13 @@ export function EditAuditModal({ isOpen, onClose, uhid, departmentId, formTempla
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-slate-700 mb-1">
-                        Patient Name <span className="text-red-500">*</span>
+                        Patient Name <span className="text-blue-500">*</span>
                       </label>
                       <input
                         type="text"
                         value={patientName}
                         onChange={(e) => setPatientName(e.target.value)}
-                        className="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                        className="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         required
                       />
                     </div>
@@ -299,7 +309,7 @@ export function EditAuditModal({ isOpen, onClose, uhid, departmentId, formTempla
                     .sort()
                     .map((sectionName) => (
                       <div key={sectionName} className="bg-white rounded-lg border border-slate-200 overflow-hidden">
-                        <div className="bg-red-600 text-white px-3 py-2">
+                        <div className="bg-blue-600 text-white px-3 py-2">
                           <h3 className="font-semibold text-sm">{sectionName}</h3>
                         </div>
                         <div className="overflow-x-auto">
@@ -326,87 +336,49 @@ export function EditAuditModal({ isOpen, onClose, uhid, departmentId, formTempla
                                         <div className="font-medium text-slate-800">{it.label}</div>
                                       </td>
                                       <td className="px-2 py-2 align-top">
-                                        {(() => {
-                                          switch (responseType) {
-                                            case 'YES_NO':
-                                              return (
-                                                <div className="flex flex-col gap-1">
-                                                  {['YES', 'NO'].map((opt) => (
-                                                    <label key={opt} className="flex items-center gap-1 cursor-pointer">
-                                                      <input
-                                                        type="radio"
-                                                        name={`resp_${it._id}`}
-                                                        value={opt}
-                                                        checked={currentValue === opt}
-                                                        onChange={(e) => {
-                                                          updateAnswer(it._id, 'responseValue', e.target.value)
-                                                          updateAnswer(it._id, 'yesNoNa', e.target.value)
-                                                        }}
-                                                        className="w-3 h-3 text-red-600"
-                                                      />
-                                                      <span className="text-[10px]">{opt}</span>
-                                                    </label>
-                                                  ))}
-                                                </div>
-                                              )
-                                            case 'YES_NO_NA':
-                                              return (
-                                                <div className="flex flex-col gap-1">
-                                                  {['YES', 'NO', 'NA'].map((opt) => (
-                                                    <label key={opt} className="flex items-center gap-1 cursor-pointer">
-                                                      <input
-                                                        type="radio"
-                                                        name={`resp_${it._id}`}
-                                                        value={opt}
-                                                        checked={currentValue === opt}
-                                                        onChange={(e) => {
-                                                          updateAnswer(it._id, 'responseValue', e.target.value)
-                                                          updateAnswer(it._id, 'yesNoNa', e.target.value)
-                                                        }}
-                                                        className="w-3 h-3 text-red-600"
-                                                      />
-                                                      <span className="text-[10px]">{opt}</span>
-                                                    </label>
-                                                  ))}
-                                                </div>
-                                              )
-                                            default:
-                                              return (
-                                                <div className="flex flex-col gap-1">
-                                                  {['YES', 'NO', 'NA'].map((opt) => (
-                                                    <label key={opt} className="flex items-center gap-1 cursor-pointer">
-                                                      <input
-                                                        type="radio"
-                                                        name={`resp_${it._id}`}
-                                                        value={opt}
-                                                        checked={currentValue === opt}
-                                                        onChange={(e) => {
-                                                          updateAnswer(it._id, 'responseValue', e.target.value)
-                                                          updateAnswer(it._id, 'yesNoNa', e.target.value)
-                                                        }}
-                                                        className="w-3 h-3 text-red-600"
-                                                      />
-                                                      <span className="text-[10px]">{opt}</span>
-                                                    </label>
-                                                  ))}
-                                                </div>
-                                              )
-                                          }
-                                        })()}
+                                        {/* Only YES/NO response type */}
+                                        <div className="flex flex-col gap-1">
+                                          {['YES', 'NO'].map((opt) => (
+                                            <label key={opt} className="flex items-center gap-1 cursor-pointer">
+                                              <input
+                                                type="radio"
+                                                name={`resp_${it._id}`}
+                                                value={opt}
+                                                checked={currentValue === opt}
+                                                onChange={(e) => {
+                                                  updateAnswer(it._id, 'responseValue', e.target.value)
+                                                  updateAnswer(it._id, 'yesNoNa', e.target.value)
+                                                  // Clear remarks if YES is selected
+                                                  if (e.target.value === 'YES') {
+                                                    updateAnswer(it._id, 'remarks', '')
+                                                  }
+                                                }}
+                                                className="w-3 h-3 text-blue-600"
+                                              />
+                                              <span className="text-[10px]">{opt}</span>
+                                            </label>
+                                          ))}
+                                        </div>
+                                      </td>
+                                      <td className="px-2 py-2 align-top">
+                                        {/* Show remarks only when NO is selected, and make it required */}
+                                        {currentValue === 'NO' ? (
+                                          <input
+                                            type="text"
+                                            className="border border-blue-300 rounded w-full px-1.5 py-1 text-[10px] focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-blue-50"
+                                            value={answers[it._id]?.remarks || ''}
+                                            onChange={(e) => updateAnswer(it._id, 'remarks', e.target.value)}
+                                            placeholder="Remarks required*"
+                                            required
+                                          />
+                                        ) : (
+                                          <span className="text-[10px] text-slate-400 italic">N/A</span>
+                                        )}
                                       </td>
                                       <td className="px-2 py-2 align-top">
                                         <input
                                           type="text"
-                                          className="border border-slate-300 rounded w-full px-1.5 py-1 text-[10px] focus:ring-1 focus:ring-red-500"
-                                          value={answers[it._id]?.remarks || ''}
-                                          onChange={(e) => updateAnswer(it._id, 'remarks', e.target.value)}
-                                          placeholder="Remarks"
-                                        />
-                                      </td>
-                                      <td className="px-2 py-2 align-top">
-                                        <input
-                                          type="text"
-                                          className="border border-slate-300 rounded w-full px-1.5 py-1 text-[10px] focus:ring-1 focus:ring-red-500"
+                                          className="border border-slate-300 rounded w-full px-1.5 py-1 text-[10px] focus:ring-1 focus:ring-blue-500"
                                           value={answers[it._id]?.responsibility || ''}
                                           onChange={(e) => updateAnswer(it._id, 'responsibility', e.target.value)}
                                           placeholder="Responsible"
@@ -414,10 +386,11 @@ export function EditAuditModal({ isOpen, onClose, uhid, departmentId, formTempla
                                       </td>
                                       <td className="px-2 py-2 align-top">
                                         <select
-                                          className="border border-slate-300 rounded w-full px-1.5 py-1 text-[10px] focus:ring-1 focus:ring-red-500"
-                                          value={answers[it._id]?.status || 'OPEN'}
+                                          className="border border-slate-300 rounded w-full px-1.5 py-1 text-[10px] focus:ring-1 focus:ring-blue-500"
+                                          value={answers[it._id]?.status || ''}
                                           onChange={(e) => updateAnswer(it._id, 'status', e.target.value)}
                                         >
+                                          <option value="">Select Status</option>
                                           {STATUS_OPTIONS.map((s) => (
                                             <option key={s} value={s}>
                                               {s.replace('_', ' ')}
@@ -447,7 +420,7 @@ export function EditAuditModal({ isOpen, onClose, uhid, departmentId, formTempla
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="bg-red-600 hover:bg-red-700 text-white font-semibold px-6 py-2 rounded text-sm transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2 rounded text-sm transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     {submitting ? 'Updating...' : 'Update Audit'}
                   </button>

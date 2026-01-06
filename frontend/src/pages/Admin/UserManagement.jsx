@@ -111,7 +111,7 @@ export function UserManagement() {
               isActive: true,
             })
           }}
-          className="bg-red-600 hover:bg-red-700 text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg shadow-md transition-colors text-xs sm:text-sm font-medium"
+          className="bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg shadow-md transition-colors text-xs sm:text-sm font-medium"
         >
           + Create New User
         </button>
@@ -132,7 +132,7 @@ export function UserManagement() {
                 required
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 placeholder="John Doe"
               />
             </div>
@@ -146,7 +146,7 @@ export function UserManagement() {
                 required
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 placeholder="user@hospital.com"
               />
             </div>
@@ -160,7 +160,7 @@ export function UserManagement() {
                 required={!editingUser}
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 placeholder="••••••••"
               />
             </div>
@@ -180,7 +180,7 @@ export function UserManagement() {
                     departmentId: newRole === 'admin' ? '' : formData.departmentId,
                   })
                 }}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
                 <option value="user">User</option>
                 <option value="admin">Admin</option>
@@ -196,7 +196,7 @@ export function UserManagement() {
                   required={formData.role === 'user'}
                   value={formData.departmentId}
                   onChange={(e) => setFormData({ ...formData, departmentId: e.target.value })}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
                   <option value="">Select Department</option>
                   {departments.map((dept) => (
@@ -214,7 +214,7 @@ export function UserManagement() {
                 id="isActive"
                 checked={formData.isActive}
                 onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-                className="w-4 h-4 text-red-600 border-slate-300 rounded focus:ring-red-500"
+                className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
               />
               <label htmlFor="isActive" className="text-sm text-slate-700">
                 Active (user can login)
@@ -224,7 +224,7 @@ export function UserManagement() {
             <div className="flex gap-3 pt-4">
               <button
                 type="submit"
-                className="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg shadow-md transition-colors"
+                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg shadow-md transition-colors"
               >
                 {editingUser ? 'Update' : 'Create'} User
               </button>
@@ -245,7 +245,7 @@ export function UserManagement() {
 
       <div className="bg-white rounded-lg shadow-md overflow-hidden">
         <table className="w-full">
-          <thead className="bg-gradient-to-r from-red-700 via-red-600 to-red-500 text-white shadow-md">
+          <thead className="bg-gradient-to-r from-blue-700 via-blue-600 to-blue-500 text-white shadow-md">
             <tr>
               <th className="text-left px-6 py-4 font-semibold">Name</th>
               <th className="text-left px-6 py-4 font-semibold">Email</th>
@@ -290,7 +290,7 @@ export function UserManagement() {
                     <span
                       className={`px-3 py-1 rounded-full text-xs font-medium ${
                         user.isActive
-                          ? 'bg-red-100 text-red-700'
+                          ? 'bg-blue-100 text-blue-700'
                           : 'bg-slate-100 text-slate-600'
                       }`}
                     >
@@ -304,13 +304,13 @@ export function UserManagement() {
                     <div className="flex items-center justify-center gap-2">
                       <button
                         onClick={() => handleEdit(user)}
-                        className="text-red-600 hover:text-red-700 text-sm font-medium px-3 py-1 rounded hover:bg-red-50 transition-colors"
+                        className="text-blue-600 hover:text-blue-700 text-sm font-medium px-3 py-1 rounded hover:bg-blue-50 transition-colors"
                       >
                         Edit
                       </button>
                       <button
                         onClick={() => handleDelete(user._id)}
-                        className="text-red-600 hover:text-red-700 text-sm font-medium px-3 py-1 rounded hover:bg-red-50 transition-colors"
+                        className="text-blue-600 hover:text-blue-700 text-sm font-medium px-3 py-1 rounded hover:bg-blue-50 transition-colors"
                       >
                         Delete
                       </button>

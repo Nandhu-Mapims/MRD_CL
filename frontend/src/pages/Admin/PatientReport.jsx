@@ -328,7 +328,7 @@ export function PatientReport() {
 
       <div className="space-y-4 sm:space-y-6">
         {/* Header */}
-        <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 border-l-4 border-red-600 no-print">
+        <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 border-l-4 border-blue-600 no-print">
           <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-800 mb-2">
             Patient Report Dashboard
           </h2>
@@ -350,7 +350,7 @@ export function PatientReport() {
                 value={uhid}
                 onChange={(e) => setUhid(e.target.value.toUpperCase())}
                 placeholder="Enter UHID (e.g., 234567)"
-                className="w-full border-2 border-slate-300 rounded-lg px-4 py-2.5 sm:py-3 text-sm sm:text-base focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                className="w-full border-2 border-slate-300 rounded-lg px-4 py-2.5 sm:py-3 text-sm sm:text-base focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 required
               />
             </div>
@@ -358,7 +358,7 @@ export function PatientReport() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full sm:w-auto bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-semibold px-6 sm:px-8 py-2.5 sm:py-3 rounded-lg shadow-lg transition-all disabled:opacity-60 disabled:cursor-not-allowed transform hover:scale-[1.02] text-sm sm:text-base"
+                className="w-full sm:w-auto bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold px-6 sm:px-8 py-2.5 sm:py-3 rounded-lg shadow-lg transition-all disabled:opacity-60 disabled:cursor-not-allowed transform hover:scale-[1.02] text-sm sm:text-base"
               >
                 {loading ? 'Searching...' : 'Search'}
               </button>
@@ -377,7 +377,7 @@ export function PatientReport() {
                   value={consultantName}
                   onChange={(e) => setConsultantName(e.target.value)}
                   placeholder="Enter consultant name"
-                  className="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                  className="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
               <div>
@@ -389,7 +389,7 @@ export function PatientReport() {
                   value={ward}
                   onChange={(e) => setWard(e.target.value)}
                   placeholder="Enter ward"
-                  className="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                  className="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
               <div>
@@ -401,7 +401,7 @@ export function PatientReport() {
                   value={unitNo}
                   onChange={(e) => setUnitNo(e.target.value)}
                   placeholder="Enter unit number"
-                  className="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                  className="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
             </div>
@@ -412,7 +412,7 @@ export function PatientReport() {
           <div className={`mt-4 p-4 rounded-lg text-sm border-2 ${
             error.includes('not found') || error.includes('no audit submissions')
               ? 'bg-yellow-50 border-yellow-300 text-yellow-800'
-              : 'bg-red-50 border-red-200 text-red-700'
+              : 'bg-blue-50 border-blue-200 text-blue-700'
           }`}>
             <div className="flex items-start gap-3">
               <span className="text-lg flex-shrink-0">
@@ -438,7 +438,7 @@ export function PatientReport() {
           <div className="bg-white rounded-lg shadow-md p-4 flex flex-wrap gap-3 justify-end no-print">
             <button
               onClick={handleExportPDF}
-              className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-semibold px-6 py-2.5 rounded-lg shadow-lg transition-all transform hover:scale-[1.02] text-sm sm:text-base"
+              className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold px-6 py-2.5 rounded-lg shadow-lg transition-all transform hover:scale-[1.02] text-sm sm:text-base"
             >
               📄 Export to PDF
             </button>
@@ -557,7 +557,7 @@ export function PatientReport() {
                     {reportData.departments.map((deptData, deptIndex) => (
                       <React.Fragment key={deptIndex}>
                         {/* Department Header Row */}
-                        <tr className="dept-header" style={{ backgroundColor: '#fee2e2', pageBreakAfter: 'avoid' }}>
+                        <tr className="dept-header" style={{ backgroundColor: '#dbeafe', pageBreakAfter: 'avoid' }}>
                           <td colSpan="6" className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 font-bold text-sm print:text-xs" style={{ border: '1.5px solid #1e293b', fontWeight: 'bold' }}>
                             {deptData.department.name} ({deptData.department.code})
                           </td>

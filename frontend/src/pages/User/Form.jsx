@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { apiClient } from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
-import { EditAuditModal } from '../../components/EditAuditModal'
 
 const STATUS_OPTIONS = ['OPEN', 'IN_PROGRESS', 'CLOSED']
 
@@ -18,14 +17,14 @@ export function Form() {
   const [uhid, setUhid] = useState('')
   const [patientName, setPatientName] = useState('')
   const [checkingUHID, setCheckingUHID] = useState(false)
-  const [isEditMode, setIsEditMode] = useState(false)
   const [recentSubmissions, setRecentSubmissions] = useState([])
   const [showRecentSubmissions, setShowRecentSubmissions] = useState(false)
   const [loadingRecent, setLoadingRecent] = useState(false)
-  const [editModalOpen, setEditModalOpen] = useState(false)
-  const [selectedUhid, setSelectedUhid] = useState('')
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(null)
+  const [showSuccessModal, setShowSuccessModal] = useState(false)
+  const [submittedUHID, setSubmittedUHID] = useState('')
+  const [submittedPatientName, setSubmittedPatientName] = useState('')
 
   // Auto-fill patient name when UHID is entered (if patient exists)
   useEffect(() => {
@@ -131,16 +130,16 @@ export function Form() {
             
             setItems(checklist || [])
 
-            // Initialize answers
+            // Initialize answers - all empty, no defaults
             const init = {}
             if (checklist && Array.isArray(checklist) && checklist.length > 0) {
               checklist.forEach((it) => {
                 init[it._id] = {
-                  yesNoNa: it.isMandatory ? 'YES' : 'NA',
-                  responseValue: it.isMandatory ? 'YES' : '',
+                  yesNoNa: '',
+                  responseValue: '',
                   remarks: '',
                   responsibility: '',
-                  status: 'OPEN',
+                  status: '',
                 }
               })
             } else {
@@ -228,136 +227,19 @@ export function Form() {
     }
   }
 
-  // Load submission for editing
-  const loadSubmissionForEdit = async (editUhid) => {
-    if (!formTemplateId) return
-
-    // Get user department ID
-    let userDeptId = null
-    if (user?.department) {
-      userDeptId = typeof user.department === 'object' 
-        ? (user.department.id || user.department._id) 
-        : user.department
-    }
-    
-    if (!userDeptId) {
-      setMessage('No department assigned. Cannot load submission.')
-      return
-    }
-
-    try {
-      const data = await apiClient.get(
-        `/audits/edit?uhid=${editUhid}&departmentId=${userDeptId}&formTemplateId=${formTemplateId}`
-      )
-      
-      // Set form data
-      setUhid(data.uhid)
-      setPatientName(data.patientName)
-      setIsEditMode(true)
-      setShowRecentSubmissions(false)
-
-        // Wait for items to be loaded if not already
-        if (items.length === 0) {
-          // Get user department ID
-          let userDeptId = null
-          if (user?.department) {
-            userDeptId = typeof user.department === 'object' 
-              ? (user.department.id || user.department._id) 
-              : user.department
-          }
-          
-          if (!userDeptId) {
-            setMessage('No department assigned. Cannot load submission.')
-            return
-          }
-          
-          const checklist = await apiClient.get(
-            `/checklists/department/${userDeptId}?formTemplateId=${formTemplateId}`
-          )
-        setItems(checklist)
-        
-        // Map existing answers
-        const existingAnswers = {}
-        data.items.forEach((item) => {
-          existingAnswers[item.checklistItemId] = {
-            yesNoNa: item.yesNoNa || item.responseValue || '',
-            responseValue: item.responseValue || item.yesNoNa || '',
-            remarks: item.remarks || '',
-            responsibility: item.responsibility || '',
-            status: item.status || 'OPEN',
-          }
-        })
-
-        // Merge with all checklist items (in case new items were added)
-        const allAnswers = {}
-        checklist.forEach((it) => {
-          if (existingAnswers[it._id]) {
-            allAnswers[it._id] = existingAnswers[it._id]
-          } else {
-            allAnswers[it._id] = {
-              yesNoNa: it.isMandatory ? 'YES' : 'NA',
-              responseValue: it.isMandatory ? 'YES' : '',
-              remarks: '',
-              responsibility: '',
-              status: 'OPEN',
-            }
-          }
-        })
-        setAnswers(allAnswers)
-      } else {
-        // Map existing answers
-        const existingAnswers = {}
-        data.items.forEach((item) => {
-          existingAnswers[item.checklistItemId] = {
-            yesNoNa: item.yesNoNa || item.responseValue || '',
-            responseValue: item.responseValue || item.yesNoNa || '',
-            remarks: item.remarks || '',
-            responsibility: item.responsibility || '',
-            status: item.status || 'OPEN',
-          }
-        })
-
-        // Merge with all checklist items (in case new items were added)
-        const allAnswers = {}
-        items.forEach((it) => {
-          if (existingAnswers[it._id]) {
-            allAnswers[it._id] = existingAnswers[it._id]
-          } else {
-            allAnswers[it._id] = {
-              yesNoNa: it.isMandatory ? 'YES' : 'NA',
-              responseValue: it.isMandatory ? 'YES' : '',
-              remarks: '',
-              responsibility: '',
-              status: 'OPEN',
-            }
-          }
-        })
-        setAnswers(allAnswers)
-      }
-      setMessage('')
-    } catch (err) {
-      const errorMsg = err.response?.data?.message || 'Failed to load submission for editing'
-      setMessage(errorMsg)
-      if (err.response?.status === 403) {
-        setMessage('You can only edit your own submissions. Only admins can edit submissions from other users.')
-      }
-    }
-  }
-
   // Reset form to new mode
   const resetToNewForm = () => {
-    setIsEditMode(false)
     setUhid('')
     setPatientName('')
     setMessage('')
     const init = {}
     items.forEach((it) => {
       init[it._id] = {
-        yesNoNa: it.isMandatory ? 'YES' : 'NA',
-        responseValue: it.isMandatory ? 'YES' : '',
+        yesNoNa: '',
+        responseValue: '',
         remarks: '',
         responsibility: '',
-        status: 'OPEN',
+        status: '',
       }
     })
     setAnswers(init)
@@ -408,6 +290,16 @@ export function Form() {
       return
     }
 
+    // Validate that remarks are provided when NO is selected
+    for (const it of items) {
+      const answer = answers[it._id]
+      if (answer?.responseValue === 'NO' && (!answer?.remarks || !answer.remarks.trim())) {
+        setMessage(`Remarks are required when "NO" is selected for: ${it.label}`)
+        setSubmitting(false)
+        return
+      }
+    }
+
     setSubmitting(true)
     setMessage('')
     try {
@@ -422,22 +314,19 @@ export function Form() {
         })),
       }
       
-      if (isEditMode) {
-        // Update existing submission
-        await apiClient.put('/audits', payload)
-        setMessage('Form updated successfully!')
-      } else {
-        // Create new submission
-        await apiClient.post('/audits', payload)
-        setMessage('Form submitted successfully!')
-      }
-      
+      // Create new submission
+      await apiClient.post('/audits', payload)
+      // Show success popup
+      setSubmittedUHID(uhid.trim())
+      setSubmittedPatientName(patientName.trim())
+      setShowSuccessModal(true)
       // Reset form
       resetToNewForm()
+      
       // Reload recent submissions
       await loadRecentSubmissions()
     } catch (err) {
-      const errorMsg = err.response?.data?.message || (isEditMode ? 'Failed to update form' : 'Failed to submit form')
+      const errorMsg = err.response?.data?.message || 'Failed to submit form'
       if (errorMsg.includes('UHID already exists') || errorMsg.includes('duplicate')) {
         setMessage('This UHID already exists in the system. Please verify the UHID or contact admin.')
       } else {
@@ -463,8 +352,8 @@ export function Form() {
   if (loadError) {
     return (
       <div className="max-w-7xl mx-auto space-y-3">
-        <div className="bg-white rounded-lg shadow-sm border border-red-200 p-4 text-center">
-          <div className="text-red-600 font-semibold">{loadError}</div>
+        <div className="bg-white rounded-lg shadow-sm border border-blue-200 p-4 text-center">
+          <div className="text-blue-600 font-semibold">{loadError}</div>
         </div>
       </div>
     )
@@ -475,7 +364,7 @@ export function Form() {
     return (
       <div className="max-w-7xl mx-auto space-y-3">
         <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-4 text-center">
-          <div className="text-red-600">Form not found. Please select a valid form from the menu.</div>
+          <div className="text-blue-600">Form not found. Please select a valid form from the menu.</div>
         </div>
       </div>
     )
@@ -488,7 +377,7 @@ export function Form() {
           className={`px-3 py-2 rounded text-xs ${
             message.includes('successfully')
               ? 'bg-green-50 border border-green-200 text-green-700'
-              : 'bg-red-50 border border-red-200 text-red-700'
+              : 'bg-blue-50 border border-blue-200 text-blue-700'
           }`}
         >
           {message}
@@ -497,15 +386,15 @@ export function Form() {
 
       <form onSubmit={handleSubmit} className="space-y-3">
         {/* Compact Patient Information */}
-        <div className="bg-white rounded-lg shadow-sm border-2 border-red-500 p-3">
+        <div className="bg-white rounded-lg shadow-sm border-2 border-blue-500 p-3">
           <h3 className="text-xs font-bold text-slate-800 mb-2 flex items-center gap-1">
-            <span className="text-red-500">*</span>
+            <span className="text-blue-500">*</span>
             Patient Information (Mandatory)
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <div>
               <label className="block text-[10px] sm:text-xs font-medium text-slate-700 mb-1">
-                UHID <span className="text-red-500">*</span>
+                UHID <span className="text-blue-500">*</span>
                 {checkingUHID && <span className="ml-1 text-[10px] text-slate-400">(Checking...)</span>}
               </label>
               <input
@@ -513,20 +402,20 @@ export function Form() {
                 value={uhid}
                 onChange={(e) => setUhid(e.target.value.toUpperCase())}
                 placeholder="Enter UHID"
-                disabled={checkingUHID || isEditMode}
-                className="w-full border border-slate-300 rounded px-2 py-1.5 text-xs focus:ring-1 focus:ring-red-500 focus:border-red-500 disabled:bg-slate-100"
+                disabled={checkingUHID}
+                className="w-full border border-slate-300 rounded px-2 py-1.5 text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-100"
                 required
               />
             </div>
             <div>
               <label className="block text-[10px] sm:text-xs font-medium text-slate-700 mb-1">
-                Patient Name <span className="text-red-500">*</span>
+                Patient Name <span className="text-blue-500">*</span>
               </label>
               <input
                 type="text"
                 value={patientName}
                 onChange={(e) => setPatientName(e.target.value)}
-                className="w-full border border-slate-300 rounded px-2 py-1.5 text-xs focus:ring-1 focus:ring-red-500 focus:border-red-500"
+                className="w-full border border-slate-300 rounded px-2 py-1.5 text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                 placeholder="Enter Patient Name"
                 required
               />
@@ -545,7 +434,7 @@ export function Form() {
             .map((sectionName) => (
               <div key={sectionName} className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
                 {/* Compact Section Header */}
-                <div className="bg-red-600 text-white px-3 py-1.5">
+                <div className="bg-blue-600 text-white px-3 py-1.5">
                   <h3 className="font-semibold text-xs sm:text-sm">{sectionName}</h3>
                 </div>
 
@@ -577,162 +466,56 @@ export function Form() {
                                     {it.departmentScope === 'ALL' ? 'All departments' : it.department?.name || 'Dept specific'}
                                   </span>
                                   {it.isMandatory && (
-                                    <span className="px-1 py-0.5 bg-red-100 text-red-700 rounded text-[9px] font-medium">
+                                    <span className="px-1 py-0.5 bg-blue-100 text-blue-700 rounded text-[9px] font-medium">
                                       Mandatory
                                     </span>
                                   )}
                                 </div>
                               </td>
                               <td className="px-2 py-2 align-top">
-                                {(() => {
-                                  switch (responseType) {
-                                    case 'YES_NO':
-                                      return (
-                                        <div className="flex flex-col gap-1">
-                                          {['YES', 'NO'].map((opt) => (
-                                            <label key={opt} className="flex items-center gap-1 cursor-pointer">
-                                              <input
-                                                type="radio"
-                                                name={`resp_${it._id}`}
-                                                value={opt}
-                                                checked={currentValue === opt}
-                                                onChange={(e) => {
-                                                  updateAnswer(it._id, 'responseValue', e.target.value)
-                                                  updateAnswer(it._id, 'yesNoNa', e.target.value)
-                                                }}
-                                                className="w-3 h-3 text-red-600 border-slate-300 focus:ring-red-500"
-                                              />
-                                              <span className="text-[10px]">{opt}</span>
-                                            </label>
-                                          ))}
-                                        </div>
-                                      )
-                                    case 'YES_NO_NA':
-                                      return (
-                                        <div className="flex flex-col gap-1">
-                                          {['YES', 'NO', 'NA'].map((opt) => (
-                                            <label key={opt} className="flex items-center gap-1 cursor-pointer">
-                                              <input
-                                                type="radio"
-                                                name={`resp_${it._id}`}
-                                                value={opt}
-                                                checked={currentValue === opt}
-                                                onChange={(e) => {
-                                                  updateAnswer(it._id, 'responseValue', e.target.value)
-                                                  updateAnswer(it._id, 'yesNoNa', e.target.value)
-                                                }}
-                                                className="w-3 h-3 text-red-600 border-slate-300 focus:ring-red-500"
-                                              />
-                                              <span className="text-[10px]">{opt}</span>
-                                            </label>
-                                          ))}
-                                        </div>
-                                      )
-                                    case 'CHECKBOX':
-                                      return (
-                                        <label className="flex items-center gap-1 cursor-pointer">
-                                          <input
-                                            type="checkbox"
-                                            checked={currentValue === 'YES' || currentValue === 'true' || currentValue === true}
-                                            onChange={(e) => {
-                                              const value = e.target.checked ? 'YES' : 'NO'
-                                              updateAnswer(it._id, 'responseValue', value)
-                                              updateAnswer(it._id, 'yesNoNa', value)
-                                            }}
-                                            className="w-3.5 h-3.5 text-red-600 border-slate-300 rounded focus:ring-red-500"
-                                          />
-                                          <span className="text-[10px]">Checked</span>
-                                        </label>
-                                      )
-                                    case 'TEXT':
-                                      return (
-                                        <input
-                                          type="text"
-                                          className="border border-slate-300 rounded w-full px-1.5 py-1 text-[10px] focus:ring-1 focus:ring-red-500 focus:border-red-500"
-                                          value={currentValue}
-                                          onChange={(e) => updateAnswer(it._id, 'responseValue', e.target.value)}
-                                          placeholder="Text"
-                                        />
-                                      )
-                                    case 'NUMBER':
-                                      return (
-                                        <input
-                                          type="number"
-                                          className="border border-slate-300 rounded w-full px-1.5 py-1 text-[10px] focus:ring-1 focus:ring-red-500 focus:border-red-500"
-                                          value={currentValue}
-                                          onChange={(e) => updateAnswer(it._id, 'responseValue', e.target.value)}
-                                          placeholder="Number"
-                                        />
-                                      )
-                                    case 'DATE':
-                                      return (
-                                        <input
-                                          type="date"
-                                          className="border border-slate-300 rounded w-full px-1.5 py-1 text-[10px] focus:ring-1 focus:ring-red-500 focus:border-red-500"
-                                          value={currentValue}
-                                          onChange={(e) => updateAnswer(it._id, 'responseValue', e.target.value)}
-                                        />
-                                      )
-                                    case 'TIME':
-                                      return (
-                                        <input
-                                          type="time"
-                                          className="border border-slate-300 rounded w-full px-1.5 py-1 text-[10px] focus:ring-1 focus:ring-red-500 focus:border-red-500"
-                                          value={currentValue}
-                                          onChange={(e) => updateAnswer(it._id, 'responseValue', e.target.value)}
-                                        />
-                                      )
-                                    case 'DROPDOWN':
-                                      const options = it.responseOptions ? it.responseOptions.split(',').map(o => o.trim()) : []
-                                      return (
-                                        <select
-                                          className="border border-slate-300 rounded w-full px-1.5 py-1 text-[10px] focus:ring-1 focus:ring-red-500 focus:border-red-500"
-                                          value={currentValue}
-                                          onChange={(e) => updateAnswer(it._id, 'responseValue', e.target.value)}
-                                        >
-                                          <option value="">Select...</option>
-                                          {options.map((opt, idx) => (
-                                            <option key={idx} value={opt}>{opt}</option>
-                                          ))}
-                                        </select>
-                                      )
-                                    default:
-                                      return (
-                                        <div className="flex flex-col gap-1">
-                                          {['YES', 'NO', 'NA'].map((opt) => (
-                                            <label key={opt} className="flex items-center gap-1 cursor-pointer">
-                                              <input
-                                                type="radio"
-                                                name={`resp_${it._id}`}
-                                                value={opt}
-                                                checked={currentValue === opt}
-                                                onChange={(e) => {
-                                                  updateAnswer(it._id, 'responseValue', e.target.value)
-                                                  updateAnswer(it._id, 'yesNoNa', e.target.value)
-                                                }}
-                                                className="w-3 h-3 text-red-600 border-slate-300 focus:ring-red-500"
-                                              />
-                                              <span className="text-[10px]">{opt}</span>
-                                            </label>
-                                          ))}
-                                        </div>
-                                      )
-                                  }
-                                })()}
+                                {/* Only YES/NO response type */}
+                                <div className="flex flex-col gap-1">
+                                  {['YES', 'NO'].map((opt) => (
+                                    <label key={opt} className="flex items-center gap-1 cursor-pointer">
+                                      <input
+                                        type="radio"
+                                        name={`resp_${it._id}`}
+                                        value={opt}
+                                        checked={currentValue === opt}
+                                        onChange={(e) => {
+                                          updateAnswer(it._id, 'responseValue', e.target.value)
+                                          updateAnswer(it._id, 'yesNoNa', e.target.value)
+                                          // Clear remarks if YES is selected
+                                          if (e.target.value === 'YES') {
+                                            updateAnswer(it._id, 'remarks', '')
+                                          }
+                                        }}
+                                        className="w-3 h-3 text-blue-600 border-slate-300 focus:ring-blue-500"
+                                      />
+                                      <span className="text-[10px]">{opt}</span>
+                                    </label>
+                                  ))}
+                                </div>
+                              </td>
+                              <td className="px-2 py-2 align-top">
+                                {/* Show remarks only when NO is selected, and make it required */}
+                                {currentValue === 'NO' ? (
+                                  <input
+                                    type="text"
+                                    className="border border-blue-300 rounded w-full px-1.5 py-1 text-[10px] focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-blue-50"
+                                    value={answers[it._id]?.remarks || ''}
+                                    onChange={(e) => updateAnswer(it._id, 'remarks', e.target.value)}
+                                    placeholder="Remarks required*"
+                                    required
+                                  />
+                                ) : (
+                                  <span className="text-[10px] text-slate-400 italic">N/A</span>
+                                )}
                               </td>
                               <td className="px-2 py-2 align-top">
                                 <input
                                   type="text"
-                                  className="border border-slate-300 rounded w-full px-1.5 py-1 text-[10px] focus:ring-1 focus:ring-red-500 focus:border-red-500"
-                                  value={answers[it._id]?.remarks || ''}
-                                  onChange={(e) => updateAnswer(it._id, 'remarks', e.target.value)}
-                                  placeholder="Remarks"
-                                />
-                              </td>
-                              <td className="px-2 py-2 align-top">
-                                <input
-                                  type="text"
-                                  className="border border-slate-300 rounded w-full px-1.5 py-1 text-[10px] focus:ring-1 focus:ring-red-500 focus:border-red-500"
+                                  className="border border-slate-300 rounded w-full px-1.5 py-1 text-[10px] focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                                   value={answers[it._id]?.responsibility || ''}
                                   onChange={(e) => updateAnswer(it._id, 'responsibility', e.target.value)}
                                   placeholder="Responsible"
@@ -740,10 +523,11 @@ export function Form() {
                               </td>
                               <td className="px-2 py-2 align-top">
                                 <select
-                                  className="border border-slate-300 rounded w-full px-1.5 py-1 text-[10px] focus:ring-1 focus:ring-red-500 focus:border-red-500"
-                                  value={answers[it._id]?.status || 'OPEN'}
+                                  className="border border-slate-300 rounded w-full px-1.5 py-1 text-[10px] focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                                  value={answers[it._id]?.status || ''}
                                   onChange={(e) => updateAnswer(it._id, 'status', e.target.value)}
                                 >
+                                  <option value="">Select Status</option>
                                   {STATUS_OPTIONS.map((s) => (
                                     <option key={s} value={s}>
                                       {s.replace('_', ' ')}
@@ -764,40 +548,46 @@ export function Form() {
         {/* Compact Submit Button */}
         {Object.keys(itemsBySection).length > 0 && (
           <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-3 flex justify-end gap-2">
-            {isEditMode && (
-              <button
-                type="button"
-                onClick={resetToNewForm}
-                className="bg-slate-600 hover:bg-slate-700 text-white font-semibold px-6 py-2 rounded text-xs sm:text-sm transition-all shadow-sm hover:shadow"
-              >
-                Cancel
-              </button>
-            )}
             <button
               type="submit"
               disabled={submitting}
-              className="bg-red-600 hover:bg-red-700 text-white font-semibold px-6 py-2 rounded text-xs sm:text-sm transition-all disabled:opacity-60 disabled:cursor-not-allowed shadow-sm hover:shadow"
+              className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2 rounded text-xs sm:text-sm transition-all disabled:opacity-60 disabled:cursor-not-allowed shadow-sm hover:shadow"
             >
-              {submitting ? (isEditMode ? 'Updating...' : 'Submitting...') : (isEditMode ? 'Update Form' : 'Submit Form')}
+              {submitting ? 'Submitting...' : 'Submit Form'}
             </button>
           </div>
         )}
       </form>
 
-      {/* Edit Modal */}
-      <EditAuditModal
-        isOpen={editModalOpen}
-        onClose={() => {
-          setEditModalOpen(false)
-          setSelectedUhid('')
-        }}
-        uhid={selectedUhid}
-        departmentId={user?.department ? (typeof user.department === 'object' ? (user.department.id || user.department._id) : user.department) : null}
-        formTemplateId={formTemplateId}
-        onSuccess={() => {
-          loadRecentSubmissions()
-        }}
-      />
+      {/* Success Modal */}
+      {showSuccessModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <div className="text-center">
+              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
+                <svg className="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-bold text-slate-800 mb-2">Form Submitted Successfully!</h3>
+              <div className="text-sm text-slate-600 mb-4 space-y-1">
+                <p><span className="font-semibold">UHID:</span> {submittedUHID}</p>
+                <p><span className="font-semibold">Patient Name:</span> {submittedPatientName}</p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowSuccessModal(false)
+                  setSubmittedUHID('')
+                  setSubmittedPatientName('')
+                }}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2 rounded-lg transition-colors"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

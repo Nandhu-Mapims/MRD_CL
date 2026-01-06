@@ -8,7 +8,8 @@
     "dev": "nodemon src/server.js",
     "seed": "node src/seed/seed.js",
     "seed:cs": "node src/seed/seedCSForm.js",
-    "clear-db": "node src/scripts/clearDatabase.js"
+    "clear-db": "node src/scripts/clearDatabase.js",
+    "clear-departments": "node src/scripts/clearDepartments.js"
   },
   "keywords": [],
   "author": "",

@@ -75,7 +75,7 @@ export function SimpleFormBuilder() {
     const newSections = [...sections]
     newSections[sectionIndex].items.push({
       label: '',
-      responseType: 'YES_NO_NA',
+      responseType: 'YES_NO',
       responseOptions: '',
       isMandatory: false,
       order: newSections[sectionIndex].items.length + 1,
@@ -186,7 +186,7 @@ export function SimpleFormBuilder() {
               .map((item) => ({
                 id: item._id,
                 label: item.label,
-                responseType: item.responseType || 'YES_NO_NA',
+                responseType: item.responseType || 'YES_NO',
                 responseOptions: item.responseOptions || '',
                 isMandatory: item.isMandatory,
                 order: item.order || 0,
@@ -213,7 +213,7 @@ export function SimpleFormBuilder() {
                 .map((item) => ({
                   id: item._id,
                   label: item.label,
-                  responseType: item.responseType || 'YES_NO_NA',
+                  responseType: item.responseType || 'YES_NO',
                   responseOptions: item.responseOptions || '',
                   isMandatory: item.isMandatory,
                   order: item.order || 0,
@@ -233,7 +233,7 @@ export function SimpleFormBuilder() {
               .map((item) => ({
                 id: item._id,
                 label: item.label,
-                responseType: item.responseType || 'YES_NO_NA',
+                responseType: item.responseType || 'YES_NO',
                 responseOptions: item.responseOptions || '',
                 isMandatory: item.isMandatory,
                 order: item.order || 0,
@@ -397,7 +397,7 @@ export function SimpleFormBuilder() {
                 departmentScope: 'ALL',
                 departmentId: undefined,
                 formTemplateId: formTemplateId,
-                responseType: item.responseType || 'YES_NO_NA',
+                responseType: item.responseType || 'YES_NO',
                 responseOptions: item.responseOptions || undefined,
                 isActive: true,
                 order: item.order,
@@ -421,7 +421,7 @@ export function SimpleFormBuilder() {
                   departmentScope: 'SINGLE',
                   departmentId: deptId,
                   formTemplateId: formTemplateId,
-                  responseType: item.responseType || 'YES_NO_NA',
+                  responseType: item.responseType || 'YES_NO',
                   responseOptions: item.responseOptions || undefined,
                   isActive: true,
                   order: item.order,
@@ -461,13 +461,13 @@ export function SimpleFormBuilder() {
   const totalItems = sections.reduce((sum, sec) => sum + sec.items.length, 0)
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-red-50 to-white">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-white">
       <div className="max-w-7xl mx-auto p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-5 md:space-y-6">
         {/* Header Section */}
-        <div className="bg-gradient-to-br from-white to-red-50 rounded-xl sm:rounded-2xl shadow-2xl p-4 sm:p-6 md:p-8 border-2 border-red-200">
+        <div className="bg-gradient-to-br from-white to-blue-50 rounded-xl sm:rounded-2xl shadow-2xl p-4 sm:p-6 md:p-8 border-2 border-blue-200">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-4 sm:mb-6 md:mb-8">
             <div>
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold bg-gradient-to-r from-red-700 to-red-600 bg-clip-text text-transparent mb-1 sm:mb-2">
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold bg-gradient-to-r from-blue-700 to-blue-600 bg-clip-text text-transparent mb-1 sm:mb-2">
                 Form Builder
               </h1>
               <p className="text-xs sm:text-sm md:text-base text-slate-600 font-medium">Build sections and checklist items for existing forms</p>
@@ -484,7 +484,7 @@ export function SimpleFormBuilder() {
                     handleNewForm()
                   }
                 }}
-                className="px-3 sm:px-4 md:px-5 py-2 sm:py-2.5 border-2 border-red-300 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-white text-slate-800 shadow-sm hover:border-red-400 transition-all"
+                className="px-3 sm:px-4 md:px-5 py-2 sm:py-2.5 border-2 border-blue-300 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-slate-800 shadow-sm hover:border-blue-400 transition-all"
               >
                 <option value="">-- Select a form to build --</option>
                 {forms.map((form) => (
@@ -502,12 +502,12 @@ export function SimpleFormBuilder() {
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 sm:gap-5 md:gap-6">
           {/* Sections Sidebar */}
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-lg sm:rounded-xl md:rounded-2xl shadow-xl p-3 sm:p-4 md:p-6 border border-red-100 lg:sticky lg:top-6">
+            <div className="bg-white rounded-lg sm:rounded-xl md:rounded-2xl shadow-xl p-3 sm:p-4 md:p-6 border border-blue-100 lg:sticky lg:top-6">
               <div className="flex items-center justify-between mb-3 sm:mb-4">
                 <h3 className="font-bold text-slate-800 text-sm sm:text-base">Sections</h3>
                 <button
                   onClick={handleAddSection}
-                  className="w-7 h-7 sm:w-8 sm:h-8 bg-red-600 hover:bg-red-700 text-white rounded-lg flex items-center justify-center text-base sm:text-lg font-bold transition-all shadow-md hover:shadow-lg"
+                  className="w-7 h-7 sm:w-8 sm:h-8 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center justify-center text-base sm:text-lg font-bold transition-all shadow-md hover:shadow-lg"
                 >
                   +
                 </button>
@@ -519,8 +519,8 @@ export function SimpleFormBuilder() {
                     onClick={() => setActiveSection(index)}
                     className={`p-2 sm:p-3 rounded-lg sm:rounded-xl cursor-pointer transition-all ${
                       activeSection === index
-                        ? 'bg-red-600 text-white shadow-md'
-                        : 'bg-slate-50 hover:bg-red-50 text-slate-700 border-2 border-transparent hover:border-red-200'
+                        ? 'bg-blue-600 text-white shadow-md'
+                        : 'bg-slate-50 hover:bg-blue-50 text-slate-700 border-2 border-transparent hover:border-blue-200'
                     }`}
                   >
                     <div className="flex items-center justify-between">
@@ -530,7 +530,7 @@ export function SimpleFormBuilder() {
                         </div>
                         <div
                           className={`text-[10px] sm:text-xs mt-0.5 sm:mt-1 ${
-                            activeSection === index ? 'text-red-100' : 'text-slate-500'
+                            activeSection === index ? 'text-blue-100' : 'text-slate-500'
                           }`}
                         >
                           {section.items.length} item{section.items.length !== 1 ? 's' : ''}
@@ -542,7 +542,7 @@ export function SimpleFormBuilder() {
                             e.stopPropagation()
                             handleRemoveSection(index)
                           }}
-                          className="ml-2 text-red-500 hover:text-red-700 text-base sm:text-lg flex-shrink-0"
+                          className="ml-2 text-blue-500 hover:text-blue-700 text-base sm:text-lg flex-shrink-0"
                         >
                           ×
                         </button>
@@ -569,9 +569,9 @@ export function SimpleFormBuilder() {
           {/* Main Content Area */}
           <div className="lg:col-span-3">
             {sections.length > 0 && sections[activeSection] && (
-              <div className="bg-white rounded-lg sm:rounded-xl md:rounded-2xl shadow-xl p-4 sm:p-6 md:p-8 border border-red-100">
+              <div className="bg-white rounded-lg sm:rounded-xl md:rounded-2xl shadow-xl p-4 sm:p-6 md:p-8 border border-blue-100">
                 {/* Section Header */}
-                <div className="mb-4 sm:mb-5 md:mb-6 pb-3 sm:pb-4 border-b-2 border-red-100">
+                <div className="mb-4 sm:mb-5 md:mb-6 pb-3 sm:pb-4 border-b-2 border-blue-100">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                     <div>
                       <label className="block text-xs sm:text-sm font-semibold text-slate-700 mb-1.5 sm:mb-2">
@@ -583,7 +583,7 @@ export function SimpleFormBuilder() {
                         onChange={(e) =>
                           handleUpdateSection(activeSection, 'name', e.target.value)
                         }
-                        className="w-full border-2 border-slate-300 rounded-lg sm:rounded-xl px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all bg-white font-medium"
+                        className="w-full border-2 border-slate-300 rounded-lg sm:rounded-xl px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white font-medium"
                         placeholder="e.g., ADMISSION SLIP, CONSENT"
                         required
                       />
@@ -598,7 +598,7 @@ export function SimpleFormBuilder() {
                         onChange={(e) =>
                           handleUpdateSection(activeSection, 'description', e.target.value)
                         }
-                        className="w-full border-2 border-slate-300 rounded-lg sm:rounded-xl px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all bg-white"
+                        className="w-full border-2 border-slate-300 rounded-lg sm:rounded-xl px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                         placeholder="Optional description"
                       />
                     </div>
@@ -611,7 +611,7 @@ export function SimpleFormBuilder() {
                     <h3 className="text-base sm:text-lg font-bold text-slate-800">Checklist Items</h3>
                     <button
                       onClick={() => handleAddItem(activeSection)}
-                      className="px-3 sm:px-4 py-1.5 sm:py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg sm:rounded-xl text-xs sm:text-sm font-medium transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2"
+                      className="px-3 sm:px-4 py-1.5 sm:py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg sm:rounded-xl text-xs sm:text-sm font-medium transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2"
                     >
                       <span className="text-base sm:text-lg">+</span> Add Item
                     </button>
@@ -630,12 +630,12 @@ export function SimpleFormBuilder() {
                       {sections[activeSection].items.map((item, itemIndex) => (
                         <div
                           key={itemIndex}
-                          className="p-3 sm:p-4 bg-gradient-to-r from-slate-50 to-white rounded-lg sm:rounded-xl border-2 border-slate-200 hover:border-red-300 transition-all shadow-sm hover:shadow-md"
+                          className="p-3 sm:p-4 bg-gradient-to-r from-slate-50 to-white rounded-lg sm:rounded-xl border-2 border-slate-200 hover:border-blue-300 transition-all shadow-sm hover:shadow-md"
                         >
                           <div className="space-y-2 sm:space-y-3">
                             <div className="flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-3">
                               <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
-                                <div className="flex-shrink-0 w-6 h-6 sm:w-8 sm:h-8 bg-red-100 text-red-700 rounded-lg flex items-center justify-center font-bold text-xs sm:text-sm">
+                                <div className="flex-shrink-0 w-6 h-6 sm:w-8 sm:h-8 bg-blue-100 text-blue-700 rounded-lg flex items-center justify-center font-bold text-xs sm:text-sm">
                                   {itemIndex + 1}
                                 </div>
                                 <input
@@ -644,7 +644,7 @@ export function SimpleFormBuilder() {
                                   onChange={(e) =>
                                     handleUpdateItem(activeSection, itemIndex, 'label', e.target.value)
                                   }
-                                  className="flex-1 min-w-0 border-2 border-slate-300 rounded-lg sm:rounded-xl px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 md:py-3 text-xs sm:text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all bg-white font-medium text-slate-800"
+                                  className="flex-1 min-w-0 border-2 border-slate-300 rounded-lg sm:rounded-xl px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 md:py-3 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white font-medium text-slate-800"
                                   placeholder="Enter checklist item label..."
                                   required
                                 />
@@ -662,7 +662,7 @@ export function SimpleFormBuilder() {
                                         e.target.checked
                                       )
                                     }
-                                    className="w-4 h-4 sm:w-5 sm:h-5 text-red-600 border-slate-300 rounded focus:ring-red-500"
+                                    className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
                                   />
                                   <span className="text-xs sm:text-sm font-medium text-slate-700">
                                     Mandatory
@@ -670,7 +670,7 @@ export function SimpleFormBuilder() {
                                 </label>
                                 <button
                                   onClick={() => handleRemoveItem(activeSection, itemIndex)}
-                                  className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all text-lg sm:text-xl"
+                                  className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-all text-lg sm:text-xl"
                                 >
                                   ×
                                 </button>
@@ -683,20 +683,14 @@ export function SimpleFormBuilder() {
                                   Response Type
                                 </label>
                                 <select
-                                  value={item.responseType || 'YES_NO_NA'}
+                                  value={item.responseType || 'YES_NO'}
                                   onChange={(e) =>
                                     handleUpdateItem(activeSection, itemIndex, 'responseType', e.target.value)
                                   }
-                                  className="w-full border border-slate-300 rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-white"
+                                  className="w-full border border-slate-300 rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                                  disabled
                                 >
                                   <option value="YES_NO">Yes/No</option>
-                                  <option value="YES_NO_NA">Yes/No/NA</option>
-                                  <option value="CHECKBOX">Checkbox</option>
-                                  <option value="TEXT">Text Box</option>
-                                  <option value="NUMBER">Number</option>
-                                  <option value="DATE">Date</option>
-                                  <option value="TIME">Time</option>
-                                  <option value="DROPDOWN">Dropdown</option>
                                 </select>
                               </div>
                               {(item.responseType === 'DROPDOWN') && (
@@ -710,7 +704,7 @@ export function SimpleFormBuilder() {
                                     onChange={(e) =>
                                       handleUpdateItem(activeSection, itemIndex, 'responseOptions', e.target.value)
                                     }
-                                    className="w-full border border-slate-300 rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-white"
+                                    className="w-full border border-slate-300 rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
                                     placeholder="Option1, Option2, Option3"
                                   />
                                 </div>
@@ -728,7 +722,7 @@ export function SimpleFormBuilder() {
         </div>
 
         {/* Action Buttons */}
-        <div className="bg-white rounded-lg sm:rounded-xl md:rounded-2xl shadow-xl p-4 sm:p-5 md:p-6 border border-red-100">
+        <div className="bg-white rounded-lg sm:rounded-xl md:rounded-2xl shadow-xl p-4 sm:p-5 md:p-6 border border-blue-100">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
             <div className="text-xs sm:text-sm text-slate-600">
               <span className="font-semibold text-slate-800">{sections.length}</span> sections •{' '}
@@ -743,7 +737,7 @@ export function SimpleFormBuilder() {
               </button>
               <button
                 onClick={handleSaveForm}
-                className="px-6 sm:px-7 md:px-8 py-2 sm:py-2.5 md:py-3 bg-gradient-to-r from-red-600 via-red-700 to-red-800 hover:from-red-700 hover:via-red-800 hover:to-red-900 text-white rounded-lg sm:rounded-xl text-xs sm:text-sm md:text-base font-bold transition-all shadow-lg hover:shadow-xl transform hover:scale-105"
+                className="px-6 sm:px-7 md:px-8 py-2 sm:py-2.5 md:py-3 bg-gradient-to-r from-blue-600 via-blue-700 to-blue-800 hover:from-blue-700 hover:via-blue-800 hover:to-blue-900 text-white rounded-lg sm:rounded-xl text-xs sm:text-sm md:text-base font-bold transition-all shadow-lg hover:shadow-xl transform hover:scale-105"
               >
                 💾 Save Sections & Items
               </button>

@@ -24,11 +24,11 @@ const checklistItemSchema = new mongoose.Schema(
     },
     // Section name within the form (e.g., "ADMISSION SLIP", "CONSENT", "OT")
     section: { type: String, trim: true },
-    // Response type for the checklist item
+    // Response type for the checklist item - Only YES_NO allowed
     responseType: {
       type: String,
-      enum: ['YES_NO', 'YES_NO_NA', 'CHECKBOX', 'TEXT', 'NUMBER', 'DATE', 'TIME', 'DROPDOWN'],
-      default: 'YES_NO_NA',
+      enum: ['YES_NO'],
+      default: 'YES_NO',
     },
     // Options for DROPDOWN type (comma-separated or array)
     responseOptions: { type: String, trim: true }, // e.g., "Option1,Option2,Option3"

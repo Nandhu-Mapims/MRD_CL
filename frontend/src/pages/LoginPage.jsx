@@ -39,14 +39,14 @@ export function LoginPage() {
   return (
     <div className="flex items-center justify-center min-h-[70vh] px-3 sm:px-4">
       <div className="w-full max-w-md">
-        <div className="bg-white rounded-lg sm:rounded-xl shadow-2xl border-2 border-red-100 overflow-hidden">
-          <div className="bg-gradient-to-r from-red-700 via-red-600 to-red-500 px-4 sm:px-6 md:px-8 py-4 sm:py-5 md:py-6 text-white">
+        <div className="bg-white rounded-lg sm:rounded-xl shadow-2xl border-2 border-blue-100 overflow-hidden">
+          <div className="bg-gradient-to-r from-blue-700 via-blue-600 to-blue-500 px-4 sm:px-6 md:px-8 py-4 sm:py-5 md:py-6 text-white">
             <h1 className="text-lg sm:text-xl md:text-2xl font-bold mb-1">🏥 Hospital Audit System</h1>
-            <p className="text-red-100 text-xs sm:text-sm">Sign in to your account</p>
+            <p className="text-blue-100 text-xs sm:text-sm">Sign in to your account</p>
           </div>
           <form onSubmit={handleSubmit} className="px-4 sm:px-6 md:px-8 pt-4 sm:pt-5 md:pt-6 pb-6 sm:pb-7 md:pb-8 bg-white">
             {error && (
-              <div className="mb-3 sm:mb-4 p-2.5 sm:p-3 bg-red-50 border-2 border-red-200 rounded-lg text-xs sm:text-sm text-red-700">
+              <div className="mb-3 sm:mb-4 p-2.5 sm:p-3 bg-blue-50 border-2 border-blue-200 rounded-lg text-xs sm:text-sm text-blue-700">
                 {error}
               </div>
             )}
@@ -56,7 +56,7 @@ export function LoginPage() {
               </label>
               <input
                 type="email"
-                className="w-full border-2 border-slate-300 rounded-lg px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all"
+                className="w-full border-2 border-slate-300 rounded-lg px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="user@hospital.com"
@@ -67,7 +67,7 @@ export function LoginPage() {
               <label className="block text-xs sm:text-sm font-medium text-slate-700 mb-1.5 sm:mb-2">Password</label>
               <input
                 type="password"
-                className="w-full border-2 border-slate-300 rounded-lg px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all"
+                className="w-full border-2 border-slate-300 rounded-lg px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Enter your password"
@@ -77,7 +77,7 @@ export function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-semibold py-2.5 sm:py-3 rounded-lg shadow-lg transition-all disabled:opacity-60 disabled:cursor-not-allowed transform hover:scale-[1.02] text-xs sm:text-sm md:text-base"
+              className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold py-2.5 sm:py-3 rounded-lg shadow-lg transition-all disabled:opacity-60 disabled:cursor-not-allowed transform hover:scale-[1.02] text-xs sm:text-sm md:text-base"
             >
               {loading ? 'Logging in...' : 'Sign In'}
             </button>
