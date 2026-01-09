@@ -24,6 +24,7 @@ export function Dashboard() {
   const [stats, setStats] = useState(null)
   const [departments, setDepartments] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     loadData()
@@ -31,14 +32,30 @@ export function Dashboard() {
 
   const loadData = async () => {
     try {
+      setError('')
+      setLoading(true)
+      // Load basic stats first (without clearance stats for faster response)
+      // Clearance stats can be loaded separately if needed
       const [statData, deptData] = await Promise.all([
-        apiClient.get('/audits/stats'),
+        apiClient.get('/audits/stats?includeClearance=false'),
         apiClient.get('/departments'),
       ])
       setStats(statData)
       setDepartments(deptData)
+      
+      // Optionally load clearance stats in background (non-blocking)
+      // This can be enabled later if needed
+      // apiClient.get('/audits/stats?includeClearance=true')
+      //   .then(fullStats => {
+      //     if (fullStats.clearanceStats) {
+      //       setStats(prev => ({ ...prev, clearanceStats: fullStats.clearanceStats }))
+      //     }
+      //   })
+      //   .catch(err => console.warn('Failed to load clearance stats:', err))
     } catch (err) {
       console.error('Error loading dashboard data', err)
+      const errorMessage = err.response?.data?.message || err.message || 'Failed to load dashboard data'
+      setError(errorMessage)
     } finally {
       setLoading(false)
     }
@@ -56,12 +73,55 @@ export function Dashboard() {
     return dept?.code || 'N/A'
   }
 
-  if (loading) {
+  // Show UI immediately with skeleton
+  const MetricsSkeleton = () => (
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
+      {[1, 2, 3, 4].map(i => (
+        <div key={i} className="bg-gradient-to-br from-white to-blue-50 rounded-xl shadow-lg p-4 sm:p-6 border border-blue-100">
+          <div className="h-3 bg-slate-200 rounded w-1/2 mb-3 animate-pulse" />
+          <div className="h-8 bg-slate-200 rounded w-1/3 mb-2 animate-pulse" />
+          <div className="h-2 bg-slate-200 rounded w-2/3 animate-pulse" />
+        </div>
+      ))}
+    </div>
+  )
+
+  if (loading && !stats) {
     return (
-      <div className="flex items-center justify-center min-h-[500px]">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600 mb-4"></div>
-          <div className="text-slate-600 font-medium">Loading dashboard...</div>
+      <div className="space-y-4 sm:space-y-6">
+        <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-blue-800 text-white rounded-xl shadow-2xl p-6 sm:p-8 relative overflow-hidden">
+          <div className="absolute inset-0 bg-black opacity-5"></div>
+          <div className="relative z-10">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-2 drop-shadow-lg">
+              Audit Dashboard
+            </h2>
+            <p className="text-blue-100 text-sm sm:text-base">
+              Comprehensive department-wise compliance and case analytics
+            </p>
+          </div>
+        </div>
+        <MetricsSkeleton />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl shadow-xl p-6 sm:p-8">
+          <h2 className="text-2xl sm:text-3xl font-bold mb-2">Audit Dashboard</h2>
+          <p className="text-blue-100">Department-wise compliance and case analytics</p>
+        </div>
+        <div className="bg-red-50 border-2 border-red-200 rounded-xl p-6 text-center">
+          <div className="text-4xl mb-4">⚠️</div>
+          <p className="text-red-800 font-semibold mb-2">Error Loading Dashboard Data</p>
+          <p className="text-red-600 text-sm mb-4">{error}</p>
+          <button
+            onClick={loadData}
+            className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors"
+          >
+            Retry
+          </button>
         </div>
       </div>
     )

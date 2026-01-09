@@ -60,13 +60,23 @@ const auditSubmissionSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+    // Lock flag to prevent editing after submission
+    isLocked: {
+      type: Boolean,
+      default: true, // Locked by default - submissions cannot be edited once submitted
+    },
   },
   { timestamps: true }
 );
 
-// Compound index for efficient queries: Patient + Department reference
+// Compound indexes for efficient queries
 auditSubmissionSchema.index({ patient: 1, department: 1 });
-auditSubmissionSchema.index({ uhid: 1, department: 1 }); // For backward compatibility queries
+auditSubmissionSchema.index({ uhid: 1, department: 1 });
+auditSubmissionSchema.index({ submittedAt: -1 }); // For time-based queries
+auditSubmissionSchema.index({ department: 1, submittedAt: -1 }); // For department performance queries
+auditSubmissionSchema.index({ uhid: 1, submittedAt: -1 }); // For patient timeline queries
+auditSubmissionSchema.index({ department: 1, formTemplate: 1 }); // For form-level queries
+auditSubmissionSchema.index({ 'responseValue': 1, 'status': 1 }); // For compliance queries
 
 module.exports = mongoose.model('AuditSubmission', auditSubmissionSchema);
 

@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react'
 import { apiClient } from '../../api/client'
-import jsPDF from 'jspdf'
-import 'jspdf-autotable'
 
 export function ExportSubmissions() {
   const [departments, setDepartments] = useState([])
@@ -10,6 +8,7 @@ export function ExportSubmissions() {
   const [endDate, setEndDate] = useState('')
   const [exportData, setExportData] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     loadDepartments()
@@ -26,6 +25,7 @@ export function ExportSubmissions() {
 
   const handleExport = async (format = 'json') => {
     setLoading(true)
+    setError('')
     try {
       const params = new URLSearchParams()
       if (selectedDepartment) params.append('departmentId', selectedDepartment)
@@ -40,6 +40,12 @@ export function ExportSubmissions() {
             Authorization: `Bearer ${localStorage.getItem('token')}`,
           },
         })
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ message: 'Failed to export CSV' }))
+          throw new Error(errorData.message || `Export failed: ${response.statusText}`)
+        }
+        
         const blob = await response.blob()
         const url = window.URL.createObjectURL(blob)
         const a = document.createElement('a')
@@ -50,116 +56,18 @@ export function ExportSubmissions() {
         window.URL.revokeObjectURL(url)
         document.body.removeChild(a)
       } else {
-        // JSON data for PDF
+        // JSON data for preview
         const data = await apiClient.get(`/audits/export?${params.toString()}`)
         setExportData(data)
-        
-        if (format === 'pdf') {
-          generatePDF(data)
-        }
       }
     } catch (err) {
-      alert('Error exporting data: ' + (err.response?.data?.message || err.message))
-      console.error(err)
+      const errorMessage = err.response?.data?.message || err.message || 'Failed to export data'
+      alert(`Error exporting data: ${errorMessage}`)
+      console.error('Export error:', err)
+      setError(errorMessage)
     } finally {
       setLoading(false)
     }
-  }
-
-  const generatePDF = (data) => {
-    const doc = new jsPDF('landscape', 'mm', 'a4')
-    
-    // Header
-    doc.setFontSize(18)
-    doc.setTextColor(220, 38, 38) // Red color
-    doc.text('Hospital Audit System - Submissions Report', 14, 15)
-    
-    // Filters info
-    doc.setFontSize(10)
-    doc.setTextColor(0, 0, 0)
-    let yPos = 25
-    doc.text(`Department: ${selectedDepartment ? departments.find(d => d._id === selectedDepartment)?.name || 'All' : 'All'}`, 14, yPos)
-    yPos += 5
-    doc.text(`Date Range: ${startDate || 'All'} to ${endDate || 'All'}`, 14, yPos)
-    yPos += 5
-    doc.text(`Total Records: ${data.totalRecords}`, 14, yPos)
-    yPos += 8
-
-    // Table data
-    const tableData = data.data.map((row) => [
-      row['Submission Date'],
-      row['Submission Time'],
-      row['Department'],
-      row['UHID'],
-      row['Patient Name'],
-      row['Checklist Item'],
-      row['Response Value'],
-      row['Remarks'] || '',
-      row['Responsibility'] || '',
-      row['Status'],
-      row['Submitted By'],
-    ])
-
-    // Create table
-    doc.autoTable({
-      startY: yPos,
-      head: [
-        [
-          'Date',
-          'Time',
-          'Department',
-          'UHID',
-          'Patient',
-          'Checklist Item',
-          'Response',
-          'Remarks',
-          'Responsibility',
-          'Status',
-          'Submitted By',
-        ],
-      ],
-      body: tableData,
-      theme: 'striped',
-      headStyles: {
-        fillColor: [220, 38, 38], // Red header
-        textColor: 255,
-        fontStyle: 'bold',
-      },
-      styles: {
-        fontSize: 7,
-        cellPadding: 2,
-      },
-      columnStyles: {
-        0: { cellWidth: 25 },
-        1: { cellWidth: 20 },
-        2: { cellWidth: 30 },
-        3: { cellWidth: 25 },
-        4: { cellWidth: 30 },
-        5: { cellWidth: 40 },
-        6: { cellWidth: 20 },
-        7: { cellWidth: 30 },
-        8: { cellWidth: 30 },
-        9: { cellWidth: 20 },
-        10: { cellWidth: 30 },
-      },
-      margin: { top: yPos, left: 14, right: 14 },
-    })
-
-    // Footer
-    const pageCount = doc.internal.getNumberOfPages()
-    for (let i = 1; i <= pageCount; i++) {
-      doc.setPage(i)
-      doc.setFontSize(8)
-      doc.setTextColor(128, 128, 128)
-      doc.text(
-        `Page ${i} of ${pageCount} - Generated on ${new Date().toLocaleString()}`,
-        14,
-        doc.internal.pageSize.height - 10
-      )
-    }
-
-    // Save PDF
-    doc.save(`audit_submissions_${Date.now()}.pdf`)
   }
 
   return (
@@ -170,6 +78,14 @@ export function ExportSubmissions() {
           Export audit submissions with filters (Department, Date Range)
         </p>
       </div>
+
+      {/* Error Message */}
+      {error && (
+        <div className="bg-red-50 border-2 border-red-200 rounded-lg p-4 text-red-800">
+          <p className="font-semibold">Error:</p>
+          <p className="text-sm">{error}</p>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="bg-white rounded-lg sm:rounded-xl shadow-lg p-4 sm:p-5 md:p-6 border border-blue-100">
@@ -220,13 +136,6 @@ export function ExportSubmissions() {
 
         {/* Export Buttons */}
         <div className="mt-4 sm:mt-5 md:mt-6 flex flex-col sm:flex-row gap-2 sm:gap-3">
-          <button
-            onClick={() => handleExport('pdf')}
-            disabled={loading}
-            className="flex-1 sm:flex-none px-4 sm:px-6 py-2 sm:py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold rounded-lg shadow-md transition-all disabled:opacity-60 disabled:cursor-not-allowed text-xs sm:text-sm"
-          >
-            {loading ? 'Exporting...' : '📄 Export as PDF'}
-          </button>
           <button
             onClick={() => handleExport('csv')}
             disabled={loading}

@@ -171,6 +171,17 @@ export function Layout({ children }) {
                     <span className="sm:hidden">📊</span>
                   </Link>
                   <Link
+                    to="/admin/analytics"
+                    className={`px-3 py-1.5 sm:px-4 sm:py-2 md:px-5 md:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
+                      isActive('/admin/analytics')
+                        ? 'bg-blue-600 text-white shadow-md'
+                        : 'text-slate-700 hover:bg-blue-50 hover:text-blue-600'
+                    }`}
+                  >
+                    <span className="hidden sm:inline">✅ Analytics</span>
+                    <span className="sm:hidden">✅</span>
+                  </Link>
+                  <Link
                     to="/admin/export"
                     className={`px-3 py-1.5 sm:px-4 sm:py-2 md:px-5 md:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
                       isActive('/admin/export')
@@ -328,6 +339,17 @@ export function Layout({ children }) {
                 </>
               ) : (
                 <>
+                  <Link
+                    to="/multi-dept-checklist"
+                    className={`px-3 py-1.5 sm:px-4 sm:py-2 md:px-5 md:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
+                      isActive('/multi-dept-checklist')
+                        ? 'bg-blue-600 text-white shadow-md'
+                        : 'text-slate-700 hover:bg-blue-50 hover:text-blue-600'
+                    }`}
+                  >
+                    <span className="hidden sm:inline">📋 All Checklists</span>
+                    <span className="sm:hidden">📋</span>
+                  </Link>
                   {userForms.map((form) => (
                     <Link
                       key={form._id}

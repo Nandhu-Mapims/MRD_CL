@@ -9,6 +9,11 @@ export function HomeRedirect() {
     return <Navigate to="/admin/dashboard" replace />
   }
 
+  // Redirect regular users to multi-department checklist
+  if (user?.role === 'user' && user?.department) {
+    return <Navigate to="/multi-dept-checklist" replace />
+  }
+
   return <DepartmentSelect />
 }
 

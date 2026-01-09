@@ -2,7 +2,6 @@ import React, { useState } from 'react'
 import { apiClient } from '../../api/client'
 import jsPDF from 'jspdf'
 import 'jspdf-autotable'
-import { EditAuditModal } from '../../components/EditAuditModal'
 
 export function PatientReport() {
   const [uhid, setUhid] = useState('')
@@ -12,8 +11,6 @@ export function PatientReport() {
   const [consultantName, setConsultantName] = useState('')
   const [ward, setWard] = useState('')
   const [unitNo, setUnitNo] = useState('')
-  const [editModalOpen, setEditModalOpen] = useState(false)
-  const [selectedDepartmentId, setSelectedDepartmentId] = useState('')
 
   const handleSearch = async (e) => {
     e.preventDefault()
@@ -27,20 +24,95 @@ export function PatientReport() {
     setReportData(null)
 
     try {
-      const data = await apiClient.get(`/audits/uhid/${uhid.trim().toUpperCase()}`)
-      setReportData(data)
-      if (data.message) {
-        setError(data.message)
-      } else {
-        setError('')
+      // Use the new patient checklists endpoint for multi-department view
+      const data = await apiClient.get(`/audits/patient-checklists?uhid=${uhid.trim().toUpperCase()}`)
+      
+      // Auto-populate ward and unitNo from patient data
+      if (data.patient?.ward && !ward.trim()) {
+        setWard(data.patient.ward)
       }
+      if (data.patient?.unitNo && !unitNo.trim()) {
+        setUnitNo(data.patient.unitNo)
+      }
+
+      // Transform data to match existing report structure
+      const transformedData = {
+        patient: data.patient,
+        departments: data.checklists.map(checklist => ({
+          department: checklist.department,
+          form: checklist.form,
+          submittedBy: checklist.submittedBy,
+          submittedAt: checklist.submittedAt,
+          sections: (() => {
+            // Group items by section
+            const sections = {}
+            checklist.items.forEach(({ item, submission }) => {
+              const sectionName = item.section || 'Other'
+              if (!sections[sectionName]) {
+                sections[sectionName] = []
+              }
+              sections[sectionName].push({
+                checklistItemId: {
+                  _id: item._id,
+                  label: item.label,
+                  section: item.section,
+                  order: item.order,
+                },
+                ...(submission || {}),
+              })
+            })
+            return Object.keys(sections).sort().map(sectionName => ({
+              sectionName,
+              items: sections[sectionName].sort((a, b) => 
+                (a.checklistItemId?.order || 0) - (b.checklistItemId?.order || 0)
+              ),
+            }))
+          })(),
+        })),
+        totalSubmissions: data.checklists.reduce((sum, c) => sum + c.items.filter(i => i.submission).length, 0),
+      }
+      
+      // Auto-populate consultant name from first available submitter
+      if (transformedData.departments.length > 0) {
+        const firstSubmittedDept = transformedData.departments.find(d => d.submittedBy?.name)
+        if (firstSubmittedDept?.submittedBy?.name && !consultantName.trim()) {
+          setConsultantName(firstSubmittedDept.submittedBy.name)
+        }
+      }
+      
+      setReportData(transformedData)
+      setError('')
     } catch (err) {
       console.error('Error fetching patient report:', err)
-      const errorMessage = err.response?.data?.message || 
-                          err.message || 
-                          'Failed to fetch patient report. Please check your connection and try again.'
-      setError(errorMessage)
       setReportData(null)
+      
+      // Handle authentication errors specifically
+      if (err.response?.status === 401) {
+        const errorMessage = err.response?.data?.message || 'Your session has expired. Please log in again.'
+        setError(`${errorMessage} Please click the logout button and log in again.`)
+        // Don't redirect automatically - let user see the error and decide
+        return
+      }
+      
+      // Try fallback to old endpoint if new one fails
+      if (err.response?.status === 404 || err.message?.includes('Cannot GET')) {
+        try {
+          console.log('Trying fallback endpoint...')
+          const fallbackData = await apiClient.get(`/audits/uhid/${uhid.trim().toUpperCase()}`)
+          setReportData(fallbackData)
+          setError('')
+        } catch (fallbackErr) {
+          const errorMessage = fallbackErr.response?.data?.message || 
+                              fallbackErr.message || 
+                              'Failed to fetch patient report. Please check your connection and try again.'
+          setError(errorMessage)
+        }
+      } else {
+        const errorMessage = err.response?.data?.message || 
+                            err.message || 
+                            'Failed to fetch patient report. Please check your connection and try again.'
+        setError(errorMessage)
+      }
     } finally {
       setLoading(false)
     }
@@ -267,61 +339,154 @@ export function PatientReport() {
 
   return (
     <>
-      {/* Print Styles */}
+      {/* Enhanced Print Styles */}
       <style>{`
         @media print {
           @page {
             size: A4;
-            margin: 10mm;
+            margin: 10mm 15mm;
+          }
+          
+          * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            color-adjust: exact !important;
           }
           
           body {
             margin: 0;
             padding: 0;
             background: white;
+            font-size: 10pt;
           }
           
           .no-print {
             display: none !important;
+            visibility: hidden !important;
           }
           
           .print-container {
             width: 100% !important;
+            max-width: 100% !important;
             margin: 0 !important;
             padding: 0 !important;
             box-shadow: none !important;
             border: none !important;
+            background: white !important;
           }
           
           .print-page {
             page-break-after: auto;
             page-break-inside: avoid;
+            break-inside: avoid;
           }
           
+          /* Ensure tables are visible and properly formatted */
           table {
-            page-break-inside: auto;
+            width: 100% !important;
+            max-width: 100% !important;
             border-collapse: collapse !important;
+            border-spacing: 0 !important;
+            page-break-inside: auto;
+            display: table !important;
+            visibility: visible !important;
           }
           
-          tr {
+          table thead {
+            display: table-header-group !important;
+            visibility: visible !important;
+          }
+          
+          table tbody {
+            display: table-row-group !important;
+            visibility: visible !important;
+          }
+          
+          table tr {
             page-break-inside: avoid;
             page-break-after: auto;
+            break-inside: avoid;
+            display: table-row !important;
+            visibility: visible !important;
           }
           
-          thead {
-            display: table-header-group;
+          table td,
+          table th {
+            display: table-cell !important;
+            visibility: visible !important;
+            border: 1.5px solid #1e293b !important;
+            padding: 4px 6px !important;
+            vertical-align: top;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
           }
           
-          tfoot {
-            display: table-footer-group;
-          }
-          
+          /* Prevent section headers from breaking */
           .section-header {
-            page-break-after: avoid;
+            page-break-after: avoid !important;
+            break-after: avoid !important;
+          }
+          
+          .section-header td {
+            background-color: #f1f5f9 !important;
+            font-weight: 600 !important;
           }
           
           .dept-header {
-            page-break-after: avoid;
+            page-break-after: avoid !important;
+            break-after: avoid !important;
+          }
+          
+          .dept-header td {
+            background-color: #dbeafe !important;
+            font-weight: bold !important;
+          }
+          
+          /* Ensure table headers repeat on each page */
+          thead {
+            display: table-header-group !important;
+          }
+          
+          tfoot {
+            display: table-footer-group !important;
+          }
+          
+          /* Fix checkbox visibility */
+          .checkbox-cell {
+            visibility: visible !important;
+            border: 2px solid #1e293b !important;
+          }
+          
+          /* Ensure all text is visible */
+          * {
+            color: #000 !important;
+            background-color: transparent !important;
+          }
+          
+          tr:nth-child(even) {
+            background-color: #f8fafc !important;
+          }
+          
+          tr:nth-child(odd) {
+            background-color: #ffffff !important;
+          }
+          
+          /* Page breaks */
+          .page-break {
+            page-break-before: always;
+            break-before: page;
+          }
+          
+          /* Ensure no overflow */
+          * {
+            overflow: visible !important;
+          }
+        }
+        
+        @media screen {
+          .print-container {
+            max-width: 210mm;
+            margin: 0 auto;
           }
         }
       `}</style>
@@ -384,25 +549,17 @@ export function PatientReport() {
                 <label className="block text-xs font-medium text-slate-700 mb-1">
                   Ward
                 </label>
-                <input
-                  type="text"
-                  value={ward}
-                  onChange={(e) => setWard(e.target.value)}
-                  placeholder="Enter ward"
-                  className="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
+                <div className="w-full border border-slate-300 rounded px-3 py-2 text-sm bg-slate-50 text-slate-600">
+                  {ward || reportData?.patient?.ward || 'Not provided'}
+                </div>
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1">
                   Unit No
                 </label>
-                <input
-                  type="text"
-                  value={unitNo}
-                  onChange={(e) => setUnitNo(e.target.value)}
-                  placeholder="Enter unit number"
-                  className="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
+                <div className="w-full border border-slate-300 rounded px-3 py-2 text-sm bg-slate-50 text-slate-600">
+                  {unitNo || reportData?.patient?.unitNo || 'Not provided'}
+                </div>
               </div>
             </div>
           )}
@@ -451,7 +608,7 @@ export function PatientReport() {
           </div>
 
           {/* A4 Printable Report - Template Format */}
-          <div className="bg-white shadow-lg rounded-lg overflow-hidden print-container">
+          <div className="bg-white shadow-lg rounded-lg overflow-visible print-container">
             <div
               className="p-6 sm:p-8 md:p-10 print:p-8 print-page"
               style={{
@@ -459,6 +616,7 @@ export function PatientReport() {
                 minHeight: '297mm',
                 margin: '0 auto',
                 backgroundColor: 'white',
+                overflow: 'visible',
               }}
             >
               {/* Header matching template */}
@@ -486,19 +644,19 @@ export function PatientReport() {
                 <div>
                   <span className="font-semibold">CONSULTANT NAME:</span>{' '}
                   <span className="border-b border-slate-400 inline-block min-w-[150px]">
-                    {consultantName || '_______________________'}
+                    {consultantName || (reportData?.departments?.[0]?.submittedBy?.name || '_______________________')}
                   </span>
                 </div>
                 <div>
                   <span className="font-semibold">WARD:</span>{' '}
                   <span className="border-b border-slate-400 inline-block min-w-[80px]">
-                    {ward || '___________'}
+                    {ward || reportData?.patient?.ward || '___________'}
                   </span>
                 </div>
                 <div>
                   <span className="font-semibold">UNIT NO:</span>{' '}
                   <span className="border-b border-slate-400 inline-block min-w-[60px]">
-                    {unitNo || '____'}
+                    {unitNo || reportData?.patient?.unitNo || '____'}
                   </span>
                 </div>
               </div>
@@ -509,57 +667,96 @@ export function PatientReport() {
                 <div className="text-xs print:text-[10px] grid grid-cols-2 gap-2">
                   <div>
                     <span className="font-semibold">UHID:</span>{' '}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        // Use first department if available
-                        const firstDept = reportData.departments?.[0]?.department?._id || reportData.departments?.[0]?.department
-                        setSelectedDepartmentId(firstDept)
-                        setEditModalOpen(true)
-                      }}
-                      className="text-blue-600 hover:text-blue-800 hover:underline font-semibold no-print"
-                    >
-                      {reportData.patient.uhid}
-                    </button>
-                    <span className="print:inline no-print:hidden">{reportData.patient.uhid}</span>
+                    <span className="font-medium">{reportData.patient.uhid}</span>
                   </div>
                   <div><span className="font-semibold">Patient Name:</span> {reportData.patient.patientName}</div>
                 </div>
               </div>
 
               {/* Main Table Header */}
-              <div className="mb-2 print:mb-1">
-                <table className="w-full text-xs print:text-[9px] border-collapse" style={{ border: '1.5px solid #1e293b' }}>
-                  <thead>
-                    <tr className="bg-slate-200" style={{ backgroundColor: '#e2e8f0' }}>
-                      <th className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-left font-bold align-top" style={{ width: '42%', border: '1.5px solid #1e293b', verticalAlign: 'middle' }}>
+              <div className="mb-2 print:mb-1 overflow-x-auto">
+                <table 
+                  className="w-full text-xs print:text-[9px] border-collapse" 
+                  style={{ 
+                    border: '1.5px solid #1e293b',
+                    tableLayout: 'fixed',
+                    width: '100%',
+                  }}
+                >
+                  <thead style={{ display: 'table-header-group' }}>
+                    <tr className="bg-slate-200" style={{ backgroundColor: '#e2e8f0', display: 'table-row' }}>
+                      <th className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-left font-bold align-top" style={{ width: '42%', border: '1.5px solid #1e293b', verticalAlign: 'middle', display: 'table-cell' }}>
                         STANDARD & OBJECTIVE ELEMENTS
                       </th>
-                      <th className="border border-slate-800 px-1 py-2.5 print:px-0.5 print:py-2 text-center font-bold" style={{ width: '6%', border: '1.5px solid #1e293b', verticalAlign: 'middle' }}>
+                      <th className="border border-slate-800 px-1 py-2.5 print:px-0.5 print:py-2 text-center font-bold" style={{ width: '6%', border: '1.5px solid #1e293b', verticalAlign: 'middle', display: 'table-cell' }}>
                         Yes
                       </th>
-                      <th className="border border-slate-800 px-1 py-2.5 print:px-0.5 print:py-2 text-center font-bold" style={{ width: '6%', border: '1.5px solid #1e293b', verticalAlign: 'middle' }}>
+                      <th className="border border-slate-800 px-1 py-2.5 print:px-0.5 print:py-2 text-center font-bold" style={{ width: '6%', border: '1.5px solid #1e293b', verticalAlign: 'middle', display: 'table-cell' }}>
                         No
                       </th>
-                      <th className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-center font-bold align-top" style={{ width: '20%', border: '1.5px solid #1e293b', verticalAlign: 'middle' }}>
+                      <th className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-center font-bold align-top" style={{ width: '20%', border: '1.5px solid #1e293b', verticalAlign: 'middle', display: 'table-cell' }}>
                         COMPLIANCE<br />Remarks (NA)
                       </th>
-                      <th className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-center font-bold" style={{ width: '13%', border: '1.5px solid #1e293b', verticalAlign: 'middle' }}>
+                      <th className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-center font-bold" style={{ width: '13%', border: '1.5px solid #1e293b', verticalAlign: 'middle', display: 'table-cell' }}>
                         Responsibility
                       </th>
-                      <th className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-center font-bold" style={{ width: '13%', border: '1.5px solid #1e293b', verticalAlign: 'middle' }}>
+                      <th className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-center font-bold" style={{ width: '13%', border: '1.5px solid #1e293b', verticalAlign: 'middle', display: 'table-cell' }}>
                         Status
                       </th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody style={{ display: 'table-row-group' }}>
                     {/* Department-wise Sections */}
                     {reportData.departments.map((deptData, deptIndex) => (
                       <React.Fragment key={deptIndex}>
                         {/* Department Header Row */}
-                        <tr className="dept-header" style={{ backgroundColor: '#dbeafe', pageBreakAfter: 'avoid' }}>
-                          <td colSpan="6" className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 font-bold text-sm print:text-xs" style={{ border: '1.5px solid #1e293b', fontWeight: 'bold' }}>
-                            {deptData.department.name} ({deptData.department.code})
+                        <tr 
+                          className="dept-header" 
+                          style={{ 
+                            backgroundColor: '#dbeafe', 
+                            pageBreakAfter: 'avoid',
+                            breakAfter: 'avoid',
+                            display: 'table-row',
+                          }}
+                        >
+                          <td 
+                            colSpan="6" 
+                            className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 font-bold text-sm print:text-xs" 
+                            style={{ 
+                              border: '1.5px solid #1e293b', 
+                              fontWeight: 'bold',
+                              backgroundColor: '#dbeafe',
+                              display: 'table-cell',
+                            }}
+                          >
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-2">
+                              <div>
+                                <span className="font-bold">
+                                  {deptData.department.name} ({deptData.department.code})
+                                </span>
+                                {deptData.form?.name && (
+                                  <span className="text-xs print:text-[9px] font-normal text-slate-600 ml-2">
+                                    - {deptData.form.name}
+                                  </span>
+                                )}
+                              </div>
+                              {deptData.submittedBy && deptData.submittedAt && (
+                                <div className="text-xs print:text-[9px] font-semibold text-slate-700 bg-slate-100 px-2 py-1 rounded">
+                                  <span className="font-bold">Submitted by:</span> {deptData.submittedBy.name} | <span className="font-bold">Date:</span> {new Date(deptData.submittedAt).toLocaleString('en-GB', { 
+                                    year: 'numeric', 
+                                    month: '2-digit', 
+                                    day: '2-digit', 
+                                    hour: '2-digit', 
+                                    minute: '2-digit' 
+                                  })}
+                                </div>
+                              )}
+                              {!deptData.submittedBy && (
+                                <span className="text-xs print:text-[9px] font-normal text-slate-500 italic">
+                                  Not submitted yet
+                                </span>
+                              )}
+                            </div>
                           </td>
                         </tr>
 
@@ -567,8 +764,25 @@ export function PatientReport() {
                         {deptData.sections.map((section, sectionIndex) => (
                           <React.Fragment key={sectionIndex}>
                             {/* Section Header Row */}
-                            <tr className="section-header" style={{ backgroundColor: '#f1f5f9', pageBreakAfter: 'avoid' }}>
-                              <td colSpan="6" className="border border-slate-800 px-2 py-2 print:px-1.5 print:py-1.5 font-semibold text-xs print:text-[10px]" style={{ border: '1.5px solid #1e293b', fontWeight: '600' }}>
+                            <tr 
+                              className="section-header" 
+                              style={{ 
+                                backgroundColor: '#f1f5f9', 
+                                pageBreakAfter: 'avoid',
+                                breakAfter: 'avoid',
+                                display: 'table-row',
+                              }}
+                            >
+                              <td 
+                                colSpan="6" 
+                                className="border border-slate-800 px-2 py-2 print:px-1.5 print:py-1.5 font-semibold text-xs print:text-[10px]" 
+                                style={{ 
+                                  border: '1.5px solid #1e293b', 
+                                  fontWeight: '600',
+                                  backgroundColor: '#f1f5f9',
+                                  display: 'table-cell',
+                                }}
+                              >
                                 {section.sectionName}
                               </td>
                             </tr>
@@ -584,27 +798,110 @@ export function PatientReport() {
                               const status = item.status || 'OPEN'
 
                               return (
-                                <tr key={itemIndex} style={{ backgroundColor: itemIndex % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
-                                  <td className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-slate-700" style={{ border: '1.5px solid #1e293b', verticalAlign: 'top', lineHeight: '1.4' }}>
+                                <tr 
+                                  key={itemIndex} 
+                                  style={{ 
+                                    backgroundColor: itemIndex % 2 === 0 ? '#ffffff' : '#f8fafc',
+                                    display: 'table-row',
+                                    pageBreakInside: 'avoid',
+                                    breakInside: 'avoid',
+                                  }}
+                                >
+                                  <td 
+                                    className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-slate-700" 
+                                    style={{ 
+                                      border: '1.5px solid #1e293b', 
+                                      verticalAlign: 'top', 
+                                      lineHeight: '1.4',
+                                      display: 'table-cell',
+                                      wordWrap: 'break-word',
+                                      overflowWrap: 'break-word',
+                                    }}
+                                  >
                                     <span style={{ fontWeight: '500' }}>{itemIndex + 1}.</span> {label}
                                   </td>
-                                  <td className="border border-slate-800 px-1 py-2.5 print:px-0.5 print:py-2 text-center" style={{ border: '1.5px solid #1e293b', verticalAlign: 'middle' }}>
-                                    <div className="w-5 h-5 mx-auto border-2 border-slate-800 flex items-center justify-center print:w-4 print:h-4" style={{ width: '20px', height: '20px', border: '2px solid #1e293b', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto' }}>
-                                      {isYes && <span className="text-xs print:text-[10px]" style={{ fontSize: '12px', fontWeight: 'bold' }}>✓</span>}
+                                  <td 
+                                    className="border border-slate-800 px-1 py-2.5 print:px-0.5 print:py-2 text-center checkbox-cell" 
+                                    style={{ 
+                                      border: '1.5px solid #1e293b', 
+                                      verticalAlign: 'middle',
+                                      display: 'table-cell',
+                                    }}
+                                  >
+                                    <div 
+                                      className="w-5 h-5 mx-auto border-2 border-slate-800 flex items-center justify-center print:w-4 print:h-4" 
+                                      style={{ 
+                                        width: '20px', 
+                                        height: '20px', 
+                                        border: '2px solid #1e293b', 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        justifyContent: 'center', 
+                                        margin: '0 auto',
+                                        backgroundColor: isYes ? '#e5e7eb' : 'white',
+                                      }}
+                                    >
+                                      {isYes && <span className="text-xs print:text-[10px]" style={{ fontSize: '12px', fontWeight: 'bold', color: '#000' }}>✓</span>}
                                     </div>
                                   </td>
-                                  <td className="border border-slate-800 px-1 py-2.5 print:px-0.5 print:py-2 text-center" style={{ border: '1.5px solid #1e293b', verticalAlign: 'middle' }}>
-                                    <div className="w-5 h-5 mx-auto border-2 border-slate-800 flex items-center justify-center print:w-4 print:h-4" style={{ width: '20px', height: '20px', border: '2px solid #1e293b', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto' }}>
-                                      {isNo && <span className="text-xs print:text-[10px]" style={{ fontSize: '12px', fontWeight: 'bold' }}>✓</span>}
+                                  <td 
+                                    className="border border-slate-800 px-1 py-2.5 print:px-0.5 print:py-2 text-center checkbox-cell" 
+                                    style={{ 
+                                      border: '1.5px solid #1e293b', 
+                                      verticalAlign: 'middle',
+                                      display: 'table-cell',
+                                    }}
+                                  >
+                                    <div 
+                                      className="w-5 h-5 mx-auto border-2 border-slate-800 flex items-center justify-center print:w-4 print:h-4" 
+                                      style={{ 
+                                        width: '20px', 
+                                        height: '20px', 
+                                        border: '2px solid #1e293b', 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        justifyContent: 'center', 
+                                        margin: '0 auto',
+                                        backgroundColor: isNo ? '#e5e7eb' : 'white',
+                                      }}
+                                    >
+                                      {isNo && <span className="text-xs print:text-[10px]" style={{ fontSize: '12px', fontWeight: 'bold', color: '#000' }}>✓</span>}
                                     </div>
                                   </td>
-                                  <td className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-slate-700 text-[10px] print:text-[9px]" style={{ border: '1.5px solid #1e293b', verticalAlign: 'top', lineHeight: '1.3', wordWrap: 'break-word' }}>
+                                  <td 
+                                    className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-slate-700 text-[10px] print:text-[9px]" 
+                                    style={{ 
+                                      border: '1.5px solid #1e293b', 
+                                      verticalAlign: 'top', 
+                                      lineHeight: '1.3', 
+                                      wordWrap: 'break-word',
+                                      overflowWrap: 'break-word',
+                                      display: 'table-cell',
+                                    }}
+                                  >
                                     {remarks}
                                   </td>
-                                  <td className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-center text-slate-700 text-[10px] print:text-[9px]" style={{ border: '1.5px solid #1e293b', verticalAlign: 'middle', lineHeight: '1.3' }}>
+                                  <td 
+                                    className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-center text-slate-700 text-[10px] print:text-[9px]" 
+                                    style={{ 
+                                      border: '1.5px solid #1e293b', 
+                                      verticalAlign: 'middle', 
+                                      lineHeight: '1.3',
+                                      display: 'table-cell',
+                                      wordWrap: 'break-word',
+                                    }}
+                                  >
                                     {responsibility}
                                   </td>
-                                  <td className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-center text-slate-700 text-[10px] print:text-[9px]" style={{ border: '1.5px solid #1e293b', verticalAlign: 'middle', lineHeight: '1.3' }}>
+                                  <td 
+                                    className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-center text-slate-700 text-[10px] print:text-[9px]" 
+                                    style={{ 
+                                      border: '1.5px solid #1e293b', 
+                                      verticalAlign: 'middle', 
+                                      lineHeight: '1.3',
+                                      display: 'table-cell',
+                                    }}
+                                  >
                                     {status}
                                   </td>
                                 </tr>
@@ -619,26 +916,33 @@ export function PatientReport() {
               </div>
 
               {/* Remarks & Observation Section */}
-              <div className="mt-6 print:mt-4">
+              <div className="mt-6 print:mt-4 page-break-inside-avoid">
                 <div className="text-sm print:text-xs font-bold mb-2" style={{ fontWeight: 'bold', marginBottom: '8px' }}>REMARKS & OBSERVATION</div>
-                <table className="w-full text-xs print:text-[9px] border-collapse" style={{ border: '1.5px solid #1e293b' }}>
-                  <thead>
-                    <tr className="bg-slate-200" style={{ backgroundColor: '#e2e8f0' }}>
-                      <th className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-center font-bold" style={{ width: '10%', border: '1.5px solid #1e293b', verticalAlign: 'middle' }}>
+                <table 
+                  className="w-full text-xs print:text-[9px] border-collapse" 
+                  style={{ 
+                    border: '1.5px solid #1e293b',
+                    tableLayout: 'fixed',
+                    width: '100%',
+                  }}
+                >
+                  <thead style={{ display: 'table-header-group' }}>
+                    <tr className="bg-slate-200" style={{ backgroundColor: '#e2e8f0', display: 'table-row' }}>
+                      <th className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-center font-bold" style={{ width: '10%', border: '1.5px solid #1e293b', verticalAlign: 'middle', display: 'table-cell' }}>
                         S.NO
                       </th>
-                      <th className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-left font-bold" style={{ border: '1.5px solid #1e293b', verticalAlign: 'middle' }}>
+                      <th className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-left font-bold" style={{ border: '1.5px solid #1e293b', verticalAlign: 'middle', display: 'table-cell' }}>
                         REMARKS
                       </th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody style={{ display: 'table-row-group' }}>
                     {[1, 2, 3, 4, 5].map((num) => (
-                      <tr key={num}>
-                        <td className="border border-slate-800 px-2 py-4 print:px-1.5 print:py-3 text-center" style={{ border: '1.5px solid #1e293b', verticalAlign: 'middle', fontWeight: '500' }}>
+                      <tr key={num} style={{ display: 'table-row', pageBreakInside: 'avoid' }}>
+                        <td className="border border-slate-800 px-2 py-4 print:px-1.5 print:py-3 text-center" style={{ border: '1.5px solid #1e293b', verticalAlign: 'middle', fontWeight: '500', display: 'table-cell' }}>
                           {num}
                         </td>
-                        <td className="border border-slate-800 px-2 py-4 print:px-1.5 print:py-3" style={{ border: '1.5px solid #1e293b', verticalAlign: 'top', minHeight: '30px' }}>
+                        <td className="border border-slate-800 px-2 py-4 print:px-1.5 print:py-3" style={{ border: '1.5px solid #1e293b', verticalAlign: 'top', minHeight: '30px', display: 'table-cell' }}>
                           &nbsp;
                         </td>
                       </tr>
@@ -648,44 +952,51 @@ export function PatientReport() {
               </div>
 
               {/* Name & Signature of Audit Members */}
-              <div className="mt-6 print:mt-4">
+              <div className="mt-6 print:mt-4 page-break-inside-avoid">
                 <div className="text-sm print:text-xs font-bold mb-2" style={{ fontWeight: 'bold', marginBottom: '8px' }}>NAME & SIGNATURE OF AUDIT MEMBERS</div>
-                <table className="w-full text-xs print:text-[9px] border-collapse" style={{ border: '1.5px solid #1e293b' }}>
-                  <thead>
-                    <tr className="bg-slate-200" style={{ backgroundColor: '#e2e8f0' }}>
-                      <th className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-center font-bold" style={{ width: '8%', border: '1.5px solid #1e293b', verticalAlign: 'middle' }}>
+                <table 
+                  className="w-full text-xs print:text-[9px] border-collapse" 
+                  style={{ 
+                    border: '1.5px solid #1e293b',
+                    tableLayout: 'fixed',
+                    width: '100%',
+                  }}
+                >
+                  <thead style={{ display: 'table-header-group' }}>
+                    <tr className="bg-slate-200" style={{ backgroundColor: '#e2e8f0', display: 'table-row' }}>
+                      <th className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-center font-bold" style={{ width: '8%', border: '1.5px solid #1e293b', verticalAlign: 'middle', display: 'table-cell' }}>
                         S.NO
                       </th>
-                      <th className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-left font-bold" style={{ width: '25%', border: '1.5px solid #1e293b', verticalAlign: 'middle' }}>
+                      <th className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-left font-bold" style={{ width: '25%', border: '1.5px solid #1e293b', verticalAlign: 'middle', display: 'table-cell' }}>
                         NAME
                       </th>
-                      <th className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-left font-bold" style={{ width: '30%', border: '1.5px solid #1e293b', verticalAlign: 'middle' }}>
+                      <th className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-left font-bold" style={{ width: '30%', border: '1.5px solid #1e293b', verticalAlign: 'middle', display: 'table-cell' }}>
                         DEPARTMENT
                       </th>
-                      <th className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-left font-bold" style={{ width: '20%', border: '1.5px solid #1e293b', verticalAlign: 'middle' }}>
+                      <th className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-left font-bold" style={{ width: '20%', border: '1.5px solid #1e293b', verticalAlign: 'middle', display: 'table-cell' }}>
                         DESIGINATION
                       </th>
-                      <th className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-center font-bold" style={{ width: '17%', border: '1.5px solid #1e293b', verticalAlign: 'middle' }}>
+                      <th className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-center font-bold" style={{ width: '17%', border: '1.5px solid #1e293b', verticalAlign: 'middle', display: 'table-cell' }}>
                         SIGNATURE
                       </th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody style={{ display: 'table-row-group' }}>
                     {[1, 2, 3, 4].map((num) => (
-                      <tr key={num}>
-                        <td className="border border-slate-800 px-2 py-5 print:px-1.5 print:py-4 text-center" style={{ border: '1.5px solid #1e293b', verticalAlign: 'middle', fontWeight: '500' }}>
+                      <tr key={num} style={{ display: 'table-row', pageBreakInside: 'avoid' }}>
+                        <td className="border border-slate-800 px-2 py-5 print:px-1.5 print:py-4 text-center" style={{ border: '1.5px solid #1e293b', verticalAlign: 'middle', fontWeight: '500', display: 'table-cell' }}>
                           {num}
                         </td>
-                        <td className="border border-slate-800 px-2 py-5 print:px-1.5 print:py-4" style={{ border: '1.5px solid #1e293b', verticalAlign: 'middle', minHeight: '40px' }}>
+                        <td className="border border-slate-800 px-2 py-5 print:px-1.5 print:py-4" style={{ border: '1.5px solid #1e293b', verticalAlign: 'middle', minHeight: '40px', display: 'table-cell' }}>
                           &nbsp;
                         </td>
-                        <td className="border border-slate-800 px-2 py-5 print:px-1.5 print:py-4" style={{ border: '1.5px solid #1e293b', verticalAlign: 'middle' }}>
+                        <td className="border border-slate-800 px-2 py-5 print:px-1.5 print:py-4" style={{ border: '1.5px solid #1e293b', verticalAlign: 'middle', display: 'table-cell' }}>
                           &nbsp;
                         </td>
-                        <td className="border border-slate-800 px-2 py-5 print:px-1.5 print:py-4" style={{ border: '1.5px solid #1e293b', verticalAlign: 'middle' }}>
+                        <td className="border border-slate-800 px-2 py-5 print:px-1.5 print:py-4" style={{ border: '1.5px solid #1e293b', verticalAlign: 'middle', display: 'table-cell' }}>
                           &nbsp;
                         </td>
-                        <td className="border border-slate-800 px-2 py-5 print:px-1.5 print:py-4" style={{ border: '1.5px solid #1e293b', verticalAlign: 'middle' }}>
+                        <td className="border border-slate-800 px-2 py-5 print:px-1.5 print:py-4" style={{ border: '1.5px solid #1e293b', verticalAlign: 'middle', display: 'table-cell' }}>
                           &nbsp;
                         </td>
                       </tr>
@@ -705,30 +1016,6 @@ export function PatientReport() {
         </div>
       )}
 
-      {/* Edit Modal */}
-      {reportData && (
-        <EditAuditModal
-          isOpen={editModalOpen}
-          onClose={() => {
-            setEditModalOpen(false)
-            setSelectedDepartmentId('')
-          }}
-          uhid={reportData?.patient?.uhid || uhid}
-          departmentId={selectedDepartmentId}
-          onSuccess={async () => {
-            // Reload the report data after successful edit
-            if (uhid.trim()) {
-              try {
-                const data = await apiClient.get(`/audits/uhid/${uhid.trim().toUpperCase()}`)
-                setReportData(data)
-                setError('')
-              } catch (err) {
-                console.error('Error reloading report:', err)
-              }
-            }
-          }}
-        />
-      )}
       </div>
     </>
   )

@@ -8,10 +8,12 @@ import { SimpleFormBuilder } from './pages/Admin/SimpleFormBuilder'
 import { FormTemplateManagement } from './pages/Admin/FormTemplateManagement'
 import { UserManagement } from './pages/Admin/UserManagement'
 import { Dashboard } from './pages/Admin/Dashboard'
+import { EnhancedAnalytics } from './pages/Admin/EnhancedAnalytics'
 import { ExportSubmissions } from './pages/Admin/ExportSubmissions'
 import { PatientReport } from './pages/Admin/PatientReport'
 import { DepartmentLogs } from './pages/Admin/DepartmentLogs'
 import { Form } from './pages/User/Form'
+import { MultiDepartmentForm } from './pages/User/MultiDepartmentForm'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { HomeRedirect } from './components/HomeRedirect'
 
@@ -63,6 +65,14 @@ function App() {
             }
           />
           <Route
+            path="/admin/analytics"
+            element={
+              <ProtectedRoute roles={['admin']}>
+                <EnhancedAnalytics />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/admin/export"
             element={
               <ProtectedRoute roles={['admin']}>
@@ -92,6 +102,14 @@ function App() {
             element={
               <ProtectedRoute roles={['admin', 'user']}>
                 <Form />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/multi-dept-checklist"
+            element={
+              <ProtectedRoute roles={['admin', 'user']}>
+                <MultiDepartmentForm />
               </ProtectedRoute>
             }
           />

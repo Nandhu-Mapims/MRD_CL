@@ -52,8 +52,70 @@ export function DepartmentLogs() {
     
     try {
       // Get all submissions for this UHID grouped by department
-      const data = await apiClient.get(`/audits/uhid/${encodeURIComponent(uhid.trim().toUpperCase())}`)
-      setPreviewData(data)
+      const submissions = await apiClient.get(`/audits/uhid/${encodeURIComponent(uhid.trim().toUpperCase())}`)
+      
+      if (!submissions || submissions.length === 0) {
+        setPreviewData({
+          patient: { uhid: uhid.trim().toUpperCase(), patientName: 'N/A' },
+          departments: []
+        })
+        return
+      }
+
+      // Transform flat array of submissions into structured format
+      const patient = submissions[0]?.patient || { 
+        uhid: uhid.trim().toUpperCase(), 
+        patientName: submissions[0]?.patientName || 'N/A' 
+      }
+
+      // Group submissions by department and section
+      const deptMap = new Map()
+      
+      submissions.forEach(sub => {
+        const deptId = sub.department?._id || sub.department
+        const deptName = sub.department?.name || 'Unknown Department'
+        const deptCode = sub.department?.code || 'N/A'
+        
+        if (!deptMap.has(deptId)) {
+          deptMap.set(deptId, {
+            department: { _id: deptId, name: deptName, code: deptCode },
+            sections: new Map()
+          })
+        }
+        
+        const deptData = deptMap.get(deptId)
+        const sectionName = sub.checklistItemId?.section || 'General'
+        
+        if (!deptData.sections.has(sectionName)) {
+          deptData.sections.set(sectionName, {
+            sectionName,
+            items: []
+          })
+        }
+        
+        const section = deptData.sections.get(sectionName)
+        section.items.push({
+          checklistItemId: {
+            _id: sub.checklistItemId?._id,
+            label: sub.checklistItemId?.label || 'N/A'
+          },
+          responseValue: sub.responseValue || sub.yesNoNa || 'N/A',
+          remarks: sub.remarks || '-',
+          responsibility: sub.responsibility || '-',
+          status: sub.status || 'OPEN'
+        })
+      })
+      
+      // Convert Maps to arrays
+      const departments = Array.from(deptMap.values()).map(dept => ({
+        department: dept.department,
+        sections: Array.from(dept.sections.values())
+      }))
+      
+      setPreviewData({
+        patient,
+        departments
+      })
     } catch (err) {
       console.error('Error loading preview data:', err)
       const errorMessage = err.response?.data?.message || err.message || 'Failed to load data'
@@ -541,14 +603,27 @@ export function DepartmentLogs() {
 
       {/* Data Preview Modal - Grouped by UHID and Department */}
       {previewModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-2 sm:p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-6xl max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col">
             {/* Header */}
-            <div className="bg-blue-600 text-white px-4 py-3 flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-bold">Data Preview - UHID: {selectedUhid}</h2>
-                <p className="text-sm text-blue-100">
-                  {previewData?.patient?.patientName ? `Patient: ${previewData.patient.patientName}` : 'Loading...'}
+            <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-4 flex items-center justify-between shadow-lg">
+              <div className="flex-1">
+                <h2 className="text-xl font-bold mb-1 flex items-center gap-2">
+                  <span>📋</span>
+                  Data Preview - UHID: <span className="font-mono">{selectedUhid}</span>
+                </h2>
+                <p className="text-sm text-blue-100 flex items-center gap-2">
+                  {previewData?.patient?.patientName ? (
+                    <>
+                      <span>👤</span>
+                      <span className="font-medium">Patient: {previewData.patient.patientName}</span>
+                    </>
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      <span className="inline-block animate-spin rounded-full h-3 w-3 border-t-2 border-b-2 border-white"></span>
+                      Loading...
+                    </span>
+                  )}
                 </p>
               </div>
               <button
@@ -557,78 +632,118 @@ export function DepartmentLogs() {
                   setSelectedUhid('')
                   setPreviewData(null)
                 }}
-                className="text-white hover:text-blue-200 text-2xl font-bold"
+                className="ml-4 text-white hover:text-blue-200 hover:bg-blue-700 rounded-full p-2 transition-colors text-2xl font-bold w-10 h-10 flex items-center justify-center"
+                aria-label="Close modal"
               >
                 ×
               </button>
             </div>
 
             {/* Content */}
-            <div className="flex-1 overflow-y-auto p-4">
+            <div className="flex-1 overflow-y-auto p-6">
               {loadingPreview ? (
-                <div className="text-center py-8">
-                  <div className="text-slate-500">Loading data...</div>
+                <div className="text-center py-12">
+                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-600 mb-4"></div>
+                  <div className="text-slate-500 font-medium">Loading data...</div>
                 </div>
               ) : previewData?.error ? (
-                <div className="text-center py-8 text-blue-600">
+                <div className="text-center py-12 text-red-600">
+                  <div className="text-4xl mb-3">⚠️</div>
                   <p className="font-semibold mb-2">Error loading data</p>
-                  <p className="text-sm">{previewData.error}</p>
+                  <p className="text-sm text-slate-600">{previewData.error}</p>
                 </div>
               ) : previewData && previewData.departments && previewData.departments.length > 0 ? (
                 <div className="space-y-6">
                   {/* Patient Info */}
-                  <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
-                    <h3 className="font-bold text-slate-800 mb-2">Patient Information</h3>
-                    <div className="grid grid-cols-2 gap-2 text-sm">
-                      <div>
-                        <span className="font-semibold">UHID:</span> {previewData.patient.uhid}
+                  <div className="bg-gradient-to-r from-blue-50 to-slate-50 rounded-lg p-5 border border-slate-200 shadow-sm">
+                    <h3 className="font-bold text-slate-800 mb-3 text-base flex items-center gap-2">
+                      <span className="text-blue-600">👤</span>
+                      Patient Information
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-slate-600 min-w-[80px]">UHID:</span>
+                        <span className="font-mono font-bold text-blue-700">{previewData.patient.uhid}</span>
                       </div>
-                      <div>
-                        <span className="font-semibold">Patient Name:</span> {previewData.patient.patientName}
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-slate-600 min-w-[120px]">Patient Name:</span>
+                        <span className="text-slate-800">{previewData.patient.patientName}</span>
                       </div>
                     </div>
                   </div>
 
                   {/* Department-wise Data */}
                   {previewData.departments.map((deptData, deptIdx) => (
-                    <div key={deptIdx} className="bg-white rounded-lg border border-slate-200 overflow-hidden">
-                      <div className="bg-blue-600 text-white px-4 py-2">
-                        <h3 className="font-semibold text-sm">
-                          {deptData.department.name} ({deptData.department.code})
+                    <div key={deptIdx} className="bg-white rounded-lg border-2 border-slate-200 overflow-hidden shadow-sm">
+                      <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-5 py-3">
+                        <h3 className="font-bold text-base flex items-center gap-2">
+                          <span>🏥</span>
+                          {deptData.department.name} 
+                          <span className="text-blue-200 font-normal">({deptData.department.code})</span>
                         </h3>
                       </div>
-                      <div className="p-4">
+                      <div className="p-5">
                         {deptData.sections && deptData.sections.length > 0 ? (
                           deptData.sections.map((section, sectionIdx) => (
-                            <div key={sectionIdx} className="mb-4">
-                              <h4 className="font-semibold text-slate-700 mb-2 text-sm border-b border-slate-200 pb-1">
+                            <div key={sectionIdx} className={sectionIdx > 0 ? "mt-6 pt-6 border-t border-slate-200" : ""}>
+                              <h4 className="font-bold text-slate-800 mb-3 text-sm uppercase tracking-wide border-b-2 border-blue-200 pb-2">
                                 {section.sectionName}
                               </h4>
-                              <div className="overflow-x-auto">
-                                <table className="w-full text-xs">
-                                  <thead className="bg-slate-50">
+                              <div className="overflow-x-auto -mx-4 px-4">
+                                <table className="w-full text-sm border-collapse">
+                                  <thead className="bg-slate-100">
                                     <tr>
-                                      <th className="px-2 py-1.5 text-left font-semibold text-slate-700">Item</th>
-                                      <th className="px-2 py-1.5 text-left font-semibold text-slate-700">Response</th>
-                                      <th className="px-2 py-1.5 text-left font-semibold text-slate-700">Remarks</th>
-                                      <th className="px-2 py-1.5 text-left font-semibold text-slate-700">Responsibility</th>
-                                      <th className="px-2 py-1.5 text-left font-semibold text-slate-700">Status</th>
+                                      <th className="px-4 py-3 text-left font-semibold text-slate-700 align-top min-w-[200px]">
+                                        Item
+                                      </th>
+                                      <th className="px-4 py-3 text-left font-semibold text-slate-700 align-top w-[100px]">
+                                        Response
+                                      </th>
+                                      <th className="px-4 py-3 text-left font-semibold text-slate-700 align-top min-w-[150px]">
+                                        Remarks
+                                      </th>
+                                      <th className="px-4 py-3 text-left font-semibold text-slate-700 align-top min-w-[120px]">
+                                        Responsibility
+                                      </th>
+                                      <th className="px-4 py-3 text-left font-semibold text-slate-700 align-top w-[120px]">
+                                        Status
+                                      </th>
                                     </tr>
                                   </thead>
-                                  <tbody className="divide-y divide-slate-100">
+                                  <tbody className="divide-y divide-slate-200">
                                     {section.items.map((item, itemIdx) => (
-                                      <tr key={itemIdx} className="hover:bg-slate-50">
-                                        <td className="px-2 py-2">{item.checklistItemId?.label || 'N/A'}</td>
-                                        <td className="px-2 py-2">{item.responseValue || item.yesNoNa || 'N/A'}</td>
-                                        <td className="px-2 py-2">{item.remarks || '-'}</td>
-                                        <td className="px-2 py-2">{item.responsibility || '-'}</td>
-                                        <td className="px-2 py-2">
-                                          <span className={`px-2 py-0.5 rounded text-xs ${
-                                            item.status === 'CLOSED' ? 'bg-green-100 text-green-700' :
-                                            item.status === 'IN_PROGRESS' ? 'bg-yellow-100 text-yellow-700' :
-                                            'bg-blue-100 text-blue-700'
+                                      <tr key={itemIdx} className="hover:bg-slate-50 transition-colors">
+                                        <td className="px-4 py-3 align-top text-slate-800">
+                                          <div className="font-medium leading-relaxed">
+                                            {item.checklistItemId?.label || 'N/A'}
+                                          </div>
+                                        </td>
+                                        <td className="px-4 py-3 align-top">
+                                          <span className="font-semibold text-slate-700">
+                                            {item.responseValue || item.yesNoNa || 'N/A'}
+                                          </span>
+                                        </td>
+                                        <td className="px-4 py-3 align-top text-slate-600">
+                                          <div className="break-words max-w-[200px]">
+                                            {item.remarks && item.remarks !== '-' ? item.remarks : (
+                                              <span className="text-slate-400 italic">-</span>
+                                            )}
+                                          </div>
+                                        </td>
+                                        <td className="px-4 py-3 align-top text-slate-600">
+                                          <div className="break-words max-w-[150px]">
+                                            {item.responsibility && item.responsibility !== '-' ? item.responsibility : (
+                                              <span className="text-slate-400 italic">-</span>
+                                            )}
+                                          </div>
+                                        </td>
+                                        <td className="px-4 py-3 align-top">
+                                          <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold whitespace-nowrap ${
+                                            item.status === 'CLOSED' ? 'bg-green-100 text-green-700 border border-green-200' :
+                                            item.status === 'IN_PROGRESS' ? 'bg-yellow-100 text-yellow-700 border border-yellow-200' :
+                                            'bg-blue-100 text-blue-700 border border-blue-200'
                                           }`}>
-                                            {item.status || 'OPEN'}
+                                            {item.status === 'IN_PROGRESS' ? 'IN PROGRESS' : (item.status || 'OPEN')}
                                           </span>
                                         </td>
                                       </tr>
@@ -653,14 +768,14 @@ export function DepartmentLogs() {
             </div>
 
             {/* Footer */}
-            <div className="border-t border-slate-200 px-4 py-3 flex justify-end">
+            <div className="border-t border-slate-200 bg-slate-50 px-6 py-4 flex justify-end">
               <button
                 onClick={() => {
                   setPreviewModalOpen(false)
                   setSelectedUhid('')
                   setPreviewData(null)
                 }}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2 rounded text-sm transition-all"
+                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-8 py-2.5 rounded-lg text-sm transition-all shadow-md hover:shadow-lg transform hover:scale-[1.02]"
               >
                 Close
               </button>

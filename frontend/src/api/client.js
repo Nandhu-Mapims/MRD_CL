@@ -9,31 +9,73 @@ export const apiClient = {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     };
 
-    const res = await fetch(`${API_BASE}${path}`, {
-      ...options,
-      headers,
-    });
+    // Add timeout for requests (default 60 seconds, 120 for stats endpoint)
+    const timeout = path.includes('/stats') ? 120000 : 60000;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-    if (!res.ok) {
-      let errorData;
-      const contentType = res.headers.get('content-type');
-      if (contentType && contentType.includes('application/json')) {
-        try {
-          errorData = await res.json();
-        } catch (e) {
-          errorData = { message: 'Request failed' };
+    try {
+      const res = await fetch(`${API_BASE}${path}`, {
+        ...options,
+        headers,
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+
+      if (!res.ok) {
+        let errorData;
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          try {
+            errorData = await res.json();
+          } catch (e) {
+            errorData = { message: 'Request failed' };
+          }
+        } else {
+          const text = await res.text();
+          errorData = { message: text || 'Request failed' };
         }
-      } else {
-        const text = await res.text();
-        errorData = { message: text || 'Request failed' };
+        
+        // Handle 401 Unauthorized - token expired or invalid
+        if (res.status === 401) {
+          console.error('Authentication failed:', errorData.message);
+          // Clear invalid token
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          // Only auto-redirect if not on patient report page (let it show error first)
+          // Patient report should show error message instead of immediately redirecting
+          if (window.location.pathname !== '/login' && !window.location.pathname.includes('/patient-report')) {
+            window.location.href = '/login';
+          }
+        }
+        
+        const error = new Error(errorData.message || 'Request failed');
+        error.response = { data: errorData, status: res.status };
+        throw error;
+      }
+      if (res.status === 204) return null;
+      return res.json();
+    } catch (err) {
+      clearTimeout(timeoutId);
+      
+      // Handle timeout errors
+      if (err.name === 'AbortError') {
+        console.error('Request timeout:', path);
+        const timeoutError = new Error('Request timed out. The server is taking too long to respond. Please try again.');
+        timeoutError.response = { status: 408, data: { message: 'Request timeout' } };
+        throw timeoutError;
       }
       
-      const error = new Error(errorData.message || 'Request failed');
-      error.response = { data: errorData, status: res.status };
-      throw error;
+      // Handle network errors
+      if (err.name === 'TypeError' && err.message.includes('fetch')) {
+        console.error('Network error - backend server may not be running:', err);
+        const networkError = new Error('Unable to connect to server. Please check if the backend server is running.');
+        networkError.response = { status: 0, data: { message: 'Network error' } };
+        throw networkError;
+      }
+      throw err;
     }
-    if (res.status === 204) return null;
-    return res.json();
   },
 
   get(path) {

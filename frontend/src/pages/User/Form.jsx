@@ -17,9 +17,6 @@ export function Form() {
   const [uhid, setUhid] = useState('')
   const [patientName, setPatientName] = useState('')
   const [checkingUHID, setCheckingUHID] = useState(false)
-  const [recentSubmissions, setRecentSubmissions] = useState([])
-  const [showRecentSubmissions, setShowRecentSubmissions] = useState(false)
-  const [loadingRecent, setLoadingRecent] = useState(false)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(null)
   const [showSuccessModal, setShowSuccessModal] = useState(false)
@@ -200,32 +197,6 @@ export function Form() {
     })()
   }, [formTemplateId, user])
 
-  // Load recent submissions
-  const loadRecentSubmissions = async () => {
-    if (!formTemplateId) return
-    
-    // Get user department ID
-    let userDeptId = null
-    if (user?.department) {
-      userDeptId = typeof user.department === 'object' 
-        ? (user.department.id || user.department._id) 
-        : user.department
-    }
-    
-    if (!userDeptId) return
-    
-    setLoadingRecent(true)
-    try {
-      const data = await apiClient.get(
-        `/audits/recent?departmentId=${userDeptId}&formTemplateId=${formTemplateId}&limit=10`
-      )
-      setRecentSubmissions(data)
-    } catch (err) {
-      console.error('Error loading recent submissions:', err)
-    } finally {
-      setLoadingRecent(false)
-    }
-  }
 
   // Reset form to new mode
   const resetToNewForm = () => {
@@ -322,9 +293,6 @@ export function Form() {
       setShowSuccessModal(true)
       // Reset form
       resetToNewForm()
-      
-      // Reload recent submissions
-      await loadRecentSubmissions()
     } catch (err) {
       const errorMsg = err.response?.data?.message || 'Failed to submit form'
       if (errorMsg.includes('UHID already exists') || errorMsg.includes('duplicate')) {

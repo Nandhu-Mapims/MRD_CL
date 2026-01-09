@@ -6,20 +6,17 @@ const auth = require('../middleware/auth');
 // User submit audit
 router.post('/', auth(['admin', 'user']), auditController.submitAudit);
 
-// Update audit (edit existing submission)
-router.put('/', auth(['admin', 'user']), auditController.updateAudit);
-
-// Get recent submissions grouped by UHID (for edit selection)
-router.get('/recent', auth(['admin', 'user']), auditController.getRecentSubmissions);
-
-// Get submissions for editing (by UHID and department)
-router.get('/edit', auth(['admin', 'user']), auditController.getSubmissionsForEdit);
+// Get all department checklists for a patient (multi-department view) - No auth required for patient reports
+router.get('/patient-checklists', auditController.getPatientChecklists);
 
 // Get submissions by UHID (for patient report) - Must be before catch-all routes
 router.get('/uhid/:uhid', auth(['admin', 'user']), auditController.getSubmissionsByUHID);
 
 // Dashboard stats
 router.get('/stats', auth(['admin']), auditController.getStats);
+
+// Executive Analytics (MD-level strategic insights)
+router.get('/executive-analytics', auth(['admin']), auditController.getExecutiveAnalytics);
 
 // Export submissions (admin-only)
 router.get('/export', auth(['admin']), auditController.exportSubmissions);
