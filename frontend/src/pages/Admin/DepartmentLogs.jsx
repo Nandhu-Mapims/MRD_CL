@@ -102,7 +102,6 @@ export function DepartmentLogs() {
           responseValue: sub.responseValue || sub.yesNoNa || 'N/A',
           remarks: sub.remarks || '-',
           responsibility: sub.responsibility || '-',
-          status: sub.status || 'OPEN'
         })
       })
       
@@ -539,7 +538,6 @@ export function DepartmentLogs() {
                                 <th className="px-3 py-2 font-semibold text-slate-700">
                                   Submitted At
                                 </th>
-                                <th className="px-3 py-2 font-semibold text-slate-700">Status</th>
                                 <th className="px-3 py-2 font-semibold text-slate-700">By</th>
                               </tr>
                             </thead>
@@ -690,23 +688,20 @@ export function DepartmentLogs() {
                                 {section.sectionName}
                               </h4>
                               <div className="overflow-x-auto -mx-4 px-4">
-                                <table className="w-full text-sm border-collapse">
+                                <table className="w-full text-sm border-collapse" style={{ tableLayout: 'fixed' }}>
                                   <thead className="bg-slate-100">
                                     <tr>
                                       <th className="px-4 py-3 text-left font-semibold text-slate-700 align-top min-w-[200px]">
                                         Item
                                       </th>
-                                      <th className="px-4 py-3 text-left font-semibold text-slate-700 align-top w-[100px]">
+                                      <th className="px-4 py-3 text-center font-semibold text-slate-700 align-top w-[100px]">
                                         Response
                                       </th>
                                       <th className="px-4 py-3 text-left font-semibold text-slate-700 align-top min-w-[150px]">
                                         Remarks
                                       </th>
-                                      <th className="px-4 py-3 text-left font-semibold text-slate-700 align-top min-w-[120px]">
+                                      <th className="px-4 py-3 text-left font-semibold text-slate-700 align-top min-w-[150px]">
                                         Responsibility
-                                      </th>
-                                      <th className="px-4 py-3 text-left font-semibold text-slate-700 align-top w-[120px]">
-                                        Status
                                       </th>
                                     </tr>
                                   </thead>
@@ -718,7 +713,7 @@ export function DepartmentLogs() {
                                             {item.checklistItemId?.label || 'N/A'}
                                           </div>
                                         </td>
-                                        <td className="px-4 py-3 align-top">
+                                        <td className="px-4 py-3 align-top text-center">
                                           <span className="font-semibold text-slate-700">
                                             {item.responseValue || item.yesNoNa || 'N/A'}
                                           </span>
@@ -736,15 +731,6 @@ export function DepartmentLogs() {
                                               <span className="text-slate-400 italic">-</span>
                                             )}
                                           </div>
-                                        </td>
-                                        <td className="px-4 py-3 align-top">
-                                          <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold whitespace-nowrap ${
-                                            item.status === 'CLOSED' ? 'bg-green-100 text-green-700 border border-green-200' :
-                                            item.status === 'IN_PROGRESS' ? 'bg-yellow-100 text-yellow-700 border border-yellow-200' :
-                                            'bg-blue-100 text-blue-700 border border-blue-200'
-                                          }`}>
-                                            {item.status === 'IN_PROGRESS' ? 'IN PROGRESS' : (item.status || 'OPEN')}
-                                          </span>
                                         </td>
                                       </tr>
                                     ))}

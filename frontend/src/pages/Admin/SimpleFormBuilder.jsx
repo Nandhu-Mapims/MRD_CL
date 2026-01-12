@@ -16,7 +16,10 @@ export function SimpleFormBuilder() {
   }, [])
 
   useEffect(() => {
-    console.log('sections===================',sections)
+    console.log('sections updated:', sections.map(s => ({
+      name: s.name,
+      items: s.items.map(i => ({ label: i.label, responseType: i.responseType }))
+    })))
   }, [sections])
 
   const loadData = async () => {
@@ -96,7 +99,22 @@ export function SimpleFormBuilder() {
 
   const handleUpdateItem = (sectionIndex, itemIndex, field, value) => {
     const newSections = [...sections]
-    newSections[sectionIndex].items[itemIndex][field] = value
+    const item = newSections[sectionIndex].items[itemIndex]
+    
+    // Update the field
+    item[field] = value
+    
+    // Clear responseOptions when responseType changes to something other than MULTI_SELECT
+    if (field === 'responseType') {
+      if (value !== 'MULTI_SELECT') {
+        item.responseOptions = ''
+      } else if (!item.responseOptions) {
+        // Initialize empty string for MULTI_SELECT if not set
+        item.responseOptions = ''
+      }
+    }
+    
+    console.log(`Updated item ${itemIndex} in section ${sectionIndex}:`, { field, value, item })
     setSections(newSections)
   }
 
@@ -186,9 +204,9 @@ export function SimpleFormBuilder() {
               .map((item) => ({
                 id: item._id,
                 label: item.label,
-                responseType: item.responseType || 'YES_NO',
-                responseOptions: item.responseOptions || '',
-                isMandatory: item.isMandatory,
+                responseType: item.responseType || 'YES_NO', // Ensure responseType is set
+                responseOptions: (item.responseType === 'MULTI_SELECT' ? (item.responseOptions || '') : ''),
+                isMandatory: item.isMandatory || false,
                 order: item.order || 0,
               }))
               .sort((a, b) => (a.order || 0) - (b.order || 0))
@@ -272,6 +290,7 @@ export function SimpleFormBuilder() {
       return
     }
 
+    // Validate sections and items
     for (const section of sections) {
       if (!section.name.trim()) {
         alert(`Please enter a name for section ${section.order}`)
@@ -280,6 +299,17 @@ export function SimpleFormBuilder() {
       for (const item of section.items) {
         if (!item.label.trim()) {
           alert(`Please enter a label for all items in section "${section.name}"`)
+          return
+        }
+        // Validate MULTI_SELECT has options
+        if (item.responseType === 'MULTI_SELECT' && (!item.responseOptions || !item.responseOptions.trim())) {
+          alert(`Please provide options for Multi Select item "${item.label}" in section "${section.name}"`)
+          return
+        }
+        // Ensure responseType is valid
+        const validTypes = ['YES_NO', 'MULTI_SELECT', 'TEXT']
+        if (item.responseType && !validTypes.includes(item.responseType)) {
+          alert(`Invalid response type for item "${item.label}" in section "${section.name}". Must be one of: ${validTypes.join(', ')}`)
           return
         }
       }
@@ -314,6 +344,15 @@ export function SimpleFormBuilder() {
         }
       }
 
+      console.log('Updating form template:', editingFormId, {
+        name: form.name,
+        description: form.description || '',
+        departmentIds: formDepts,
+        sections: sectionsData,
+        isCommon: form.isCommon || false,
+        isActive: form.isActive !== undefined ? form.isActive : true,
+      })
+      
       await apiClient.put(`/form-templates/${editingFormId}`, {
         name: form.name,
         description: form.description || '',
@@ -322,6 +361,8 @@ export function SimpleFormBuilder() {
         isCommon: form.isCommon || false,
         isActive: form.isActive !== undefined ? form.isActive : true,
       })
+      
+      console.log('Form template updated successfully')
       formTemplateId = editingFormId
       
       // Get ALL existing items for this form template to delete them before recreating
@@ -374,9 +415,13 @@ export function SimpleFormBuilder() {
       // Delete all old items
       for (const item of oldItems) {
         try {
-          await apiClient.delete(`/checklists/${item._id}`)
+          const itemId = item._id || item.id
+          if (itemId) {
+            await apiClient.delete(`/checklists/${itemId}`)
+          }
         } catch (err) {
-          console.warn(`Error deleting item ${item._id}:`, err)
+          const itemId = item._id || item.id
+          console.warn(`Error deleting item ${itemId}:`, err)
         }
       }
 
@@ -390,21 +435,34 @@ export function SimpleFormBuilder() {
       if (form.isCommon) {
         for (const section of sections) {
           for (const item of section.items) {
+            // Ensure responseType is valid
+            const responseType = (item.responseType && ['YES_NO', 'MULTI_SELECT', 'TEXT'].includes(item.responseType)) 
+              ? item.responseType 
+              : 'YES_NO'
+            
+            let payload = {
+              label: item.label,
+              section: section.name,
+              departmentScope: 'ALL',
+              departmentId: undefined,
+              formTemplateId: formTemplateId,
+              responseType: responseType,
+              isActive: true,
+              order: item.order || 0,
+              isMandatory: item.isMandatory || false,
+            }
+            // Only include responseOptions if responseType is MULTI_SELECT and options are provided
+            if (responseType === 'MULTI_SELECT' && item.responseOptions && item.responseOptions.trim()) {
+              payload.responseOptions = item.responseOptions.trim()
+            }
+            
+            console.log(`Creating item "${item.label}" with responseType: ${responseType}`, { item, payload })
             try {
-              await apiClient.post('/checklists', {
-                label: item.label,
-                section: section.name,
-                departmentScope: 'ALL',
-                departmentId: undefined,
-                formTemplateId: formTemplateId,
-                responseType: item.responseType || 'YES_NO',
-                responseOptions: item.responseOptions || undefined,
-                isActive: true,
-                order: item.order,
-                isMandatory: item.isMandatory,
-              })
+              await apiClient.post('/checklists', payload)
             } catch (err) {
               console.error(`Error creating item "${item.label}":`, err)
+              console.error('Payload sent:', payload)
+              console.error('Error response:', err.response?.data)
               throw err // Re-throw to stop the process
             }
           }
@@ -414,21 +472,34 @@ export function SimpleFormBuilder() {
         for (const deptId of formDepts) {
           for (const section of sections) {
             for (const item of section.items) {
+              // Ensure responseType is valid
+              const responseType = (item.responseType && ['YES_NO', 'MULTI_SELECT', 'TEXT'].includes(item.responseType)) 
+                ? item.responseType 
+                : 'YES_NO'
+              
+              let payload = {
+                label: item.label,
+                section: section.name,
+                departmentScope: 'SINGLE',
+                departmentId: deptId,
+                formTemplateId: formTemplateId,
+                responseType: responseType,
+                isActive: true,
+                order: item.order || 0,
+                isMandatory: item.isMandatory || false,
+              }
+              // Only include responseOptions if responseType is MULTI_SELECT and options are provided
+              if (responseType === 'MULTI_SELECT' && item.responseOptions && item.responseOptions.trim()) {
+                payload.responseOptions = item.responseOptions.trim()
+              }
+              
+              console.log(`Creating item "${item.label}" for dept ${deptId} with responseType: ${responseType}`, { item, payload })
               try {
-                await apiClient.post('/checklists', {
-                  label: item.label,
-                  section: section.name,
-                  departmentScope: 'SINGLE',
-                  departmentId: deptId,
-                  formTemplateId: formTemplateId,
-                  responseType: item.responseType || 'YES_NO',
-                  responseOptions: item.responseOptions || undefined,
-                  isActive: true,
-                  order: item.order,
-                  isMandatory: item.isMandatory,
-                })
+                await apiClient.post('/checklists', payload)
               } catch (err) {
                 console.error(`Error creating item "${item.label}" for department ${deptId}:`, err)
+                console.error('Payload sent:', payload)
+                console.error('Error response:', err.response?.data)
                 throw err // Re-throw to stop the process
               }
             }
@@ -445,8 +516,42 @@ export function SimpleFormBuilder() {
 
       loadData()
     } catch (err) {
-      alert('Error saving form: ' + (err.response?.data?.message || err.message))
-      console.error(err)
+      console.error('Full error object:', err)
+      console.error('Error response:', err.response)
+      console.error('Error response data:', err.response?.data)
+      console.error('Error response status:', err.response?.status)
+      
+      // Build comprehensive error message
+      let errorMessage = 'Unknown error'
+      let errorDetails = ''
+      
+      if (err.response?.data) {
+        const data = err.response.data
+        // Try multiple possible error message fields
+        errorMessage = data.error || data.message || data.msg || 'Server error'
+        
+        // Add validation errors if present
+        if (data.validationErrors) {
+          errorDetails = `\n\nValidation errors:\n${JSON.stringify(data.validationErrors, null, 2)}`
+        }
+        
+        // Add stack trace if available (for debugging)
+        if (data.stack && process.env.NODE_ENV !== 'production') {
+          errorDetails += `\n\nStack trace:\n${data.stack}`
+        }
+        
+        // Add request body if available
+        if (data.requestBody) {
+          errorDetails += `\n\nRequest body:\n${JSON.stringify(data.requestBody, null, 2)}`
+        }
+      } else if (err.message) {
+        errorMessage = err.message
+      }
+      
+      // Show detailed error in alert
+      const fullError = `Error saving form: ${errorMessage}${errorDetails}`
+      console.error('Displaying error to user:', fullError)
+      alert(fullError)
     }
   }
 
@@ -684,19 +789,22 @@ export function SimpleFormBuilder() {
                                 </label>
                                 <select
                                   value={item.responseType || 'YES_NO'}
-                                  onChange={(e) =>
-                                    handleUpdateItem(activeSection, itemIndex, 'responseType', e.target.value)
-                                  }
+                                  onChange={(e) => {
+                                    const newValue = e.target.value
+                                    console.log(`Changing responseType from ${item.responseType} to ${newValue} for item:`, item.label)
+                                    handleUpdateItem(activeSection, itemIndex, 'responseType', newValue)
+                                  }}
                                   className="w-full border border-slate-300 rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
-                                  disabled
                                 >
-                                  <option value="YES_NO">Yes/No</option>
+                                  <option value="YES_NO">Yes or No</option>
+                                  <option value="MULTI_SELECT">Multi Select - Options</option>
+                                  <option value="TEXT">Text Box</option>
                                 </select>
                               </div>
-                              {(item.responseType === 'DROPDOWN') && (
+                              {(item.responseType === 'MULTI_SELECT') && (
                                 <div>
                                   <label className="block text-[10px] sm:text-xs font-medium text-slate-700 mb-1">
-                                    Options (comma-separated)
+                                    Options (comma-separated) *
                                   </label>
                                   <input
                                     type="text"
@@ -706,6 +814,7 @@ export function SimpleFormBuilder() {
                                     }
                                     className="w-full border border-slate-300 rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
                                     placeholder="Option1, Option2, Option3"
+                                    required={item.responseType === 'MULTI_SELECT'}
                                   />
                                 </div>
                               )}

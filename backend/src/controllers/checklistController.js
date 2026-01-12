@@ -9,35 +9,107 @@ exports.createChecklistItem = async (req, res) => {
 
     let department = undefined;
     if (departmentScope === 'SINGLE') {
+      if (!departmentId) {
+        console.error('Missing departmentId for SINGLE scope:', req.body);
+        return res.status(400).json({ message: 'departmentId is required when departmentScope is SINGLE' });
+      }
       // Ensure departmentId is converted to ObjectId
       const mongoose = require('mongoose');
       try {
         department = new mongoose.Types.ObjectId(departmentId);
       } catch (err) {
+        console.error('Invalid departmentId format:', departmentId, err);
         return res.status(400).json({ message: 'Invalid department ID format' });
       }
       const exists = await Department.findById(department);
       if (!exists) {
+        console.error('Department not found:', department, 'from departmentId:', departmentId);
         return res.status(400).json({ message: 'Invalid department' });
+      }
+    } else if (departmentScope === 'ALL') {
+      // For ALL scope, department should be undefined
+      department = undefined;
+    }
+
+    // Clean up responseOptions - only set if responseType is MULTI_SELECT and options are provided
+    // For TEXT and YES_NO types, explicitly set to undefined (not empty string)
+    let cleanedResponseOptions = undefined;
+    if (responseType === 'MULTI_SELECT' && responseOptions && responseOptions.trim()) {
+      cleanedResponseOptions = responseOptions.trim();
+    } else if (responseOptions !== undefined && responseOptions !== null) {
+      // If responseOptions is provided but not for MULTI_SELECT, set to undefined
+      cleanedResponseOptions = undefined;
+    }
+
+    // Convert formTemplateId to ObjectId if provided
+    let formTemplate = undefined;
+    if (formTemplateId) {
+      const mongoose = require('mongoose');
+      try {
+        formTemplate = new mongoose.Types.ObjectId(formTemplateId);
+      } catch (err) {
+        console.warn('Invalid formTemplateId format:', formTemplateId);
+        // Continue without formTemplate if invalid
       }
     }
 
-    const item = await ChecklistItem.create({
+    // Validate responseType
+    const validResponseTypes = ['YES_NO', 'MULTI_SELECT', 'TEXT'];
+    const finalResponseType = responseType || 'YES_NO';
+    if (!validResponseTypes.includes(finalResponseType)) {
+      return res.status(400).json({ 
+        message: `Invalid responseType: ${finalResponseType}. Must be one of: ${validResponseTypes.join(', ')}` 
+      });
+    }
+
+    // Prepare the item data
+    const itemData = {
       label,
       departmentScope: departmentScope || 'SINGLE',
       department,
-      formTemplate: formTemplateId || undefined,
+      formTemplate,
       section: section || undefined,
-      responseType: responseType || 'YES_NO_NA',
-      responseOptions: responseOptions || undefined,
-      isActive,
-      order,
-      isMandatory,
+      responseType: finalResponseType,
+      responseOptions: cleanedResponseOptions,
+      isActive: isActive !== undefined ? isActive : true,
+      order: order !== undefined ? order : 0,
+      isMandatory: isMandatory !== undefined ? isMandatory : false,
+    };
+    
+    console.log('Creating checklist item with data:', {
+      label: itemData.label,
+      responseType: itemData.responseType,
+      departmentScope: itemData.departmentScope,
+      hasDepartment: !!itemData.department,
+      hasFormTemplate: !!itemData.formTemplate
     });
+    
+    const item = await ChecklistItem.create(itemData);
     res.status(201).json(item);
   } catch (err) {
     console.error('createChecklistItem error', err);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Error details:', {
+      message: err.message,
+      name: err.name,
+      stack: err.stack,
+      errors: err.errors,
+      requestBody: req.body
+    });
+    
+    // Return detailed error for debugging (always include details)
+    const errorResponse = { 
+      message: 'Server error',
+      error: err.message,
+    };
+    
+    // Always include additional details for debugging
+    errorResponse.stack = err.stack;
+    if (err.errors) {
+      errorResponse.validationErrors = err.errors;
+    }
+    errorResponse.requestBody = req.body; // Include request body for debugging
+    
+    res.status(500).json(errorResponse);
   }
 };
 
@@ -48,30 +120,108 @@ exports.updateChecklistItem = async (req, res) => {
     const { label, departmentScope, departmentId, formTemplateId, section, responseType, responseOptions, isActive, order, isMandatory } =
       req.body;
 
+    // Clean up responseOptions - only set if responseType is MULTI_SELECT and options are provided
+    // For TEXT and YES_NO types, explicitly set to undefined (not empty string)
+    let cleanedResponseOptions = undefined;
+    if (responseType === 'MULTI_SELECT' && responseOptions && responseOptions.trim()) {
+      cleanedResponseOptions = responseOptions.trim();
+    } else if (responseOptions !== undefined && responseOptions !== null) {
+      // If responseOptions is provided but not for MULTI_SELECT, set to undefined
+      cleanedResponseOptions = undefined;
+    }
+
+    // Convert formTemplateId to ObjectId if provided
+    let formTemplate = undefined;
+    if (formTemplateId) {
+      const mongoose = require('mongoose');
+      try {
+        formTemplate = new mongoose.Types.ObjectId(formTemplateId);
+      } catch (err) {
+        console.warn('Invalid formTemplateId format:', formTemplateId);
+        // Continue without formTemplate if invalid
+      }
+    }
+
+    // Validate responseType
+    const validResponseTypes = ['YES_NO', 'MULTI_SELECT', 'TEXT'];
+    const finalResponseType = responseType || 'YES_NO';
+    if (!validResponseTypes.includes(finalResponseType)) {
+      return res.status(400).json({ 
+        message: `Invalid responseType: ${finalResponseType}. Must be one of: ${validResponseTypes.join(', ')}` 
+      });
+    }
+
     const update = {
       label,
       departmentScope,
-      formTemplate: formTemplateId,
+      formTemplate: formTemplate,
       section: section || undefined,
-      responseType: responseType || 'YES_NO_NA',
-      responseOptions: responseOptions || undefined,
+      responseType: finalResponseType,
+      responseOptions: cleanedResponseOptions,
       isActive,
       order,
       isMandatory,
     };
 
+    // Handle department assignment
     if (departmentScope === 'SINGLE') {
-      update.department = departmentId;
-    } else {
+      if (!departmentId) {
+        console.error('Missing departmentId for SINGLE scope in update:', req.body);
+        return res.status(400).json({ message: 'departmentId is required when departmentScope is SINGLE' });
+      }
+      const mongoose = require('mongoose');
+      try {
+        update.department = new mongoose.Types.ObjectId(departmentId);
+        // Verify department exists
+        const deptExists = await Department.findById(update.department);
+        if (!deptExists) {
+          console.error('Department not found for update:', update.department, 'from departmentId:', departmentId);
+          return res.status(400).json({ message: 'Invalid department' });
+        }
+      } catch (err) {
+        console.error('Invalid departmentId format for update:', departmentId, err);
+        return res.status(400).json({ message: 'Invalid department ID format' });
+      }
+    } else if (departmentScope === 'ALL') {
       update.department = undefined;
     }
 
-    const item = await ChecklistItem.findByIdAndUpdate(id, update, { new: true });
+    console.log('Updating checklist item:', {
+      id,
+      label: update.label,
+      responseType: update.responseType,
+      departmentScope: update.departmentScope,
+      hasDepartment: !!update.department,
+      hasFormTemplate: !!update.formTemplate
+    });
+
+    const item = await ChecklistItem.findByIdAndUpdate(id, update, { new: true, runValidators: true });
     if (!item) return res.status(404).json({ message: 'Checklist item not found' });
     res.json(item);
   } catch (err) {
     console.error('updateChecklistItem error', err);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Error details:', {
+      message: err.message,
+      name: err.name,
+      stack: err.stack,
+      errors: err.errors,
+      requestBody: req.body
+    });
+    
+    // Return detailed error for debugging (always include details)
+    const errorResponse = { 
+      message: 'Server error',
+      error: err.message,
+    };
+    
+    // Always include additional details for debugging
+    errorResponse.stack = err.stack;
+    if (err.errors) {
+      errorResponse.validationErrors = err.errors;
+    }
+    errorResponse.requestBody = req.body; // Include request body for debugging
+    
+    res.status(500).json(errorResponse);
   }
 };
 
@@ -134,25 +284,39 @@ exports.getChecklistForDepartment = async (req, res) => {
         return res.status(400).json({ message: 'Invalid form template ID format' });
       }
 
-      // Verify the form template is assigned to this department or is common
-      const formTemplate = await FormTemplate.findById(formTemplateObjectId);
+      // Verify the form template is assigned to this department or is common (ANAE/NUS only)
+      const formTemplate = await FormTemplate.findById(formTemplateObjectId).populate('departments');
       if (!formTemplate) {
         return res.status(404).json({ message: 'Form template not found' });
       }
 
+      // Get ANAE and NUS department IDs - these forms are common for all departments
+      const Department = require('../models/Department');
+      const anaDept = await Department.findOne({ code: 'ANAE' });
+      const nusDept = await Department.findOne({ code: 'NUS' });
+      const anaDeptId = anaDept?._id?.toString();
+      const nusDeptId = nusDept?._id?.toString();
+
+      // Check if form is assigned to ANAE or NUS - these are common for all departments
+      const formDeptIds = (formTemplate.departments || []).map(dept => {
+        if (dept._id) return dept._id.toString();
+        if (dept.toString) return dept.toString();
+        return String(dept);
+      });
+      
+      const isAnaeForm = anaDeptId && formDeptIds.includes(anaDeptId);
+      const isNusForm = nusDeptId && formDeptIds.includes(nusDeptId);
+      const isCommonForm = isAnaeForm || isNusForm;
+
       // Check if form is assigned to this department
       // Handle both populated (object with _id) and unpopulated (ObjectId) departments
       let isAssigned = false;
-      if (formTemplate.isCommon) {
+      if (isCommonForm) {
+        // ANAE and NUS forms are accessible to all departments
         isAssigned = true;
-        console.log(`[DEBUG] Form template ${formTemplateId} is common, accessible to all departments`);
+        console.log(`[DEBUG] Form template ${formTemplateId} is assigned to ANAE/NUS, accessible to all departments`);
       } else if (formTemplate.departments && formTemplate.departments.length > 0) {
         // Convert department IDs to strings for comparison
-        const formDeptIds = formTemplate.departments.map(dept => {
-          if (dept._id) return dept._id.toString();
-          if (dept.toString) return dept.toString();
-          return String(dept);
-        });
         const deptIdStr = departmentId.toString();
         const deptObjectIdStr = deptObjectId.toString();
         

@@ -13,7 +13,10 @@
     "seed:multidept": "node src/scripts/seedMultiDeptDummyData.js",
     "seed:perfect": "node src/scripts/seedPerfectData.js",
     "clear-db": "node src/scripts/clearDatabase.js",
-    "clear-departments": "node src/scripts/clearDepartments.js"
+    "clear-data": "node src/scripts/clearDataKeepUsersDepts.js",
+    "clear-departments": "node src/scripts/clearDepartments.js",
+    "clear-patients": "node src/scripts/clearPatientData.js",
+    "create-checklists": "node src/scripts/createAllDepartmentChecklists.js"
   },
   "keywords": [],
   "author": "",

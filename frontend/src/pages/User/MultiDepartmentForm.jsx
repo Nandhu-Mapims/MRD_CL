@@ -2,8 +2,6 @@ import { useEffect, useState } from 'react'
 import { apiClient } from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 
-const STATUS_OPTIONS = ['OPEN', 'IN_PROGRESS', 'CLOSED']
-
 export function MultiDepartmentForm() {
   const { user } = useAuth()
   const [uhid, setUhid] = useState('')
@@ -15,35 +13,10 @@ export function MultiDepartmentForm() {
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [message, setMessage] = useState('')
-  const [checkingUHID, setCheckingUHID] = useState(false)
   const [userDepartment, setUserDepartment] = useState(null)
 
-  // Auto-fill patient name when UHID is entered
-  useEffect(() => {
-    const checkPatient = async () => {
-      if (!uhid.trim() || uhid.trim().length < 3) {
-        return
-      }
-
-      setCheckingUHID(true)
-      try {
-        const normalizedUHID = uhid.trim().toUpperCase()
-        const patient = await apiClient.get(`/patients/uhid/${normalizedUHID}`)
-        if (patient && patient.patientName) {
-          setPatientName(patient.patientName)
-        }
-      } catch (err) {
-        if (err.response?.status !== 404) {
-          console.error('Error checking patient:', err)
-        }
-      } finally {
-        setCheckingUHID(false)
-      }
-    }
-
-    const timeoutId = setTimeout(checkPatient, 500)
-    return () => clearTimeout(timeoutId)
-  }, [uhid])
+  // UHID is entered manually from OP card - no database lookup needed
+  // Patient record will be created automatically when form is submitted
 
   const loadChecklists = async () => {
     if (!uhid.trim()) {
@@ -73,7 +46,6 @@ export function MultiDepartmentForm() {
               responseValue: submission.responseValue || submission.yesNoNa || '',
               remarks: submission.remarks || '',
               responsibility: submission.responsibility || '',
-              status: submission.status || '',
             }
           } else {
             initialAnswers[key] = {
@@ -81,7 +53,6 @@ export function MultiDepartmentForm() {
               responseValue: '',
               remarks: '',
               responsibility: '',
-              status: '',
             }
           }
         })
@@ -197,13 +168,15 @@ export function MultiDepartmentForm() {
       <div className="bg-white rounded-lg shadow-md p-6 border border-slate-200">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">UHID *</label>
+            <label className="block text-sm font-medium text-slate-700 mb-2">
+              UHID * <span className="text-xs text-slate-500 font-normal">(Enter from OP Card)</span>
+            </label>
             <input
               type="text"
               value={uhid}
               onChange={(e) => setUhid(e.target.value.toUpperCase())}
               className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
-              placeholder="Enter UHID"
+              placeholder="Enter UHID from OP Card"
             />
           </div>
           <div>
@@ -417,43 +390,21 @@ export function MultiDepartmentForm() {
                                       />
                                     </div>
 
-                                    {/* Responsibility & Status */}
-                                    <div className="grid grid-cols-2 gap-3">
-                                      <div>
-                                        <label className="block text-xs font-medium text-slate-600 mb-1">
-                                          Responsibility
-                                        </label>
-                                        <input
-                                          type="text"
-                                          value={answer.responsibility || ''}
-                                          onChange={(e) =>
-                                            !isReadOnly &&
-                                            updateAnswer(key, 'responsibility', e.target.value)
-                                          }
-                                          disabled={isReadOnly}
-                                          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100"
-                                        />
-                                      </div>
-                                      <div>
-                                        <label className="block text-xs font-medium text-slate-600 mb-1">
-                                          Status
-                                        </label>
-                                        <select
-                                          value={answer.status || ''}
-                                          onChange={(e) =>
-                                            !isReadOnly && updateAnswer(key, 'status', e.target.value)
-                                          }
-                                          disabled={isReadOnly}
-                                          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100"
-                                        >
-                                          <option value="">Select Status</option>
-                                          {STATUS_OPTIONS.map((status) => (
-                                            <option key={status} value={status}>
-                                              {status}
-                                            </option>
-                                          ))}
-                                        </select>
-                                      </div>
+                                    {/* Responsibility */}
+                                    <div>
+                                      <label className="block text-xs font-medium text-slate-600 mb-1">
+                                        Responsibility
+                                      </label>
+                                      <input
+                                        type="text"
+                                        value={answer.responsibility || ''}
+                                        onChange={(e) =>
+                                          !isReadOnly &&
+                                          updateAnswer(key, 'responsibility', e.target.value)
+                                        }
+                                        disabled={isReadOnly}
+                                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100"
+                                      />
                                     </div>
                                   </div>
                                 </div>

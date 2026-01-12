@@ -83,7 +83,27 @@ router.put('/:id', auth('admin'), async (req, res) => {
     res.json(form);
   } catch (err) {
     console.error('updateFormTemplate error', err);
-    res.status(500).json({ message: 'Server error', error: err.message });
+    console.error('Error details:', {
+      message: err.message,
+      name: err.name,
+      stack: err.stack,
+      errors: err.errors,
+      requestBody: req.body
+    });
+    
+    const errorResponse = {
+      message: 'Server error',
+      error: err.message,
+    };
+    
+    // Always include additional details for debugging
+    errorResponse.stack = err.stack;
+    if (err.errors) {
+      errorResponse.validationErrors = err.errors;
+    }
+    errorResponse.requestBody = req.body;
+    
+    res.status(500).json(errorResponse);
   }
 });
 

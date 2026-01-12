@@ -177,7 +177,6 @@ export function ExportSubmissions() {
                   <th className="px-2 sm:px-3 py-2 text-left font-semibold text-slate-700">Patient</th>
                   <th className="px-2 sm:px-3 py-2 text-left font-semibold text-slate-700">Item</th>
                   <th className="px-2 sm:px-3 py-2 text-left font-semibold text-slate-700">Response</th>
-                  <th className="px-2 sm:px-3 py-2 text-left font-semibold text-slate-700">Status</th>
                   <th className="px-2 sm:px-3 py-2 text-left font-semibold text-slate-700">Submitted By</th>
                 </tr>
               </thead>
@@ -190,7 +189,6 @@ export function ExportSubmissions() {
                     <td className="px-2 sm:px-3 py-2">{row['Patient Name']}</td>
                     <td className="px-2 sm:px-3 py-2">{row['Checklist Item']}</td>
                     <td className="px-2 sm:px-3 py-2">{row['Response Value']}</td>
-                    <td className="px-2 sm:px-3 py-2">{row['Status']}</td>
                     <td className="px-2 sm:px-3 py-2">{row['Submitted By']}</td>
                   </tr>
                 ))}

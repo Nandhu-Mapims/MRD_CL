@@ -177,7 +177,6 @@ export function PatientReport() {
     doc.text('COMPLIANCE', 145, yPos + 2)
     doc.text('Remarks (NA)', 145, yPos + 4.5)
     doc.text('Responsibility', 165, yPos + 4)
-    doc.text('Status', 180, yPos + 4)
 
     yPos += 7
 
@@ -222,7 +221,6 @@ export function PatientReport() {
           const isNo = responseValue === 'NO' || responseValue === 'No'
           const remarks = item.remarks || ''
           const responsibility = item.responsibility || ''
-          const status = item.status || 'OPEN'
 
           // Item label
           doc.setFontSize(8)
@@ -250,9 +248,6 @@ export function PatientReport() {
 
           // Responsibility
           doc.text(responsibility || '-', 165, yPos)
-
-          // Status
-          doc.text(status || 'OPEN', 180, yPos)
 
           yPos += 5
         })
@@ -685,7 +680,7 @@ export function PatientReport() {
                 >
                   <thead style={{ display: 'table-header-group' }}>
                     <tr className="bg-slate-200" style={{ backgroundColor: '#e2e8f0', display: 'table-row' }}>
-                      <th className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-left font-bold align-top" style={{ width: '42%', border: '1.5px solid #1e293b', verticalAlign: 'middle', display: 'table-cell' }}>
+                      <th className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-left font-bold align-top" style={{ width: '45%', border: '1.5px solid #1e293b', verticalAlign: 'middle', display: 'table-cell' }}>
                         STANDARD & OBJECTIVE ELEMENTS
                       </th>
                       <th className="border border-slate-800 px-1 py-2.5 print:px-0.5 print:py-2 text-center font-bold" style={{ width: '6%', border: '1.5px solid #1e293b', verticalAlign: 'middle', display: 'table-cell' }}>
@@ -697,11 +692,8 @@ export function PatientReport() {
                       <th className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-center font-bold align-top" style={{ width: '20%', border: '1.5px solid #1e293b', verticalAlign: 'middle', display: 'table-cell' }}>
                         COMPLIANCE<br />Remarks (NA)
                       </th>
-                      <th className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-center font-bold" style={{ width: '13%', border: '1.5px solid #1e293b', verticalAlign: 'middle', display: 'table-cell' }}>
+                      <th className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-center font-bold" style={{ width: '23%', border: '1.5px solid #1e293b', verticalAlign: 'middle', display: 'table-cell' }}>
                         Responsibility
-                      </th>
-                      <th className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-center font-bold" style={{ width: '13%', border: '1.5px solid #1e293b', verticalAlign: 'middle', display: 'table-cell' }}>
-                        Status
                       </th>
                     </tr>
                   </thead>
@@ -720,7 +712,7 @@ export function PatientReport() {
                           }}
                         >
                           <td 
-                            colSpan="6" 
+                            colSpan="5" 
                             className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 font-bold text-sm print:text-xs" 
                             style={{ 
                               border: '1.5px solid #1e293b', 
@@ -774,7 +766,7 @@ export function PatientReport() {
                               }}
                             >
                               <td 
-                                colSpan="6" 
+                                colSpan="5" 
                                 className="border border-slate-800 px-2 py-2 print:px-1.5 print:py-1.5 font-semibold text-xs print:text-[10px]" 
                                 style={{ 
                                   border: '1.5px solid #1e293b', 
@@ -795,7 +787,6 @@ export function PatientReport() {
                               const isNo = responseValue === 'NO' || responseValue === 'No' || responseValue === 'no'
                               const remarks = item.remarks || '-'
                               const responsibility = item.responsibility || '-'
-                              const status = item.status || 'OPEN'
 
                               return (
                                 <tr 
@@ -892,17 +883,6 @@ export function PatientReport() {
                                     }}
                                   >
                                     {responsibility}
-                                  </td>
-                                  <td 
-                                    className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-center text-slate-700 text-[10px] print:text-[9px]" 
-                                    style={{ 
-                                      border: '1.5px solid #1e293b', 
-                                      verticalAlign: 'middle', 
-                                      lineHeight: '1.3',
-                                      display: 'table-cell',
-                                    }}
-                                  >
-                                    {status}
                                   </td>
                                 </tr>
                               )

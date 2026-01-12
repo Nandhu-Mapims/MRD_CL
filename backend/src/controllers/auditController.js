@@ -53,7 +53,6 @@ exports.submitAudit = async (req, res) => {
       responseValue: it.responseValue || it.yesNoNa || '',
       remarks: it.remarks || '',
       responsibility: it.responsibility || '',
-      status: it.status && it.status.trim() ? it.status : undefined,
       submittedBy: userId,
       submittedAt: new Date(),
       isLocked: true,
@@ -81,9 +80,9 @@ exports.getSubmissions = async (req, res) => {
     if (uhid) filter.uhid = uhid.trim().toUpperCase();
 
     const submissions = await AuditSubmission.find(filter)
-      .populate('department')
+      .populate('department', 'name code')
       .populate('patient', 'uhid patientName ward unitNo')
-      .populate('checklistItemId')
+      .populate('checklistItemId', 'label section responseType')
       .populate('submittedBy', 'name email')
       .sort({ createdAt: -1 })
       .limit(parseInt(limit));
@@ -127,16 +126,6 @@ exports.getStats = async (req, res) => {
                 ]
               }
             },
-            openIssues: {
-              $sum: {
-                $cond: [{ $ne: ['$status', 'CLOSED'] }, 1, 0]
-              }
-            },
-            closedIssues: {
-              $sum: {
-                $cond: [{ $eq: ['$status', 'CLOSED'] }, 1, 0]
-              }
-            },
           },
         },
       ]),
@@ -172,11 +161,6 @@ exports.getStats = async (req, res) => {
                 ]
               }
             },
-            totalOpenIssues: {
-              $sum: {
-                $cond: [{ $ne: ['$status', 'CLOSED'] }, 1, 0]
-              }
-            },
           },
         },
       ]),
@@ -199,7 +183,6 @@ exports.getStats = async (req, res) => {
       overall: overall[0] || {
         totalSubmissions: 0,
         totalCompliant: 0,
-        totalOpenIssues: 0,
       },
       totalCases: uniqueCases.length,
       clearanceStats: {
@@ -373,16 +356,23 @@ exports.getSubmissionsByUHID = async (req, res) => {
     }
 
     const normalizedUHID = uhid.trim().toUpperCase();
-    const submissions = await AuditSubmission.find({ uhid: normalizedUHID })
-      .populate('department')
-      .populate('formTemplate')
-      .populate('checklistItemId')
+    let submissions = await AuditSubmission.find({ uhid: normalizedUHID })
+      .populate('department', 'name code')
+      .populate('formTemplate', 'name')
+      .populate('checklistItemId', 'label section responseType')
       .populate('submittedBy', 'name email')
       .populate('patient', 'uhid patientName ward unitNo')
       .sort({ submittedAt: -1 });
 
     if (submissions.length === 0) {
       return res.status(404).json({ message: 'No submissions found for this UHID' });
+    }
+
+    // Filter out submissions with invalid/null checklistItemId (items that were deleted)
+    submissions = submissions.filter(sub => sub.checklistItemId && sub.checklistItemId.label);
+
+    if (submissions.length === 0) {
+      return res.status(404).json({ message: 'No valid submissions found for this UHID (checklist items may have been deleted)' });
     }
 
     res.json(submissions);
@@ -492,7 +482,6 @@ exports.getPatientChecklists = async (req, res) => {
               responseValue: submission.responseValue || submission.yesNoNa,
               remarks: submission.remarks,
               responsibility: submission.responsibility,
-              status: submission.status,
               submittedAt: submission.submittedAt,
               isLocked: submission.isLocked,
             } : null,
@@ -586,7 +575,6 @@ exports.exportSubmissions = async (req, res) => {
         'Response Value': sub.responseValue || sub.yesNoNa || '',
         'Remarks': sub.remarks || '',
         'Responsibility': sub.responsibility || '',
-        'Status': sub.status || 'OPEN',
         'Submitted By': sub.submittedBy?.name || sub.submittedBy?.email || 'Unknown',
         'Submitted By Email': sub.submittedBy?.email || '',
         'Is Locked': sub.isLocked ? 'Yes' : 'No',
@@ -690,16 +678,6 @@ exports.getExecutiveAnalytics = async (req, res) => {
               ]
             }
           },
-          closedIssues: {
-            $sum: {
-              $cond: [{ $eq: ['$status', 'CLOSED'] }, 1, 0]
-            }
-          },
-          openIssues: {
-            $sum: {
-              $cond: [{ $ne: ['$status', 'CLOSED'] }, 1, 0]
-            }
-          },
         }
       }
     ])
@@ -724,11 +702,6 @@ exports.getExecutiveAnalytics = async (req, res) => {
               ]
             }
           },
-          closedIssues: {
-            $sum: {
-              $cond: [{ $eq: ['$status', 'CLOSED'] }, 1, 0]
-            }
-          },
         }
       }
     ])
@@ -737,14 +710,11 @@ exports.getExecutiveAnalytics = async (req, res) => {
       totalSubmissions: 0,
       compliant: 0,
       nonCompliant: 0,
-      closedIssues: 0,
-      openIssues: 0,
     }
 
     const previous = previousStats[0] || {
       totalSubmissions: 0,
       compliant: 0,
-      closedIssues: 0,
     }
 
     // Calculate trends
@@ -821,12 +791,7 @@ exports.getExecutiveAnalytics = async (req, res) => {
               ]
             }
           },
-          cases: { $addToSet: '$uhid' },
-          openIssues: {
-            $sum: {
-              $cond: [{ $ne: ['$status', 'CLOSED'] }, 1, 0]
-            }
-          }
+          cases: { $addToSet: '$uhid' }
         }
       },
       {
@@ -848,7 +813,6 @@ exports.getExecutiveAnalytics = async (req, res) => {
           total: 1,
           compliant: 1,
           cases: { $size: '$cases' },
-          openIssues: 1,
           complianceRate: {
             $cond: [
               { $gt: ['$total', 0] },
@@ -865,7 +829,7 @@ exports.getExecutiveAnalytics = async (req, res) => {
 
     // Risk indicators
     const highRiskDepts = deptPerformance.filter(d => 
-      d.complianceRate < 70 || d.openIssues > (d.total * 0.2)
+      d.complianceRate < 70
     )
 
     // 100% Clearance analysis - optimized with aggregation
@@ -993,8 +957,6 @@ exports.getExecutiveAnalytics = async (req, res) => {
         totalSubmissions: current.totalSubmissions,
         submissionTrend,
         totalCases,
-        closedIssues: current.closedIssues,
-        openIssues: current.openIssues,
         riskLevel: complianceRate >= 90 ? 'low' : complianceRate >= 70 ? 'medium' : 'high'
       },
       trends: {
@@ -1006,7 +968,6 @@ exports.getExecutiveAnalytics = async (req, res) => {
         highRiskDepartments: highRiskDepts.map(d => ({
           name: d.departmentName || d.departmentCode,
           complianceRate: d.complianceRate,
-          openIssues: d.openIssues,
           totalCases: d.cases
         })),
         overallRiskLevel: complianceRate >= 90 ? 'Low Risk' : complianceRate >= 70 ? 'Medium Risk' : 'High Risk'

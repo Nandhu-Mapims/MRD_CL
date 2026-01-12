@@ -155,7 +155,6 @@ export function Dashboard() {
     submissions: s.total || 0,
     compliant: s.compliant || 0,
     nonCompliant: s.nonCompliant || 0,
-    openIssues: s.openIssues || 0,
     compliance: s.total > 0 ? Math.round((s.compliant / s.total) * 100) : 0,
   }))
 
@@ -465,9 +464,6 @@ export function Dashboard() {
                 <th className="px-4 sm:px-6 py-3 text-center text-xs font-bold text-slate-700 uppercase tracking-wider">
                   Compliance %
                 </th>
-                <th className="px-4 sm:px-6 py-3 text-center text-xs font-bold text-slate-700 uppercase tracking-wider">
-                  Open Issues
-                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 bg-white">
@@ -510,17 +506,6 @@ export function Dashboard() {
                         {dept.compliance}%
                       </span>
                     </div>
-                  </td>
-                  <td className="px-4 sm:px-6 py-4 text-center">
-                    <span
-                      className={`inline-flex items-center px-3 py-1 rounded-full text-xs sm:text-sm font-semibold ${
-                        dept.openIssues > 0
-                          ? 'bg-orange-100 text-orange-700'
-                          : 'bg-green-100 text-green-700'
-                      }`}
-                    >
-                      {dept.openIssues}
-                    </span>
                   </td>
                 </tr>
               ))}

@@ -3,8 +3,6 @@ import { useParams } from 'react-router-dom'
 import { apiClient } from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 
-const STATUS_OPTIONS = ['OPEN', 'IN_PROGRESS', 'CLOSED']
-
 export function Form() {
   const { formTemplateId } = useParams()
   const { user } = useAuth()
@@ -16,41 +14,16 @@ export function Form() {
   const [message, setMessage] = useState('')
   const [uhid, setUhid] = useState('')
   const [patientName, setPatientName] = useState('')
-  const [checkingUHID, setCheckingUHID] = useState(false)
+  const [ward, setWard] = useState('')
+  const [unitNo, setUnitNo] = useState('')
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(null)
   const [showSuccessModal, setShowSuccessModal] = useState(false)
   const [submittedUHID, setSubmittedUHID] = useState('')
   const [submittedPatientName, setSubmittedPatientName] = useState('')
 
-  // Auto-fill patient name when UHID is entered (if patient exists)
-  useEffect(() => {
-    const checkPatient = async () => {
-      if (!uhid.trim() || uhid.trim().length < 3) {
-        return
-      }
-
-      setCheckingUHID(true)
-      try {
-        const normalizedUHID = uhid.trim().toUpperCase()
-        const patient = await apiClient.get(`/patients/uhid/${normalizedUHID}`)
-        if (patient && patient.patientName) {
-          setPatientName(patient.patientName)
-        }
-      } catch (err) {
-        // Patient not found - that's okay, user will enter new patient
-        if (err.response?.status !== 404) {
-          console.error('Error checking patient:', err)
-        }
-      } finally {
-        setCheckingUHID(false)
-      }
-    }
-
-    // Debounce the API call
-    const timeoutId = setTimeout(checkPatient, 500)
-    return () => clearTimeout(timeoutId)
-  }, [uhid])
+  // UHID is entered manually from OP card - no database lookup needed
+  // Patient record will be created automatically when form is submitted
 
   useEffect(() => {
     ;(async () => {
@@ -136,7 +109,6 @@ export function Form() {
                   responseValue: '',
                   remarks: '',
                   responsibility: '',
-                  status: '',
                 }
               })
             } else {
@@ -202,16 +174,17 @@ export function Form() {
   const resetToNewForm = () => {
     setUhid('')
     setPatientName('')
+    setWard('')
+    setUnitNo('')
     setMessage('')
     const init = {}
     items.forEach((it) => {
-      init[it._id] = {
-        yesNoNa: '',
-        responseValue: '',
-        remarks: '',
-        responsibility: '',
-        status: '',
-      }
+            init[it._id] = {
+              yesNoNa: '',
+              responseValue: '',
+              remarks: '',
+              responsibility: '',
+            }
     })
     setAnswers(init)
   }
@@ -240,6 +213,14 @@ export function Form() {
     }
     if (!patientName.trim()) {
       setMessage('Please enter Patient Name')
+      return
+    }
+    if (!ward.trim()) {
+      setMessage('Please enter Ward')
+      return
+    }
+    if (!unitNo.trim()) {
+      setMessage('Please enter Unit No')
       return
     }
 
@@ -279,6 +260,8 @@ export function Form() {
         formTemplateId: formTemplateId,
         uhid: uhid.trim(),
         patientName: patientName.trim(),
+        ward: ward.trim(),
+        unitNo: unitNo.trim(),
         items: items.map((it) => ({
           checklistItemId: it._id,
           ...answers[it._id],
@@ -363,15 +346,14 @@ export function Form() {
             <div>
               <label className="block text-[10px] sm:text-xs font-medium text-slate-700 mb-1">
                 UHID <span className="text-blue-500">*</span>
-                {checkingUHID && <span className="ml-1 text-[10px] text-slate-400">(Checking...)</span>}
+                <span className="ml-1 text-[9px] text-slate-500 font-normal">(Enter from OP Card)</span>
               </label>
               <input
                 type="text"
                 value={uhid}
                 onChange={(e) => setUhid(e.target.value.toUpperCase())}
-                placeholder="Enter UHID"
-                disabled={checkingUHID}
-                className="w-full border border-slate-300 rounded px-2 py-1.5 text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-100"
+                placeholder="Enter UHID from OP Card"
+                className="w-full border border-slate-300 rounded px-2 py-1.5 text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                 required
               />
             </div>
@@ -385,6 +367,32 @@ export function Form() {
                 onChange={(e) => setPatientName(e.target.value)}
                 className="w-full border border-slate-300 rounded px-2 py-1.5 text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                 placeholder="Enter Patient Name"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] sm:text-xs font-medium text-slate-700 mb-1">
+                Ward <span className="text-blue-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={ward}
+                onChange={(e) => setWard(e.target.value)}
+                className="w-full border border-slate-300 rounded px-2 py-1.5 text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Enter Ward"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] sm:text-xs font-medium text-slate-700 mb-1">
+                Unit No <span className="text-blue-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={unitNo}
+                onChange={(e) => setUnitNo(e.target.value)}
+                className="w-full border border-slate-300 rounded px-2 py-1.5 text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Enter Unit No"
                 required
               />
             </div>
@@ -411,11 +419,10 @@ export function Form() {
                   <table className="w-full text-xs">
                     <thead className="bg-slate-50 border-b border-slate-200">
                       <tr>
-                        <th className="text-left px-2 py-1.5 font-semibold text-slate-700 w-[30%]">Checklist Item</th>
+                        <th className="text-left px-2 py-1.5 font-semibold text-slate-700 w-[35%]">Checklist Item</th>
                         <th className="text-center px-2 py-1.5 font-semibold text-slate-700 w-[15%]">Response</th>
-                        <th className="text-left px-2 py-1.5 font-semibold text-slate-700 w-[20%]">Remarks</th>
-                        <th className="text-left px-2 py-1.5 font-semibold text-slate-700 w-[18%]">Responsibility</th>
-                        <th className="text-center px-2 py-1.5 font-semibold text-slate-700 w-[17%]">Status</th>
+                        <th className="text-left px-2 py-1.5 font-semibold text-slate-700 w-[25%]">Remarks</th>
+                        <th className="text-left px-2 py-1.5 font-semibold text-slate-700 w-[25%]">Responsibility</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -488,20 +495,6 @@ export function Form() {
                                   onChange={(e) => updateAnswer(it._id, 'responsibility', e.target.value)}
                                   placeholder="Responsible"
                                 />
-                              </td>
-                              <td className="px-2 py-2 align-top">
-                                <select
-                                  className="border border-slate-300 rounded w-full px-1.5 py-1 text-[10px] focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                                  value={answers[it._id]?.status || ''}
-                                  onChange={(e) => updateAnswer(it._id, 'status', e.target.value)}
-                                >
-                                  <option value="">Select Status</option>
-                                  {STATUS_OPTIONS.map((s) => (
-                                    <option key={s} value={s}>
-                                      {s.replace('_', ' ')}
-                                    </option>
-                                  ))}
-                                </select>
                               </td>
                             </tr>
                           )

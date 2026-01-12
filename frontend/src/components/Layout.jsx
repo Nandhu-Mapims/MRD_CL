@@ -32,7 +32,10 @@ export function Layout({ children }) {
     const loadUserForms = async () => {
       if (user?.role === 'user') {
         try {
-          const allForms = await apiClient.get('/form-templates')
+          const [allForms, departments] = await Promise.all([
+            apiClient.get('/form-templates'),
+            apiClient.get('/departments')
+          ])
           
           // Get user department ID - handle both object and string formats
           let userDeptId = null
@@ -42,11 +45,29 @@ export function Layout({ children }) {
               : user.department
           }
           
+          // Get ANAE and NUS department IDs - these forms are common for all users
+          const anaDept = departments.find(d => d.code === 'ANAE')
+          const nusDept = departments.find(d => d.code === 'NUS')
+          const anaDeptId = anaDept?._id?.toString()
+          const nusDeptId = nusDept?._id?.toString()
+          
           const filtered = allForms.filter(form => {
             if (!form.isActive) return false
-            // Show common forms to all users
-            if (form.isCommon) return true
-            // Show forms assigned to user's department
+            
+            // Check if form is assigned to ANAE or NUS departments - these are common for ALL users
+            const isAnaeForm = form.departments?.some(d => {
+              const deptId = typeof d === 'object' ? (d._id || d.id) : d
+              return deptId?.toString() === anaDeptId
+            })
+            const isNusForm = form.departments?.some(d => {
+              const deptId = typeof d === 'object' ? (d._id || d.id) : d
+              return deptId?.toString() === nusDeptId
+            })
+            
+            // Show ANAE and NUS forms to all users (common forms)
+            if (isAnaeForm || isNusForm) return true
+            
+            // For other forms: only show if assigned to user's department
             if (!userDeptId) return false
             return form.departments?.some(d => {
               const deptId = typeof d === 'object' ? (d._id || d.id) : d
@@ -339,17 +360,6 @@ export function Layout({ children }) {
                 </>
               ) : (
                 <>
-                  <Link
-                    to="/multi-dept-checklist"
-                    className={`px-3 py-1.5 sm:px-4 sm:py-2 md:px-5 md:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
-                      isActive('/multi-dept-checklist')
-                        ? 'bg-blue-600 text-white shadow-md'
-                        : 'text-slate-700 hover:bg-blue-50 hover:text-blue-600'
-                    }`}
-                  >
-                    <span className="hidden sm:inline">📋 All Checklists</span>
-                    <span className="sm:hidden">📋</span>
-                  </Link>
                   {userForms.map((form) => (
                     <Link
                       key={form._id}

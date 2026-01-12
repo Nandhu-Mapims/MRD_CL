@@ -24,6 +24,8 @@ export function FormBuilderWithSections() {
     departmentScope: 'SINGLE',
     departmentId: '',
     formTemplateId: '',
+    responseType: 'YES_NO',
+    responseOptions: '',
     isMandatory: false,
     order: 0,
   })
@@ -143,10 +145,17 @@ export function FormBuilderWithSections() {
   const handleCreateItem = async (e) => {
     e.preventDefault()
     try {
-      await apiClient.post('/checklists', {
+      const payload = {
         ...itemData,
         formTemplateId: selectedForm._id,
-      })
+      }
+      // Only include responseOptions if responseType is MULTI_SELECT and options are provided
+      if (payload.responseType !== 'MULTI_SELECT' || !payload.responseOptions || !payload.responseOptions.trim()) {
+        delete payload.responseOptions
+      } else {
+        payload.responseOptions = payload.responseOptions.trim()
+      }
+      await apiClient.post('/checklists', payload)
       setShowItemModal(false)
       setItemData({
         label: '',
@@ -154,6 +163,8 @@ export function FormBuilderWithSections() {
         departmentScope: 'SINGLE',
         departmentId: '',
         formTemplateId: '',
+        responseType: 'YES_NO',
+        responseOptions: '',
         isMandatory: false,
         order: 0,
       })
@@ -172,6 +183,8 @@ export function FormBuilderWithSections() {
       departmentScope: item.departmentScope,
       departmentId: item.department?._id || '',
       formTemplateId: item.formTemplate?._id || '',
+      responseType: item.responseType || 'YES_NO',
+      responseOptions: item.responseOptions || '',
       isMandatory: item.isMandatory,
       order: item.order,
     })
@@ -181,10 +194,17 @@ export function FormBuilderWithSections() {
   const handleUpdateItem = async (e) => {
     e.preventDefault()
     try {
-      await apiClient.put(`/checklists/${editingItem._id}`, {
+      const payload = {
         ...itemData,
         formTemplateId: selectedForm._id,
-      })
+      }
+      // Only include responseOptions if responseType is MULTI_SELECT and options are provided
+      if (payload.responseType !== 'MULTI_SELECT' || !payload.responseOptions || !payload.responseOptions.trim()) {
+        delete payload.responseOptions
+      } else {
+        payload.responseOptions = payload.responseOptions.trim()
+      }
+      await apiClient.put(`/checklists/${editingItem._id}`, payload)
       setShowItemModal(false)
       setEditingItem(null)
       setItemData({
@@ -193,6 +213,8 @@ export function FormBuilderWithSections() {
         departmentScope: 'SINGLE',
         departmentId: '',
         formTemplateId: '',
+        responseType: 'YES_NO',
+        responseOptions: '',
         isMandatory: false,
         order: 0,
       })
@@ -524,6 +546,8 @@ export function FormBuilderWithSections() {
               setItemData({
                 label: '',
                 section: '',
+                responseType: 'YES_NO',
+                responseOptions: '',
                 departmentScope: 'SINGLE',
                 departmentId: selectedForm.departments[0]?._id || '',
                 formTemplateId: selectedForm._id,
@@ -783,6 +807,33 @@ export function FormBuilderWithSections() {
                       </option>
                     ))}
                   </select>
+                </div>
+              )}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Response Type</label>
+                <select
+                  value={itemData.responseType || 'YES_NO'}
+                  onChange={(e) => setItemData({ ...itemData, responseType: e.target.value })}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2"
+                >
+                  <option value="YES_NO">Yes or No</option>
+                  <option value="MULTI_SELECT">Multi Select - Options</option>
+                  <option value="TEXT">Text Box</option>
+                </select>
+              </div>
+              {itemData.responseType === 'MULTI_SELECT' && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Options (comma-separated) *
+                  </label>
+                  <input
+                    type="text"
+                    required={itemData.responseType === 'MULTI_SELECT'}
+                    value={itemData.responseOptions || ''}
+                    onChange={(e) => setItemData({ ...itemData, responseOptions: e.target.value })}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2"
+                    placeholder="Option1, Option2, Option3"
+                  />
                 </div>
               )}
               <div className="flex items-center gap-2">

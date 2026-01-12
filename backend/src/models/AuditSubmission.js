@@ -46,11 +46,8 @@ const auditSubmissionSchema = new mongoose.Schema(
     responseValue: { type: String }, // Stores the actual response (YES/NO, checked/unchecked, text, number, etc.)
     remarks: { type: String },
     responsibility: { type: String },
-    status: {
-      type: String,
-      enum: ['OPEN', 'IN_PROGRESS', 'CLOSED'],
-      default: 'OPEN',
-    },
+    // Status field kept for backward compatibility but no longer used
+    status: { type: String },
     submittedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
@@ -76,7 +73,7 @@ auditSubmissionSchema.index({ submittedAt: -1 }); // For time-based queries
 auditSubmissionSchema.index({ department: 1, submittedAt: -1 }); // For department performance queries
 auditSubmissionSchema.index({ uhid: 1, submittedAt: -1 }); // For patient timeline queries
 auditSubmissionSchema.index({ department: 1, formTemplate: 1 }); // For form-level queries
-auditSubmissionSchema.index({ 'responseValue': 1, 'status': 1 }); // For compliance queries
+auditSubmissionSchema.index({ 'responseValue': 1 }); // For compliance queries
 
 module.exports = mongoose.model('AuditSubmission', auditSubmissionSchema);
 
