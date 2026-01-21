@@ -16,7 +16,10 @@
     "clear-data": "node src/scripts/clearDataKeepUsersDepts.js",
     "clear-departments": "node src/scripts/clearDepartments.js",
     "clear-patients": "node src/scripts/clearPatientData.js",
-    "create-checklists": "node src/scripts/createAllDepartmentChecklists.js"
+    "create-checklists": "node src/scripts/createAllDepartmentChecklists.js",
+    "seed:nabh": "node src/scripts/seedNABHQualityStandards.js",
+    "seed:dummy-forms": "node src/scripts/seedDummyFormsChecklists.js",
+    "seed:missing": "node src/scripts/seedMissingSubmissions.js"
   },
   "keywords": [],
   "author": "",

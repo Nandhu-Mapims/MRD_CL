@@ -62,25 +62,27 @@ exports.getDepartmentLogs = async (req, res) => {
     const User = require('../models/User');
     const user = await User.findById(userId).populate('department');
     
-    // If user is not admin, filter by their department
+    // Allow all users to view all departments
     let targetDepartmentId = departmentId;
-    if (user.role !== 'admin' && user.department) {
-      targetDepartmentId = user.department._id.toString();
-    }
 
-    // Get all departments if no specific department requested (admin only)
+    // Get all departments if no specific department requested
     const departments = targetDepartmentId 
       ? [await Department.findById(targetDepartmentId)]
-      : user.role === 'admin' 
-        ? await Department.find({ isActive: true }).sort({ name: 1 })
-        : user.department ? [user.department] : [];
+      : await Department.find({ isActive: true }).sort({ name: 1 });
 
+    console.log(`[getDepartmentLogs] Found ${departments.length} active departments for user ${user.role}:`, departments.map(d => d.name));
+    
     const departmentLogs = [];
 
+    // Ensure we process ALL departments, even if they have no submissions
     for (const dept of departments) {
-      if (!dept) continue;
+      if (!dept) {
+        console.log(`[getDepartmentLogs] Skipping null department`);
+        continue;
+      }
 
-      const deptFilter = { department: dept._id };
+      try {
+        const deptFilter = { department: dept._id };
 
       // Get all submissions for this department, grouped by form (UHID + submittedAt rounded to second)
       // Use aggregation to get unique form submissions - group by UHID and submittedAt (rounded to nearest second)
@@ -149,19 +151,23 @@ exports.getDepartmentLogs = async (req, res) => {
 
       // Group submissions by date
       const submissionsByDate = {};
-      submissions.forEach(sub => {
-        const dateKey = sub.submittedAt.toISOString().split('T')[0];
-        if (!submissionsByDate[dateKey]) {
-          submissionsByDate[dateKey] = [];
-        }
-        submissionsByDate[dateKey].push({
-          id: sub._id,
-          uhid: sub.uhid,
-          patientName: sub.patientName,
-          submittedAt: sub.submittedAt,
-          submittedBy: sub.submittedBy?.name || 'Unknown',
+      if (submissions && submissions.length > 0) {
+        submissions.forEach(sub => {
+          if (sub.submittedAt) {
+            const dateKey = sub.submittedAt.toISOString().split('T')[0];
+            if (!submissionsByDate[dateKey]) {
+              submissionsByDate[dateKey] = [];
+            }
+            submissionsByDate[dateKey].push({
+              id: sub._id,
+              uhid: sub.uhid,
+              patientName: sub.patientName,
+              submittedAt: sub.submittedAt,
+              submittedBy: sub.submittedBy?.name || 'Unknown',
+            });
+          }
         });
-      });
+      }
 
       // Find recently edited forms (where updatedAt > createdAt)
       // Group by form (UHID + submittedAt) to show only unique form submissions
@@ -219,40 +225,43 @@ exports.getDepartmentLogs = async (req, res) => {
 
       // Group submissions by patient (UHID)
       const submissionsByPatient = {};
-      submissions.forEach(sub => {
-        const uhid = sub.uhid;
-        if (!submissionsByPatient[uhid]) {
-          submissionsByPatient[uhid] = {
-            uhid: uhid,
-            patientName: sub.patientName,
-            submissions: [],
-            firstSubmission: sub.submittedAt,
-            lastSubmission: sub.submittedAt,
-            editedCount: 0,
-          };
-        }
-        const createdAt = sub.createdAt ? new Date(sub.createdAt) : new Date(sub.submittedAt);
-        const updatedAt = sub.updatedAt ? new Date(sub.updatedAt) : new Date(sub.submittedAt);
-        const isEdited = updatedAt.getTime() - createdAt.getTime() > 1000;
-        
-        submissionsByPatient[uhid].submissions.push({
-          id: sub._id,
-          submittedAt: sub.submittedAt,
-          updatedAt: sub.updatedAt || sub.submittedAt,
-          isEdited: isEdited,
-          submittedBy: sub.submittedBy?.name || 'Unknown',
+      if (submissions && submissions.length > 0) {
+        submissions.forEach(sub => {
+          if (!sub.uhid || !sub.submittedAt) return;
+          const uhid = sub.uhid;
+          if (!submissionsByPatient[uhid]) {
+            submissionsByPatient[uhid] = {
+              uhid: uhid,
+              patientName: sub.patientName,
+              submissions: [],
+              firstSubmission: sub.submittedAt,
+              lastSubmission: sub.submittedAt,
+              editedCount: 0,
+            };
+          }
+          const createdAt = sub.createdAt ? new Date(sub.createdAt) : new Date(sub.submittedAt);
+          const updatedAt = sub.updatedAt ? new Date(sub.updatedAt) : new Date(sub.submittedAt);
+          const isEdited = updatedAt.getTime() - createdAt.getTime() > 1000;
+          
+          submissionsByPatient[uhid].submissions.push({
+            id: sub._id,
+            submittedAt: sub.submittedAt,
+            updatedAt: sub.updatedAt || sub.submittedAt,
+            isEdited: isEdited,
+            submittedBy: sub.submittedBy?.name || 'Unknown',
+          });
+          
+          if (sub.submittedAt < submissionsByPatient[uhid].firstSubmission) {
+            submissionsByPatient[uhid].firstSubmission = sub.submittedAt;
+          }
+          if (sub.submittedAt > submissionsByPatient[uhid].lastSubmission) {
+            submissionsByPatient[uhid].lastSubmission = sub.submittedAt;
+          }
+          if (isEdited) {
+            submissionsByPatient[uhid].editedCount++;
+          }
         });
-        
-        if (sub.submittedAt < submissionsByPatient[uhid].firstSubmission) {
-          submissionsByPatient[uhid].firstSubmission = sub.submittedAt;
-        }
-        if (sub.submittedAt > submissionsByPatient[uhid].lastSubmission) {
-          submissionsByPatient[uhid].lastSubmission = sub.submittedAt;
-        }
-        if (isEdited) {
-          submissionsByPatient[uhid].editedCount++;
-        }
-      });
+      }
 
       // Convert to array and sort by last submission date
       const patientsList = Object.values(submissionsByPatient)
@@ -262,6 +271,7 @@ exports.getDepartmentLogs = async (req, res) => {
         }))
         .sort((a, b) => new Date(b.lastSubmission) - new Date(a.lastSubmission));
 
+      // Always add the department, even if it has no submissions
       departmentLogs.push({
         department: {
           _id: dept._id,
@@ -290,8 +300,29 @@ exports.getDepartmentLogs = async (req, res) => {
           };
         }),
       });
+      } catch (deptError) {
+        console.error(`[getDepartmentLogs] Error processing department ${dept.name} (${dept.code}):`, deptError);
+        // Still add the department with empty data so it shows in the list
+        departmentLogs.push({
+          department: {
+            _id: dept._id,
+            name: dept.name,
+            code: dept.code,
+          },
+          totalFormsSubmitted: 0,
+          totalSubmissions: 0,
+          latestSubmissionDate: null,
+          submissionDates: [],
+          recentlyEdited: [],
+          recentlyEditedCount: 0,
+          patients: [],
+          allSubmissions: [],
+        });
+      }
     }
 
+    console.log(`[getDepartmentLogs] Returning ${departmentLogs.length} department logs`);
+    
     res.json({
       departments: departmentLogs,
       totalDepartments: departmentLogs.length,

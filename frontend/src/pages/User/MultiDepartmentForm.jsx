@@ -347,7 +347,7 @@ export function MultiDepartmentForm() {
 
                                     {/* Response */}
                                     <div className="flex gap-4 mb-3">
-                                      {['YES', 'NO', 'NA'].map((option) => (
+                                      {['YES', 'NO'].map((option) => (
                                         <label
                                           key={option}
                                           className={`flex items-center gap-2 cursor-pointer ${

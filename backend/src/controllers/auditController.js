@@ -1,10 +1,11 @@
 const AuditSubmission = require('../models/AuditSubmission');
 const Patient = require('../models/Patient');
+const Admission = require('../models/Admission');
 
 // User submit audit
 exports.submitAudit = async (req, res) => {
   try {
-    const { uhid, patientName, departmentId, formTemplateId, items, ward, unitNo } = req.body;
+    const { uhid, patientName, departmentId, formTemplateId, items, ward, unitNo, ipid, admissionDate } = req.body;
     // JWT payload uses 'sub' field for user ID, not '_id'
     const userId = req.user?.sub || req.user?._id;
 
@@ -19,34 +20,91 @@ exports.submitAudit = async (req, res) => {
     const normalizedUHID = uhid.trim().toUpperCase();
     const normalizedPatientName = patientName.trim();
 
-    // Find or create patient
+    // Find or create patient (UHID is lifetime unique)
     let patient = await Patient.findOne({ uhid: normalizedUHID });
     if (!patient) {
       patient = await Patient.create({
         uhid: normalizedUHID,
         patientName: normalizedPatientName,
-        ward: ward.trim(),
-        unitNo: unitNo.trim(),
       });
     } else {
+      // Update patient name if changed
       if (patient.patientName !== normalizedPatientName) {
         patient.patientName = normalizedPatientName;
+        await patient.save();
       }
-      if (ward !== undefined && ward !== null) {
-        patient.ward = ward.trim() || undefined;
-      }
-      if (unitNo !== undefined && unitNo !== null) {
-        patient.unitNo = unitNo.trim() || undefined;
-      }
-      await patient.save();
     }
 
-    // Create audit submissions with patient reference - all locked by default
+    // Handle admission and IPID - IPID must be provided by user
+    if (!ipid) {
+      return res.status(400).json({ message: 'IPID is required. Please enter the In-Patient ID.' });
+    }
+
+    const normalizedIPID = ipid.trim().toUpperCase();
+
+    // Find existing admission by IPID
+    let admission = await Admission.findOne({ ipid: normalizedIPID });
+
+    if (!admission) {
+      // Create new admission with user-provided IPID
+      // Check if IPID already exists (uniqueness validation)
+      const existingIPID = await Admission.findOne({ ipid: normalizedIPID });
+      if (existingIPID) {
+        return res.status(400).json({ message: 'IPID already exists. Please use a different IPID.' });
+      }
+
+      // Create new admission
+      admission = await Admission.create({
+        ipid: normalizedIPID,
+        patient: patient._id,
+        uhid: normalizedUHID,
+        admissionDate: admissionDate ? new Date(admissionDate) : new Date(),
+        ward: ward.trim(),
+        unitNo: unitNo.trim(),
+        status: 'Admitted',
+        department: departmentId,
+      });
+    } else {
+      // Use existing admission
+      // Verify UHID matches
+      if (admission.uhid !== normalizedUHID) {
+        return res.status(400).json({ message: 'IPID belongs to a different patient. Please verify the UHID and IPID.' });
+      }
+      
+      // Update ward/unit if changed
+      if (admission.ward !== ward.trim() || admission.unitNo !== unitNo.trim()) {
+        admission.ward = ward.trim();
+        admission.unitNo = unitNo.trim();
+        await admission.save();
+      }
+    }
+
+    // Check for duplicate submission: same UHID, IPID, and Department
+    // This check must happen BEFORE creating any submissions to prevent data override
+    const existingSubmission = await AuditSubmission.findOne({
+      uhid: normalizedUHID,
+      ipid: normalizedIPID,
+      department: departmentId,
+    });
+
+    if (existingSubmission) {
+      return res.status(400).json({ 
+        message: 'No Duplicate IPID: A checklist has already been submitted for this UHID, IPID, and Department combination. Only one submission is allowed per department for the same admission.',
+        existingSubmission: {
+          submittedAt: existingSubmission.submittedAt,
+          submittedBy: existingSubmission.submittedBy,
+        }
+      });
+    }
+
+    // Create audit submissions with patient and admission reference - all locked by default
     const docs = items.map((it) => ({
       department: departmentId,
       formTemplate: formTemplateId || undefined,
       patient: patient._id,
+      admission: admission._id,
       uhid: normalizedUHID,
+      ipid: normalizedIPID,
       patientName: normalizedPatientName,
       checklistItemId: it.checklistItemId,
       yesNoNa: it.yesNoNa || undefined,
@@ -59,7 +117,10 @@ exports.submitAudit = async (req, res) => {
     }));
 
     const created = await AuditSubmission.insertMany(docs);
-    await AuditSubmission.populate(created, { path: 'patient', select: 'uhid patientName' });
+    await AuditSubmission.populate(created, [
+      { path: 'patient', select: 'uhid patientName' },
+      { path: 'admission', select: 'ipid admissionDate dischargeDate status' }
+    ]);
     
     res.status(201).json(created);
   } catch (err) {
@@ -67,7 +128,7 @@ exports.submitAudit = async (req, res) => {
     if (err.code === 11000) {
       return res.status(400).json({ message: 'UHID already exists. Please use a unique UHID.' });
     }
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: 'Server error', error: err.message });
   }
 };
 
@@ -362,6 +423,7 @@ exports.getSubmissionsByUHID = async (req, res) => {
       .populate('checklistItemId', 'label section responseType')
       .populate('submittedBy', 'name email')
       .populate('patient', 'uhid patientName ward unitNo')
+      .populate('admission', 'ipid admissionDate dischargeDate status ward unitNo')
       .sort({ submittedAt: -1 });
 
     if (submissions.length === 0) {
@@ -379,6 +441,78 @@ exports.getSubmissionsByUHID = async (req, res) => {
   } catch (err) {
     console.error('getSubmissionsByUHID error', err);
     res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Get all submissions by IPID (for specific admission)
+exports.getSubmissionsByIPID = async (req, res) => {
+  try {
+    const { ipid } = req.params;
+    if (!ipid || !ipid.trim()) {
+      return res.status(400).json({ message: 'IPID is required' });
+    }
+
+    const normalizedIPID = ipid.trim().toUpperCase();
+    let submissions = await AuditSubmission.find({ ipid: normalizedIPID })
+      .populate('department', 'name code')
+      .populate('formTemplate', 'name')
+      .populate('checklistItemId', 'label section responseType')
+      .populate('submittedBy', 'name email')
+      .populate('patient', 'uhid patientName ward unitNo')
+      .populate('admission', 'ipid admissionDate dischargeDate status ward unitNo')
+      .sort({ submittedAt: -1 });
+
+    if (submissions.length === 0) {
+      return res.status(404).json({ message: 'No submissions found for this IPID' });
+    }
+
+    // Filter out submissions with invalid/null checklistItemId (items that were deleted)
+    submissions = submissions.filter(sub => sub.checklistItemId && sub.checklistItemId.label);
+
+    if (submissions.length === 0) {
+      return res.status(404).json({ message: 'No valid submissions found for this IPID (checklist items may have been deleted)' });
+    }
+
+    res.json(submissions);
+  } catch (err) {
+    console.error('getSubmissionsByIPID error', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Check if submission exists for UHID, IPID, and Department
+exports.checkDuplicateSubmission = async (req, res) => {
+  try {
+    const { uhid, ipid, departmentId } = req.query;
+    
+    if (!uhid || !ipid || !departmentId) {
+      return res.status(400).json({ message: 'UHID, IPID, and Department ID are required' });
+    }
+
+    const normalizedUHID = uhid.trim().toUpperCase();
+    const normalizedIPID = ipid.trim().toUpperCase();
+
+    const existingSubmission = await AuditSubmission.findOne({
+      uhid: normalizedUHID,
+      ipid: normalizedIPID,
+      department: departmentId,
+    })
+    .populate('submittedBy', 'name email')
+    .select('submittedAt submittedBy');
+
+    if (existingSubmission) {
+      return res.json({ 
+        exists: true,
+        message: 'No Duplicate IPID: A checklist has already been submitted for this UHID, IPID, and Department combination.',
+        submittedAt: existingSubmission.submittedAt,
+        submittedBy: existingSubmission.submittedBy,
+      });
+    }
+
+    return res.json({ exists: false });
+  } catch (err) {
+    console.error('checkDuplicateSubmission error', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
   }
 };
 

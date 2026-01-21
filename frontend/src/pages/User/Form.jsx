@@ -13,6 +13,7 @@ export function Form() {
   const [submitting, setSubmitting] = useState(false)
   const [message, setMessage] = useState('')
   const [uhid, setUhid] = useState('')
+  const [ipid, setIpid] = useState('')
   const [patientName, setPatientName] = useState('')
   const [ward, setWard] = useState('')
   const [unitNo, setUnitNo] = useState('')
@@ -21,6 +22,9 @@ export function Form() {
   const [showSuccessModal, setShowSuccessModal] = useState(false)
   const [submittedUHID, setSubmittedUHID] = useState('')
   const [submittedPatientName, setSubmittedPatientName] = useState('')
+  const [duplicateExists, setDuplicateExists] = useState(false)
+  const [checkingDuplicate, setCheckingDuplicate] = useState(false)
+  const [duplicateMessage, setDuplicateMessage] = useState('')
 
   // UHID is entered manually from OP card - no database lookup needed
   // Patient record will be created automatically when form is submitted
@@ -170,13 +174,78 @@ export function Form() {
   }, [formTemplateId, user])
 
 
+  // Check for duplicate submission when UHID and IPID are entered
+  useEffect(() => {
+    const checkDuplicate = async () => {
+      // Only check if both UHID and IPID are provided and user has a department
+      if (!uhid.trim() || !ipid.trim() || !user?.department || loading) {
+        setDuplicateExists(false)
+        setDuplicateMessage('')
+        return
+      }
+
+      let userDeptId = null
+      if (user?.department) {
+        userDeptId = typeof user.department === 'object' 
+          ? (user.department.id || user.department._id) 
+          : user.department
+      }
+
+      if (!userDeptId) {
+        return
+      }
+
+      setCheckingDuplicate(true)
+      try {
+        const response = await apiClient.get(
+          `/audits/check-duplicate?uhid=${encodeURIComponent(uhid.trim().toUpperCase())}&ipid=${encodeURIComponent(ipid.trim().toUpperCase())}&departmentId=${encodeURIComponent(userDeptId)}`
+        )
+        
+        if (response.exists) {
+          setDuplicateExists(true)
+          const submittedDate = response.submittedAt 
+            ? new Date(response.submittedAt).toLocaleString('en-GB', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+              })
+            : 'previously'
+          const submittedBy = response.submittedBy?.name || 'another user'
+          setDuplicateMessage(`No Duplicate IPID: A checklist has already been submitted for this UHID (${uhid.trim().toUpperCase()}) and IPID (${ipid.trim().toUpperCase()}) by your department. Submitted by ${submittedBy} on ${submittedDate}. Only one submission is allowed per department for the same admission.`)
+        } else {
+          setDuplicateExists(false)
+          setDuplicateMessage('')
+        }
+      } catch (err) {
+        console.error('Error checking duplicate:', err)
+        // Don't block form if check fails - let backend handle it on submit
+        setDuplicateExists(false)
+        setDuplicateMessage('')
+      } finally {
+        setCheckingDuplicate(false)
+      }
+    }
+
+    // Debounce the check to avoid too many API calls
+    const timeoutId = setTimeout(() => {
+      checkDuplicate()
+    }, 500) // Wait 500ms after user stops typing
+
+    return () => clearTimeout(timeoutId)
+  }, [uhid, ipid, user, loading])
+
   // Reset form to new mode
   const resetToNewForm = () => {
     setUhid('')
+    setIpid('')
     setPatientName('')
     setWard('')
     setUnitNo('')
     setMessage('')
+    setDuplicateExists(false)
+    setDuplicateMessage('')
     const init = {}
     items.forEach((it) => {
             init[it._id] = {
@@ -211,6 +280,11 @@ export function Form() {
       setMessage('Please enter UHID')
       return
     }
+
+    if (!ipid.trim()) {
+      setMessage('Please enter IPID (In-Patient ID)')
+      return
+    }
     if (!patientName.trim()) {
       setMessage('Please enter Patient Name')
       return
@@ -242,11 +316,30 @@ export function Form() {
       return
     }
 
-    // Validate that remarks are provided when NO is selected
+    // Validate responses
     for (const it of items) {
       const answer = answers[it._id]
-      if (answer?.responseValue === 'NO' && (!answer?.remarks || !answer.remarks.trim())) {
+      const responseType = it.responseType || 'YES_NO'
+      
+      // Validate mandatory items
+      if (it.isMandatory) {
+        if (!answer?.responseValue || !answer.responseValue.trim()) {
+          setMessage(`Response is required for mandatory item: ${it.label}`)
+          setSubmitting(false)
+          return
+        }
+      }
+      
+      // Validate that remarks are provided when NO is selected (for YES_NO type)
+      if (responseType === 'YES_NO' && answer?.responseValue === 'NO' && (!answer?.remarks || !answer.remarks.trim())) {
         setMessage(`Remarks are required when "NO" is selected for: ${it.label}`)
+        setSubmitting(false)
+        return
+      }
+      
+      // Validate TEXT type has content if mandatory
+      if (responseType === 'TEXT' && it.isMandatory && (!answer?.responseValue || !answer.responseValue.trim())) {
+        setMessage(`Text response is required for: ${it.label}`)
         setSubmitting(false)
         return
       }
@@ -259,6 +352,7 @@ export function Form() {
         departmentId: userDeptId,
         formTemplateId: formTemplateId,
         uhid: uhid.trim(),
+        ipid: ipid.trim(),
         patientName: patientName.trim(),
         ward: ward.trim(),
         unitNo: unitNo.trim(),
@@ -278,7 +372,9 @@ export function Form() {
       resetToNewForm()
     } catch (err) {
       const errorMsg = err.response?.data?.message || 'Failed to submit form'
-      if (errorMsg.includes('UHID already exists') || errorMsg.includes('duplicate')) {
+      if (errorMsg.includes('No Duplicate IPID') || errorMsg.includes('already been submitted')) {
+        setMessage('No Duplicate IPID: A checklist has already been submitted for this UHID, IPID, and Department combination. Only one submission is allowed per department for the same admission.')
+      } else if (errorMsg.includes('UHID already exists') || errorMsg.includes('duplicate')) {
         setMessage('This UHID already exists in the system. Please verify the UHID or contact admin.')
       } else {
         setMessage(errorMsg)
@@ -322,180 +418,292 @@ export function Form() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto space-y-3">
+    <div className="max-w-7xl mx-auto space-y-4 px-4 py-4">
       {message && (
         <div
-          className={`px-3 py-2 rounded text-xs ${
-            message.includes('successfully')
-              ? 'bg-green-50 border border-green-200 text-green-700'
-              : 'bg-blue-50 border border-blue-200 text-blue-700'
+          className={`px-4 py-3 rounded-lg shadow-sm border-2 flex items-start gap-3 ${
+            message.includes('successfully') || message.includes('Success')
+              ? 'bg-green-50 border-green-300 text-green-800'
+              : message.includes('Error') || message.includes('error') || message.includes('failed')
+              ? 'bg-red-50 border-red-300 text-red-800'
+              : 'bg-blue-50 border-blue-300 text-blue-800'
           }`}
         >
-          {message}
+          {message.includes('successfully') || message.includes('Success') ? (
+            <svg className="w-5 h-5 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+            </svg>
+          ) : message.includes('Error') || message.includes('error') || message.includes('failed') ? (
+            <svg className="w-5 h-5 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+            </svg>
+          ) : (
+            <svg className="w-5 h-5 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+            </svg>
+          )}
+          <span className="text-sm font-medium flex-1">{message}</span>
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-3">
-        {/* Compact Patient Information */}
-        <div className="bg-white rounded-lg shadow-sm border-2 border-blue-500 p-3">
-          <h3 className="text-xs font-bold text-slate-800 mb-2 flex items-center gap-1">
-            <span className="text-blue-500">*</span>
-            Patient Information (Mandatory)
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <div>
-              <label className="block text-[10px] sm:text-xs font-medium text-slate-700 mb-1">
-                UHID <span className="text-blue-500">*</span>
-                <span className="ml-1 text-[9px] text-slate-500 font-normal">(Enter from OP Card)</span>
-              </label>
-              <input
-                type="text"
-                value={uhid}
-                onChange={(e) => setUhid(e.target.value.toUpperCase())}
-                placeholder="Enter UHID from OP Card"
-                className="w-full border border-slate-300 rounded px-2 py-1.5 text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-[10px] sm:text-xs font-medium text-slate-700 mb-1">
-                Patient Name <span className="text-blue-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={patientName}
-                onChange={(e) => setPatientName(e.target.value)}
-                className="w-full border border-slate-300 rounded px-2 py-1.5 text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Enter Patient Name"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-[10px] sm:text-xs font-medium text-slate-700 mb-1">
-                Ward <span className="text-blue-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={ward}
-                onChange={(e) => setWard(e.target.value)}
-                className="w-full border border-slate-300 rounded px-2 py-1.5 text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Enter Ward"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-[10px] sm:text-xs font-medium text-slate-700 mb-1">
-                Unit No <span className="text-blue-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={unitNo}
-                onChange={(e) => setUnitNo(e.target.value)}
-                className="w-full border border-slate-300 rounded px-2 py-1.5 text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Enter Unit No"
-                required
-              />
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Patient Information Section */}
+        <div className="bg-white rounded-lg shadow-md border border-blue-200 overflow-hidden">
+          <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-2.5">
+            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+              Patient Information <span className="text-red-300">*</span>
+              <span className="text-xs font-normal text-blue-100 ml-2">(All fields are mandatory)</span>
+            </h3>
+          </div>
+          <div className="p-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-slate-700">
+                  UHID <span className="text-red-500">*</span>
+                  <span className="ml-1 text-[10px] font-normal text-slate-500">(Enter from OP Card)</span>
+                </label>
+                <input
+                  type="text"
+                  value={uhid}
+                  onChange={(e) => setUhid(e.target.value.toUpperCase())}
+                  placeholder="Enter UHID from OP Card"
+                  className={`w-full border-2 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all ${
+                    duplicateExists ? 'border-red-500 bg-red-50' : 'border-slate-300 hover:border-slate-400'
+                  }`}
+                  required
+                  disabled={duplicateExists}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-slate-700">
+                  IPID <span className="text-red-500">*</span>
+                  <span className="ml-1 text-[10px] font-normal text-slate-500">(In-Patient ID)</span>
+                </label>
+                <input
+                  type="text"
+                  value={ipid}
+                  onChange={(e) => setIpid(e.target.value.toUpperCase())}
+                  placeholder="Enter IPID from Admission Slip"
+                  className={`w-full border-2 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all ${
+                    duplicateExists ? 'border-red-500 bg-red-50' : 'border-slate-300 hover:border-slate-400'
+                  }`}
+                  required
+                  disabled={duplicateExists}
+                />
+                {checkingDuplicate && (
+                  <div className="text-xs text-blue-600 mt-1.5 flex items-center gap-2">
+                    <span className="inline-block animate-spin rounded-full h-3 w-3 border-2 border-blue-600 border-t-transparent"></span>
+                    Checking for existing submission...
+                  </div>
+                )}
+                {duplicateExists && duplicateMessage && (
+                  <div className="mt-2 p-3 bg-red-50 border-2 border-red-300 rounded-md text-xs text-red-800">
+                    <div className="font-bold mb-1 flex items-center gap-1">
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                      </svg>
+                      Duplicate Submission Detected
+                    </div>
+                    <div className="leading-relaxed">{duplicateMessage}</div>
+                  </div>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-slate-700">
+                  Patient Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={patientName}
+                  onChange={(e) => setPatientName(e.target.value)}
+                  className={`w-full border-2 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all ${
+                    duplicateExists ? 'border-red-500 bg-red-50' : 'border-slate-300 hover:border-slate-400'
+                  }`}
+                  placeholder="Enter Patient Name"
+                  required
+                  disabled={duplicateExists}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-slate-700">
+                  Ward <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={ward}
+                  onChange={(e) => setWard(e.target.value)}
+                  className={`w-full border-2 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all ${
+                    duplicateExists ? 'border-red-500 bg-red-50' : 'border-slate-300 hover:border-slate-400'
+                  }`}
+                  placeholder="Enter Ward"
+                  required
+                  disabled={duplicateExists}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-slate-700">
+                  Unit No <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={unitNo}
+                  onChange={(e) => setUnitNo(e.target.value)}
+                  className={`w-full border-2 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all ${
+                    duplicateExists ? 'border-red-500 bg-red-50' : 'border-slate-300 hover:border-slate-400'
+                  }`}
+                  placeholder="Enter Unit No"
+                  required
+                  disabled={duplicateExists}
+                />
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Checklist Sections - Compact Table Style */}
+        {/* Checklist Sections */}
         {Object.keys(itemsBySection).length === 0 ? (
-          <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-4 text-center text-xs text-slate-500">
-            No checklist items available for this form.
+          <div className="bg-white rounded-lg shadow-md border border-slate-200 p-6 text-center">
+            <div className="text-slate-400 mb-2">
+              <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+            <p className="text-sm text-slate-500 font-medium">No checklist items available for this form.</p>
           </div>
         ) : (
           Object.keys(itemsBySection)
             .sort()
             .map((sectionName) => (
-              <div key={sectionName} className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
-                {/* Compact Section Header */}
-                <div className="bg-blue-600 text-white px-3 py-1.5">
-                  <h3 className="font-semibold text-xs sm:text-sm">{sectionName}</h3>
+              <div key={sectionName} className="bg-white rounded-lg shadow-md border border-slate-200 overflow-hidden">
+                {/* Section Header */}
+                <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-3">
+                  <h3 className="font-bold text-sm flex items-center gap-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    </svg>
+                    {sectionName}
+                  </h3>
                 </div>
 
-                {/* Compact Table Layout */}
+                {/* Table Layout */}
                 <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead className="bg-slate-50 border-b border-slate-200">
+                  <table className="w-full">
+                    <thead className="bg-slate-100 border-b-2 border-slate-200">
                       <tr>
-                        <th className="text-left px-2 py-1.5 font-semibold text-slate-700 w-[35%]">Checklist Item</th>
-                        <th className="text-center px-2 py-1.5 font-semibold text-slate-700 w-[15%]">Response</th>
-                        <th className="text-left px-2 py-1.5 font-semibold text-slate-700 w-[25%]">Remarks</th>
-                        <th className="text-left px-2 py-1.5 font-semibold text-slate-700 w-[25%]">Responsibility</th>
+                        <th className="text-left px-4 py-3 font-bold text-xs text-slate-700 uppercase tracking-wide w-[35%]">Checklist Item</th>
+                        <th className="text-center px-4 py-3 font-bold text-xs text-slate-700 uppercase tracking-wide w-[15%]">Response</th>
+                        <th className="text-left px-4 py-3 font-bold text-xs text-slate-700 uppercase tracking-wide w-[25%]">Remarks</th>
+                        <th className="text-left px-4 py-3 font-bold text-xs text-slate-700 uppercase tracking-wide w-[25%]">Responsibility</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {itemsBySection[sectionName]
                         .sort((a, b) => a.order - b.order)
-                        .map((it) => {
-                          const responseType = it.responseType || 'YES_NO_NA'
+                        .map((it, idx) => {
+                          const responseType = it.responseType || 'YES_NO'
                           const currentValue = answers[it._id]?.responseValue || answers[it._id]?.yesNoNa || ''
+                          const isTextType = responseType === 'TEXT'
                           
                           return (
-                            <tr key={it._id} className="hover:bg-slate-50">
-                              <td className="px-2 py-2 align-top">
-                                <div className="font-medium text-slate-800">{it.label}</div>
-                                <div className="text-[10px] text-slate-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
-                                  <span>
+                            <tr key={it._id} className={`hover:bg-blue-50 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}`}>
+                              <td className="px-4 py-3 align-top">
+                                <div className="font-semibold text-sm text-slate-800 mb-1">{it.label}</div>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="text-[10px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
                                     {it.departmentScope === 'ALL' ? 'All departments' : it.department?.name || 'Dept specific'}
                                   </span>
                                   {it.isMandatory && (
-                                    <span className="px-1 py-0.5 bg-blue-100 text-blue-700 rounded text-[9px] font-medium">
+                                    <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded text-[10px] font-semibold">
                                       Mandatory
                                     </span>
                                   )}
                                 </div>
                               </td>
-                              <td className="px-2 py-2 align-top">
-                                {/* Only YES/NO response type */}
-                                <div className="flex flex-col gap-1">
-                                  {['YES', 'NO'].map((opt) => (
-                                    <label key={opt} className="flex items-center gap-1 cursor-pointer">
-                                      <input
-                                        type="radio"
-                                        name={`resp_${it._id}`}
-                                        value={opt}
-                                        checked={currentValue === opt}
-                                        onChange={(e) => {
-                                          updateAnswer(it._id, 'responseValue', e.target.value)
-                                          updateAnswer(it._id, 'yesNoNa', e.target.value)
-                                          // Clear remarks if YES is selected
-                                          if (e.target.value === 'YES') {
-                                            updateAnswer(it._id, 'remarks', '')
-                                          }
-                                        }}
-                                        className="w-3 h-3 text-blue-600 border-slate-300 focus:ring-blue-500"
-                                      />
-                                      <span className="text-[10px]">{opt}</span>
-                                    </label>
-                                  ))}
-                                </div>
-                              </td>
-                              <td className="px-2 py-2 align-top">
-                                {/* Show remarks only when NO is selected, and make it required */}
-                                {currentValue === 'NO' ? (
-                                  <input
-                                    type="text"
-                                    className="border border-blue-300 rounded w-full px-1.5 py-1 text-[10px] focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-blue-50"
-                                    value={answers[it._id]?.remarks || ''}
-                                    onChange={(e) => updateAnswer(it._id, 'remarks', e.target.value)}
-                                    placeholder="Remarks required*"
-                                    required
+                              <td className="px-4 py-3 align-middle" colSpan={isTextType ? 3 : 1}>
+                                {/* Handle different response types */}
+                                {responseType === 'TEXT' ? (
+                                  <textarea
+                                    className="border-2 border-blue-300 rounded-md w-full px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-blue-50 resize-y min-h-[100px] transition-all"
+                                    value={answers[it._id]?.responseValue || ''}
+                                    onChange={(e) => {
+                                      updateAnswer(it._id, 'responseValue', e.target.value)
+                                      updateAnswer(it._id, 'yesNoNa', '')
+                                    }}
+                                    placeholder={it.isMandatory ? "Enter text about the patient (required)*" : "Enter text about the patient"}
+                                    required={it.isMandatory}
+                                    rows={4}
                                   />
+                                ) : responseType === 'MULTI_SELECT' ? (
+                                  <select
+                                    className="border-2 border-slate-300 rounded-md w-full px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-all"
+                                    value={currentValue}
+                                    onChange={(e) => {
+                                      updateAnswer(it._id, 'responseValue', e.target.value)
+                                      updateAnswer(it._id, 'yesNoNa', e.target.value)
+                                    }}
+                                    required={it.isMandatory}
+                                  >
+                                    <option value="">Select an option</option>
+                                    {it.responseOptions && it.responseOptions.split(',').map((opt, idx) => (
+                                      <option key={idx} value={opt.trim()}>
+                                        {opt.trim()}
+                                      </option>
+                                    ))}
+                                  </select>
                                 ) : (
-                                  <span className="text-[10px] text-slate-400 italic">N/A</span>
+                                  <div className="flex items-center justify-center gap-4">
+                                    {['YES', 'NO'].map((opt) => (
+                                      <label key={opt} className="flex items-center gap-2 cursor-pointer group">
+                                        <input
+                                          type="radio"
+                                          name={`resp_${it._id}`}
+                                          value={opt}
+                                          checked={currentValue === opt}
+                                          onChange={(e) => {
+                                            updateAnswer(it._id, 'responseValue', e.target.value)
+                                            updateAnswer(it._id, 'yesNoNa', e.target.value)
+                                            if (e.target.value === 'YES') {
+                                              updateAnswer(it._id, 'remarks', '')
+                                            }
+                                          }}
+                                          className="w-4 h-4 text-blue-600 border-2 border-slate-300 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                                        />
+                                        <span className="text-sm font-medium text-slate-700 group-hover:text-blue-600 transition-colors">{opt}</span>
+                                      </label>
+                                    ))}
+                                  </div>
                                 )}
                               </td>
-                              <td className="px-2 py-2 align-top">
-                                <input
-                                  type="text"
-                                  className="border border-slate-300 rounded w-full px-1.5 py-1 text-[10px] focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                                  value={answers[it._id]?.responsibility || ''}
-                                  onChange={(e) => updateAnswer(it._id, 'responsibility', e.target.value)}
-                                  placeholder="Responsible"
-                                />
-                              </td>
+                              {!isTextType && (
+                                <>
+                                  <td className="px-4 py-3 align-top">
+                                    {responseType === 'YES_NO' && currentValue === 'NO' ? (
+                                      <input
+                                        type="text"
+                                        className="border-2 border-blue-300 rounded-md w-full px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-blue-50 transition-all"
+                                        value={answers[it._id]?.remarks || ''}
+                                        onChange={(e) => updateAnswer(it._id, 'remarks', e.target.value)}
+                                        placeholder="Remarks required*"
+                                        required
+                                      />
+                                    ) : (
+                                      <span className="text-xs text-slate-400 italic">N/A</span>
+                                    )}
+                                  </td>
+                                  <td className="px-4 py-3 align-top">
+                                    <input
+                                      type="text"
+                                      className="border-2 border-slate-300 rounded-md w-full px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                      value={answers[it._id]?.responsibility || ''}
+                                      onChange={(e) => updateAnswer(it._id, 'responsibility', e.target.value)}
+                                      placeholder="Enter responsible person"
+                                    />
+                                  </td>
+                                </>
+                              )}
                             </tr>
                           )
                         })}
@@ -506,15 +714,41 @@ export function Form() {
             ))
         )}
 
-        {/* Compact Submit Button */}
+        {/* Submit Button */}
         {Object.keys(itemsBySection).length > 0 && (
-          <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-3 flex justify-end gap-2">
+          <div className="bg-white rounded-lg shadow-md border border-slate-200 p-4 flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={resetToNewForm}
+              className="px-6 py-2.5 border-2 border-slate-300 text-slate-700 font-semibold rounded-md hover:bg-slate-50 transition-all text-sm"
+            >
+              Reset Form
+            </button>
             <button
               type="submit"
-              disabled={submitting}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2 rounded text-xs sm:text-sm transition-all disabled:opacity-60 disabled:cursor-not-allowed shadow-sm hover:shadow"
+              disabled={submitting || duplicateExists || checkingDuplicate}
+              className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold px-8 py-2.5 rounded-md transition-all disabled:opacity-60 disabled:cursor-not-allowed shadow-lg hover:shadow-xl text-sm flex items-center gap-2"
             >
-              {submitting ? 'Submitting...' : 'Submit Form'}
+              {submitting ? (
+                <>
+                  <span className="inline-block animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></span>
+                  Submitting...
+                </>
+              ) : duplicateExists ? (
+                <>
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                  </svg>
+                  Duplicate - Cannot Submit
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Submit Form
+                </>
+              )}
             </button>
           </div>
         )}

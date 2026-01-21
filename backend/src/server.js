@@ -23,6 +23,7 @@ app.use('/api/checklists', require('./routes/checklistRoutes'));
 app.use('/api/audits', require('./routes/auditRoutes'));
 app.use('/api/form-templates', require('./routes/formTemplateRoutes'));
 app.use('/api/patients', require('./routes/patientRoutes'));
+app.use('/api/admissions', require('./routes/admissionRoutes'));
 
 app.get('/', (_req, res) => {
   res.json({ status: 'MRD Audit API running' });

@@ -19,8 +19,7 @@ const patientSchema = new mongoose.Schema(
     gender: { type: String, enum: ['Male', 'Female', 'Other'] },
     contactNumber: { type: String },
     address: { type: String },
-    ward: { type: String, trim: true, required: true },
-    unitNo: { type: String, trim: true, required: true },
+    // Note: ward and unitNo moved to Admission model (one patient can have multiple admissions)
   },
   { timestamps: true }
 );

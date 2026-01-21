@@ -26,6 +26,21 @@ const auditSubmissionSchema = new mongoose.Schema(
       uppercase: true,
       index: true,
     },
+    // IPID - unique for each admission
+    ipid: {
+      type: String,
+      required: true,
+      trim: true,
+      uppercase: true,
+      index: true,
+    },
+    // Admission reference
+    admission: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Admission',
+      required: true,
+      index: true,
+    },
     patientName: {
       type: String,
       required: true,
@@ -39,7 +54,7 @@ const auditSubmissionSchema = new mongoose.Schema(
     // Legacy field for backward compatibility
     yesNoNa: {
       type: String,
-      enum: ['YES', 'NO', 'NA'],
+      enum: ['YES', 'NO'], // NA removed - only YES or NO allowed
       required: false, // Made optional to support new response types
     },
     // New flexible response value field
@@ -69,9 +84,12 @@ const auditSubmissionSchema = new mongoose.Schema(
 // Compound indexes for efficient queries
 auditSubmissionSchema.index({ patient: 1, department: 1 });
 auditSubmissionSchema.index({ uhid: 1, department: 1 });
+auditSubmissionSchema.index({ ipid: 1, department: 1 }); // For admission-based queries
+auditSubmissionSchema.index({ admission: 1, department: 1 }); // For admission-based queries
 auditSubmissionSchema.index({ submittedAt: -1 }); // For time-based queries
 auditSubmissionSchema.index({ department: 1, submittedAt: -1 }); // For department performance queries
 auditSubmissionSchema.index({ uhid: 1, submittedAt: -1 }); // For patient timeline queries
+auditSubmissionSchema.index({ ipid: 1, submittedAt: -1 }); // For admission timeline queries
 auditSubmissionSchema.index({ department: 1, formTemplate: 1 }); // For form-level queries
 auditSubmissionSchema.index({ 'responseValue': 1 }); // For compliance queries
 

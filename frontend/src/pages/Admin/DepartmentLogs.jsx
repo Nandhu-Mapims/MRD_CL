@@ -10,6 +10,9 @@ export function DepartmentLogs() {
   const [selectedUhid, setSelectedUhid] = useState('')
   const [previewData, setPreviewData] = useState(null)
   const [loadingPreview, setLoadingPreview] = useState(false)
+  const [admissions, setAdmissions] = useState([])
+  const [selectedIPID, setSelectedIPID] = useState(null)
+  const [loadingAdmissions, setLoadingAdmissions] = useState(false)
 
   useEffect(() => {
     loadLogs()
@@ -42,17 +45,142 @@ export function DepartmentLogs() {
     setExpandedDepts(newExpanded)
   }
 
-  const loadPreviewData = async (uhid) => {
+  // Load admissions for UHID
+  const loadAdmissionsForPreview = async (uhid) => {
     if (!uhid || !uhid.trim()) return
     
-    setLoadingPreview(true)
-    setPreviewModalOpen(true)
-    setSelectedUhid(uhid.trim().toUpperCase())
-    setPreviewData(null) // Clear previous data
+    setLoadingAdmissions(true)
+    setAdmissions([])
+    setSelectedIPID(null)
+    setPreviewData(null)
     
     try {
-      // Get all submissions for this UHID grouped by department
-      const submissions = await apiClient.get(`/audits/uhid/${encodeURIComponent(uhid.trim().toUpperCase())}`)
+      const normalizedUHID = uhid.trim().toUpperCase()
+      console.log('[loadAdmissionsForPreview] Fetching admissions for UHID:', normalizedUHID)
+      const url = `/admissions/patient/${encodeURIComponent(normalizedUHID)}`
+      console.log('[loadAdmissionsForPreview] API URL:', url)
+      console.log('[loadAdmissionsForPreview] Making API call at:', new Date().toISOString())
+      
+      const startTime = Date.now()
+      
+      // Add timeout wrapper
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => {
+          reject(new Error('Request timeout: Backend server may not be responding. Please check if the server is running on port 5000.'))
+        }, 15000) // 15 second timeout
+      })
+      
+      const admissionsData = await Promise.race([
+        apiClient.get(url),
+        timeoutPromise
+      ])
+      
+      const endTime = Date.now()
+      console.log(`[loadAdmissionsForPreview] API call completed in ${endTime - startTime}ms`)
+      console.log('[loadAdmissionsForPreview] Admissions data received:', admissionsData)
+      
+      // Handle different response formats
+      let admissionsList = []
+      if (Array.isArray(admissionsData)) {
+        admissionsList = admissionsData
+      } else if (admissionsData?.admissions) {
+        admissionsList = admissionsData.admissions
+      } else if (admissionsData?.data?.admissions) {
+        admissionsList = admissionsData.data.admissions
+      }
+      
+      setAdmissions(admissionsList)
+      
+      // If no admissions found, try to get submissions to create a virtual admission
+      if (admissionsList.length === 0) {
+        try {
+          const submissions = await apiClient.get(`/audits/uhid/${encodeURIComponent(normalizedUHID)}`)
+          if (submissions && submissions.length > 0) {
+            // Extract unique IPIDs from submissions
+            const uniqueIPIDs = [...new Set(submissions.map(s => s.ipid).filter(Boolean))]
+            if (uniqueIPIDs.length > 0) {
+              // Create virtual admission objects from submissions
+              const virtualAdmissions = uniqueIPIDs.map(ipid => {
+                const subWithIPID = submissions.find(s => s.ipid === ipid)
+                return {
+                  ipid: ipid,
+                  uhid: normalizedUHID,
+                  admissionDate: subWithIPID?.submittedAt || new Date(),
+                  status: 'Admitted',
+                  ward: subWithIPID?.ward || subWithIPID?.patient?.ward || 'N/A',
+                  unitNo: subWithIPID?.unitNo || subWithIPID?.patient?.unitNo || 'N/A',
+                  isVirtual: true // Flag to indicate this is created from submissions
+                }
+              })
+              setAdmissions(virtualAdmissions)
+            }
+          }
+        } catch (subErr) {
+          console.error('Error loading submissions as fallback:', subErr)
+        }
+      }
+    } catch (err) {
+      console.error('[loadAdmissionsForPreview] Error loading admissions:', err)
+      console.error('[loadAdmissionsForPreview] Error details:', err.response?.data || err.message)
+      console.error('[loadAdmissionsForPreview] Error status:', err.response?.status)
+      console.error('[loadAdmissionsForPreview] Full error:', err)
+      
+      setAdmissions([])
+      
+      // Check if it's a network/connection error or timeout
+      if (err.message?.includes('connect') || err.message?.includes('Network') || err.message?.includes('timeout') || err.response?.status === 0) {
+        const errorMsg = err.message?.includes('timeout') 
+          ? 'Request timed out. Please ensure the backend server is running on port 5000 and try again.'
+          : 'Cannot connect to backend server. Please ensure the backend server is running on port 5000.'
+        
+        setPreviewData({
+          error: errorMsg,
+          patient: { uhid: uhid.trim().toUpperCase(), patientName: 'N/A' },
+          departments: []
+        })
+        setLoadingAdmissions(false)
+        return
+      }
+      
+      // Check for authentication errors
+      if (err.response?.status === 401) {
+        setPreviewData({
+          error: 'Authentication failed. Please log out and log in again.',
+          patient: { uhid: uhid.trim().toUpperCase(), patientName: 'N/A' },
+          departments: []
+        })
+        setLoadingAdmissions(false)
+        return
+      }
+      
+      // Show error in UI
+      if (err.response?.status === 404) {
+        // 404 is okay - just means no admissions found, try fallback
+        console.log('[loadAdmissionsForPreview] No admissions found, trying submissions fallback...')
+      } else {
+        // Other errors - show in preview data
+        setPreviewData({
+          error: err.response?.data?.message || err.message || 'Failed to load admissions. Please check console for details.',
+          patient: { uhid: uhid.trim().toUpperCase(), patientName: 'N/A' },
+          departments: []
+        })
+      }
+    } finally {
+      setLoadingAdmissions(false)
+    }
+  }
+
+  // Load checklist for specific IPID
+  const loadChecklistByIPID = async (ipid) => {
+    if (!ipid || !ipid.trim()) return
+    
+    setLoadingPreview(true)
+    setSelectedIPID(ipid.trim().toUpperCase())
+    setPreviewData(null)
+    
+    try {
+      // Get all submissions for this IPID grouped by department
+      const submissions = await apiClient.get(`/audits/ipid/${encodeURIComponent(ipid.trim().toUpperCase())}`)
       
       if (!submissions || submissions.length === 0) {
         setPreviewData({
@@ -79,7 +207,9 @@ export function DepartmentLogs() {
         if (!deptMap.has(deptId)) {
           deptMap.set(deptId, {
             department: { _id: deptId, name: deptName, code: deptCode },
-            sections: new Map()
+            sections: new Map(),
+            submittedBy: sub.submittedBy,
+            submittedAt: sub.submittedAt
           })
         }
         
@@ -97,7 +227,8 @@ export function DepartmentLogs() {
         section.items.push({
           checklistItemId: {
             _id: sub.checklistItemId?._id,
-            label: sub.checklistItemId?.label || 'N/A'
+            label: sub.checklistItemId?.label || 'N/A',
+            responseType: sub.checklistItemId?.responseType || 'YES_NO'
           },
           responseValue: sub.responseValue || sub.yesNoNa || 'N/A',
           remarks: sub.remarks || '-',
@@ -108,7 +239,9 @@ export function DepartmentLogs() {
       // Convert Maps to arrays
       const departments = Array.from(deptMap.values()).map(dept => ({
         department: dept.department,
-        sections: Array.from(dept.sections.values())
+        sections: Array.from(dept.sections.values()),
+        submittedBy: dept.submittedBy,
+        submittedAt: dept.submittedAt
       }))
       
       setPreviewData({
@@ -116,7 +249,7 @@ export function DepartmentLogs() {
         departments
       })
     } catch (err) {
-      console.error('Error loading preview data:', err)
+      console.error('Error loading checklist by IPID:', err)
       const errorMessage = err.response?.data?.message || err.message || 'Failed to load data'
       setPreviewData({ 
         error: errorMessage,
@@ -126,6 +259,22 @@ export function DepartmentLogs() {
     } finally {
       setLoadingPreview(false)
     }
+  }
+
+  const loadPreviewData = async (uhid) => {
+    if (!uhid || !uhid.trim()) return
+    
+    setPreviewModalOpen(true)
+    setSelectedUhid(uhid.trim().toUpperCase())
+    setPreviewData(null)
+    setSelectedIPID(null)
+    
+    // First, load admissions list
+    await loadAdmissionsForPreview(uhid.trim())
+  }
+
+  const handleIPIDClick = async (ipid) => {
+    await loadChecklistByIPID(ipid)
   }
 
   const formatDate = (dateString) => {
@@ -608,7 +757,11 @@ export function DepartmentLogs() {
               <div className="flex-1">
                 <h2 className="text-xl font-bold mb-1 flex items-center gap-2">
                   <span>📋</span>
-                  Data Preview - UHID: <span className="font-mono">{selectedUhid}</span>
+                  {selectedIPID ? (
+                    <>Checklist - IPID: <span className="font-mono">{selectedIPID}</span></>
+                  ) : (
+                    <>Admissions - UHID: <span className="font-mono">{selectedUhid}</span></>
+                  )}
                 </h2>
                 <p className="text-sm text-blue-100 flex items-center gap-2">
                   {previewData?.patient?.patientName ? (
@@ -639,10 +792,69 @@ export function DepartmentLogs() {
 
             {/* Content */}
             <div className="flex-1 overflow-y-auto p-6">
+              {/* IPID List - Show when UHID is entered but no IPID selected */}
+              {selectedUhid && !selectedIPID && (
+                <div className="mb-6">
+                  <h3 className="text-lg font-bold text-slate-800 mb-4">
+                    📋 Select Admission (IPID) for UHID: {selectedUhid}
+                  </h3>
+                  {loadingAdmissions ? (
+                    <div className="text-center py-8">
+                      <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-600 mb-4"></div>
+                      <div className="text-slate-600 font-medium">Loading admissions...</div>
+                      <div className="text-xs text-slate-400 mt-2">
+                        If this takes too long, check if backend server is running on port 5000
+                      </div>
+                    </div>
+                  ) : admissions.length === 0 ? (
+                    <div className="text-center py-8 text-slate-500 bg-yellow-50 border border-yellow-200 rounded-lg">
+                      <div className="text-4xl mb-2">📭</div>
+                      <p className="font-semibold mb-1">No admissions found</p>
+                      <p className="text-sm">No admission records found for UHID: {selectedUhid}</p>
+                      {previewData?.error && (
+                        <p className="text-xs mt-2 text-red-600">{previewData.error}</p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {admissions.map((admission, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => handleIPIDClick(admission.ipid)}
+                          className="w-full text-left p-4 rounded-lg border-2 border-slate-200 bg-white hover:border-blue-400 hover:bg-blue-50 transition-all"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-3 mb-2">
+                                <span className="text-lg font-bold text-blue-600 hover:text-blue-800 hover:underline">
+                                  IPID: {admission.ipid}
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2 text-sm text-slate-600">
+                                <div>
+                                  <span className="font-medium">Ward:</span> {admission.ward}
+                                </div>
+                                <div>
+                                  <span className="font-medium">Unit:</span> {admission.unitNo}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="ml-4">
+                              <span className="text-blue-600 text-sm font-semibold">View Checklist →</span>
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {loadingPreview ? (
                 <div className="text-center py-12">
                   <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-600 mb-4"></div>
-                  <div className="text-slate-500 font-medium">Loading data...</div>
+                  <div className="text-slate-500 font-medium">Loading checklist data...</div>
                 </div>
               ) : previewData?.error ? (
                 <div className="text-center py-12 text-red-600">
@@ -662,6 +874,10 @@ export function DepartmentLogs() {
                       <div className="flex items-center gap-2">
                         <span className="font-semibold text-slate-600 min-w-[80px]">UHID:</span>
                         <span className="font-mono font-bold text-blue-700">{previewData.patient.uhid}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-slate-600 min-w-[80px]">IPID:</span>
+                        <span className="font-mono font-bold text-blue-700">{selectedIPID || 'N/A'}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="font-semibold text-slate-600 min-w-[120px]">Patient Name:</span>
@@ -697,27 +913,43 @@ export function DepartmentLogs() {
                                       <th className="px-4 py-3 text-center font-semibold text-slate-700 align-top w-[100px]">
                                         Response
                                       </th>
+                                      {section.items.some(item => (item.checklistItemId?.responseType || 'YES_NO') !== 'TEXT') && (
+                                        <>
                                       <th className="px-4 py-3 text-left font-semibold text-slate-700 align-top min-w-[150px]">
                                         Remarks
                                       </th>
                                       <th className="px-4 py-3 text-left font-semibold text-slate-700 align-top min-w-[150px]">
                                         Responsibility
                                       </th>
+                                        </>
+                                      )}
                                     </tr>
                                   </thead>
                                   <tbody className="divide-y divide-slate-200">
-                                    {section.items.map((item, itemIdx) => (
+                                    {section.items.map((item, itemIdx) => {
+                                      const responseType = item.checklistItemId?.responseType || 'YES_NO'
+                                      const isTextType = responseType === 'TEXT'
+                                      
+                                      return (
                                       <tr key={itemIdx} className="hover:bg-slate-50 transition-colors">
                                         <td className="px-4 py-3 align-top text-slate-800">
                                           <div className="font-medium leading-relaxed">
                                             {item.checklistItemId?.label || 'N/A'}
                                           </div>
                                         </td>
-                                        <td className="px-4 py-3 align-top text-center">
+                                          <td className={`px-4 py-3 align-top ${isTextType ? 'text-left' : 'text-center'}`} colSpan={isTextType ? 3 : 1}>
+                                            {isTextType ? (
+                                              <div className="break-words whitespace-pre-wrap bg-blue-50 border border-blue-200 rounded p-2 text-slate-700">
+                                                {item.responseValue || 'N/A'}
+                                              </div>
+                                            ) : (
                                           <span className="font-semibold text-slate-700">
                                             {item.responseValue || item.yesNoNa || 'N/A'}
                                           </span>
+                                            )}
                                         </td>
+                                          {!isTextType && (
+                                            <>
                                         <td className="px-4 py-3 align-top text-slate-600">
                                           <div className="break-words max-w-[200px]">
                                             {item.remarks && item.remarks !== '-' ? item.remarks : (
@@ -732,8 +964,11 @@ export function DepartmentLogs() {
                                             )}
                                           </div>
                                         </td>
+                                            </>
+                                          )}
                                       </tr>
-                                    ))}
+                                      )
+                                    })}
                                   </tbody>
                                 </table>
                               </div>
@@ -742,24 +977,106 @@ export function DepartmentLogs() {
                         ) : (
                           <p className="text-slate-500 text-sm">No data available for this department.</p>
                         )}
+                        
+                        {/* Signature Section */}
+                        <div className="mt-8 pt-6 border-t-2 border-slate-300">
+                          <h4 className="font-bold text-slate-800 mb-4 text-sm uppercase tracking-wide">
+                            Signature & Verification
+                          </h4>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                            <div className="space-y-4">
+                              <div>
+                                <label className="block text-xs font-semibold text-slate-600 mb-2">
+                                  Name
+                                </label>
+                                <div className="border-b-2 border-slate-400 pb-2 min-h-[30px]">
+                                  <span className="text-slate-800 font-medium">
+                                    {deptData.submittedBy?.name || 'N/A'}
+                                  </span>
+                                </div>
+                              </div>
+                              <div>
+                                <label className="block text-xs font-semibold text-slate-600 mb-2">
+                                  Signature
+                                </label>
+                                <div className="border-b-2 border-slate-400 pb-2 min-h-[30px] flex items-end">
+                                  <span className="text-slate-600 italic text-sm">
+                                    {deptData.submittedBy?.name ? 'Signed' : 'Not available'}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="space-y-4">
+                              <div>
+                                <label className="block text-xs font-semibold text-slate-600 mb-2">
+                                  Date
+                                </label>
+                                <div className="border-b-2 border-slate-400 pb-2 min-h-[30px]">
+                                  <span className="text-slate-800 font-medium">
+                                    {deptData.submittedAt 
+                                      ? new Date(deptData.submittedAt).toLocaleDateString('en-GB', {
+                                          day: '2-digit',
+                                          month: 'short',
+                                          year: 'numeric'
+                                        })
+                                      : 'N/A'}
+                                  </span>
+                                </div>
+                              </div>
+                              <div>
+                                <label className="block text-xs font-semibold text-slate-600 mb-2">
+                                  Time
+                                </label>
+                                <div className="border-b-2 border-slate-400 pb-2 min-h-[30px]">
+                                  <span className="text-slate-800 font-medium">
+                                    {deptData.submittedAt 
+                                      ? new Date(deptData.submittedAt).toLocaleTimeString('en-GB', {
+                                          hour: '2-digit',
+                                          minute: '2-digit',
+                                          second: '2-digit'
+                                        })
+                                      : 'N/A'}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   ))}
                 </div>
-              ) : (
+              ) : selectedIPID && !loadingPreview ? (
                 <div className="text-center py-8 text-slate-500">
-                  <p>No data found for UHID: {selectedUhid}</p>
+                  <p>No checklist data found for IPID: {selectedIPID}</p>
                 </div>
-              )}
+              ) : !selectedIPID && admissions.length === 0 && !loadingAdmissions ? (
+                <div className="text-center py-8 text-slate-500">
+                  <p>No admissions found for UHID: {selectedUhid}</p>
+                </div>
+              ) : null}
             </div>
 
             {/* Footer */}
-            <div className="border-t border-slate-200 bg-slate-50 px-6 py-4 flex justify-end">
+            <div className="border-t border-slate-200 bg-slate-50 px-6 py-4 flex justify-end gap-3">
+              {selectedIPID && (
+                <button
+                  onClick={() => {
+                    setSelectedIPID(null)
+                    setPreviewData(null)
+                  }}
+                  className="bg-slate-600 hover:bg-slate-700 text-white font-semibold px-6 py-2.5 rounded-lg text-sm transition-all shadow-md hover:shadow-lg transform hover:scale-[1.02]"
+                >
+                  ← Back to IPID List
+                </button>
+              )}
               <button
                 onClick={() => {
                   setPreviewModalOpen(false)
                   setSelectedUhid('')
                   setPreviewData(null)
+                  setSelectedIPID(null)
+                  setAdmissions([])
                 }}
                 className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-8 py-2.5 rounded-lg text-sm transition-all shadow-md hover:shadow-lg transform hover:scale-[1.02]"
               >

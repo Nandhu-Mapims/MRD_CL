@@ -203,17 +203,6 @@ export function Layout({ children }) {
                     <span className="sm:hidden">✅</span>
                   </Link>
                   <Link
-                    to="/admin/export"
-                    className={`px-3 py-1.5 sm:px-4 sm:py-2 md:px-5 md:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
-                      isActive('/admin/export')
-                        ? 'bg-blue-600 text-white shadow-md'
-                        : 'text-slate-700 hover:bg-blue-50 hover:text-blue-600'
-                    }`}
-                  >
-                    <span className="hidden sm:inline">📥 Export</span>
-                    <span className="sm:hidden">📥</span>
-                  </Link>
-                  <Link
                     to="/admin/patient-report"
                     className={`px-3 py-1.5 sm:px-4 sm:py-2 md:px-5 md:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
                       isActive('/admin/patient-report')
@@ -357,6 +346,17 @@ export function Layout({ children }) {
                       </div>
                     )}
                   </div>
+                  <Link
+                    to="/user-manual"
+                    className={`px-3 py-1.5 sm:px-4 sm:py-2 md:px-5 md:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
+                      isActive('/user-manual')
+                        ? 'bg-blue-600 text-white shadow-md'
+                        : 'text-slate-700 hover:bg-blue-50 hover:text-blue-600'
+                    }`}
+                  >
+                    <span className="hidden sm:inline">📖 User Manual</span>
+                    <span className="sm:hidden">📖</span>
+                  </Link>
                 </>
               ) : (
                 <>
@@ -395,6 +395,17 @@ export function Layout({ children }) {
                   >
                     <span className="hidden sm:inline">📊 Department Logs</span>
                     <span className="sm:hidden">📊</span>
+                  </Link>
+                  <Link
+                    to="/user-manual"
+                    className={`px-3 py-1.5 sm:px-4 sm:py-2 md:px-5 md:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
+                      isActive('/user-manual')
+                        ? 'bg-blue-600 text-white shadow-md'
+                        : 'text-slate-700 hover:bg-blue-50 hover:text-blue-600'
+                    }`}
+                  >
+                    <span className="hidden sm:inline">📖 User Manual</span>
+                    <span className="sm:hidden">📖</span>
                   </Link>
                 </>
               )}
