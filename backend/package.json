@@ -19,7 +19,8 @@
     "create-checklists": "node src/scripts/createAllDepartmentChecklists.js",
     "seed:nabh": "node src/scripts/seedNABHQualityStandards.js",
     "seed:dummy-forms": "node src/scripts/seedDummyFormsChecklists.js",
-    "seed:missing": "node src/scripts/seedMissingSubmissions.js"
+    "seed:missing": "node src/scripts/seedMissingSubmissions.js",
+    "seed:comprehensive": "node src/scripts/seedComprehensiveData.js"
   },
   "keywords": [],
   "author": "",

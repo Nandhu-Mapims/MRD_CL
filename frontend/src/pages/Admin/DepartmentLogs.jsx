@@ -550,26 +550,18 @@ export function DepartmentLogs() {
                                     >
                                       UHID: {patient.uhid}
                                     </button>
-                                    <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded">
-                                      {patient.submissionCount} submission{patient.submissionCount !== 1 ? 's' : ''}
-                                    </span>
-                                    {patient.editedCount > 0 && (
-                                      <span className="px-2 py-1 bg-orange-100 text-orange-700 text-xs font-semibold rounded">
-                                        {patient.editedCount} edited
-                                      </span>
-                                    )}
                                   </div>
                                   <p className="text-sm text-slate-600 mb-2">
                                     <span className="font-medium">Patient Name:</span> {patient.patientName}
                                   </p>
-                                  <div className="grid grid-cols-2 gap-2 text-xs text-slate-600">
+                                  <div className="text-xs text-slate-600 space-y-1">
                                     <div>
-                                      <span className="font-medium">First Submission:</span>{' '}
-                                      {formatDate(patient.firstSubmission)}
+                                      <span className="font-medium">Department:</span>{' '}
+                                      {deptLog.department.name} ({deptLog.department.code})
                                     </div>
                                     <div>
-                                      <span className="font-medium">Last Submission:</span>{' '}
-                                      {formatDate(patient.lastSubmission)} ({getTimeAgo(patient.lastSubmission)})
+                                      <span className="font-medium">Time:</span>{' '}
+                                      {patient.lastSubmission ? formatDate(patient.lastSubmission) : 'N/A'}
                                     </div>
                                   </div>
                                 </div>
