@@ -243,84 +243,158 @@ export function UserManagement() {
         </div>
       )}
 
-      <div className="bg-white rounded-lg shadow-md overflow-hidden">
-        <table className="w-full">
-          <thead className="bg-gradient-to-r from-blue-700 via-blue-600 to-blue-500 text-white shadow-md">
-            <tr>
-              <th className="text-left px-6 py-4 font-semibold">Name</th>
-              <th className="text-left px-6 py-4 font-semibold">Email</th>
-              <th className="text-left px-6 py-4 font-semibold">Role</th>
-              <th className="text-left px-6 py-4 font-semibold">Department</th>
-              <th className="text-left px-6 py-4 font-semibold">Status</th>
-              <th className="text-left px-6 py-4 font-semibold">Created</th>
-              <th className="text-center px-6 py-4 font-semibold">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-200">
-            {users.length === 0 ? (
+      {/* Desktop Table View */}
+      <div className="hidden md:block bg-white rounded-lg shadow-md overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gradient-to-r from-blue-700 via-blue-600 to-blue-500 text-white shadow-md">
               <tr>
-                <td colSpan="7" className="px-6 py-8 text-center text-slate-500">
-                  No users found. Click "Create New User" to add users.
-                </td>
+                <th className="text-left px-4 lg:px-6 py-3 lg:py-4 font-semibold text-xs lg:text-sm">Name</th>
+                <th className="text-left px-4 lg:px-6 py-3 lg:py-4 font-semibold text-xs lg:text-sm">Email</th>
+                <th className="text-left px-4 lg:px-6 py-3 lg:py-4 font-semibold text-xs lg:text-sm">Role</th>
+                <th className="text-left px-4 lg:px-6 py-3 lg:py-4 font-semibold text-xs lg:text-sm">Department</th>
+                <th className="text-left px-4 lg:px-6 py-3 lg:py-4 font-semibold text-xs lg:text-sm">Status</th>
+                <th className="text-left px-4 lg:px-6 py-3 lg:py-4 font-semibold text-xs lg:text-sm">Created</th>
+                <th className="text-center px-4 lg:px-6 py-3 lg:py-4 font-semibold text-xs lg:text-sm">Actions</th>
               </tr>
-            ) : (
-              users.map((user) => (
-                <tr key={user._id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-6 py-4 font-medium text-slate-800">{user.name}</td>
-                  <td className="px-6 py-4 text-slate-600">{user.email}</td>
-                  <td className="px-6 py-4">
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        user.role === 'admin'
-                          ? 'bg-purple-100 text-purple-700'
-                          : 'bg-blue-100 text-blue-700'
-                      }`}
-                    >
-                      {user.role === 'admin' ? 'Admin' : 'User'}
-                    </span>
+            </thead>
+            <tbody className="divide-y divide-slate-200">
+              {users.length === 0 ? (
+                <tr>
+                  <td colSpan="7" className="px-6 py-8 text-center text-slate-500 text-sm">
+                    No users found. Click "Create New User" to add users.
                   </td>
-                  <td className="px-6 py-4 text-sm text-slate-600">
+                </tr>
+              ) : (
+                users.map((user) => (
+                  <tr key={user._id} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-4 lg:px-6 py-3 lg:py-4 font-medium text-slate-800 text-sm">{user.name}</td>
+                    <td className="px-4 lg:px-6 py-3 lg:py-4 text-slate-600 text-sm">{user.email}</td>
+                    <td className="px-4 lg:px-6 py-3 lg:py-4">
+                      <span
+                        className={`px-2 lg:px-3 py-1 rounded-full text-xs font-medium ${
+                          user.role === 'admin'
+                            ? 'bg-purple-100 text-purple-700'
+                            : 'bg-blue-100 text-blue-700'
+                        }`}
+                      >
+                        {user.role === 'admin' ? 'Admin' : 'User'}
+                      </span>
+                    </td>
+                    <td className="px-4 lg:px-6 py-3 lg:py-4 text-xs lg:text-sm text-slate-600">
+                      {user.department
+                        ? `${user.department.name || user.department} (${user.department.code || ''})`
+                        : user.role === 'admin'
+                          ? 'All Departments'
+                          : 'Not Assigned'}
+                    </td>
+                    <td className="px-4 lg:px-6 py-3 lg:py-4">
+                      <span
+                        className={`px-2 lg:px-3 py-1 rounded-full text-xs font-medium ${
+                          user.isActive
+                            ? 'bg-blue-100 text-blue-700'
+                            : 'bg-slate-100 text-slate-600'
+                        }`}
+                      >
+                        {user.isActive ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
+                    <td className="px-4 lg:px-6 py-3 lg:py-4 text-xs lg:text-sm text-slate-500">
+                      {new Date(user.createdAt).toLocaleDateString()}
+                    </td>
+                    <td className="px-4 lg:px-6 py-3 lg:py-4">
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          onClick={() => handleEdit(user)}
+                          className="text-blue-600 hover:text-blue-700 text-xs lg:text-sm font-medium px-2 lg:px-3 py-1 rounded hover:bg-blue-50 transition-colors"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDelete(user._id)}
+                          className="text-red-600 hover:text-red-700 text-xs lg:text-sm font-medium px-2 lg:px-3 py-1 rounded hover:bg-red-50 transition-colors"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Mobile Card View */}
+      <div className="md:hidden space-y-3">
+        {users.length === 0 ? (
+          <div className="bg-white rounded-lg shadow-md p-6 text-center text-slate-500 text-sm">
+            No users found. Click "Create New User" to add users.
+          </div>
+        ) : (
+          users.map((user) => (
+            <div key={user._id} className="bg-white rounded-lg shadow-md border border-slate-200 p-4">
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex-1">
+                  <h3 className="font-semibold text-slate-800 text-sm mb-1">{user.name}</h3>
+                  <p className="text-xs text-slate-600 mb-2">{user.email}</p>
+                </div>
+                <span
+                  className={`px-2 py-1 rounded-full text-xs font-medium ${
+                    user.role === 'admin'
+                      ? 'bg-purple-100 text-purple-700'
+                      : 'bg-blue-100 text-blue-700'
+                  }`}
+                >
+                  {user.role === 'admin' ? 'Admin' : 'User'}
+                </span>
+              </div>
+              <div className="space-y-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500">Department:</span>
+                  <span className="text-slate-700 font-medium">
                     {user.department
                       ? `${user.department.name || user.department} (${user.department.code || ''})`
                       : user.role === 'admin'
                         ? 'All Departments'
                         : 'Not Assigned'}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        user.isActive
-                          ? 'bg-blue-100 text-blue-700'
-                          : 'bg-slate-100 text-slate-600'
-                      }`}
-                    >
-                      {user.isActive ? 'Active' : 'Inactive'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-slate-500">
-                    {new Date(user.createdAt).toLocaleDateString()}
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center justify-center gap-2">
-                      <button
-                        onClick={() => handleEdit(user)}
-                        className="text-blue-600 hover:text-blue-700 text-sm font-medium px-3 py-1 rounded hover:bg-blue-50 transition-colors"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDelete(user._id)}
-                        className="text-blue-600 hover:text-blue-700 text-sm font-medium px-3 py-1 rounded hover:bg-blue-50 transition-colors"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500">Status:</span>
+                  <span
+                    className={`px-2 py-1 rounded-full text-xs font-medium ${
+                      user.isActive
+                        ? 'bg-blue-100 text-blue-700'
+                        : 'bg-slate-100 text-slate-600'
+                    }`}
+                  >
+                    {user.isActive ? 'Active' : 'Inactive'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500">Created:</span>
+                  <span className="text-slate-700">{new Date(user.createdAt).toLocaleDateString()}</span>
+                </div>
+              </div>
+              <div className="flex gap-2 mt-3 pt-3 border-t border-slate-200">
+                <button
+                  onClick={() => handleEdit(user)}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-3 py-2 rounded-lg transition-colors"
+                >
+                  Edit
+                </button>
+                <button
+                  onClick={() => handleDelete(user._id)}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white text-xs font-medium px-3 py-2 rounded-lg transition-colors"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          ))
+        )}
       </div>
     </div>
   )

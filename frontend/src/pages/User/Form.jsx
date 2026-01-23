@@ -589,14 +589,14 @@ export function Form() {
                 </div>
 
                 {/* Table Layout */}
-                <div className="overflow-x-auto">
-                  <table className="w-full">
+                <div className="overflow-x-auto -mx-2 sm:mx-0">
+                  <table className="w-full min-w-[640px]">
                     <thead className="bg-slate-100 border-b-2 border-slate-200">
                       <tr>
-                        <th className="text-left px-4 py-3 font-bold text-xs text-slate-700 uppercase tracking-wide w-[35%]">Checklist Item</th>
-                        <th className="text-center px-4 py-3 font-bold text-xs text-slate-700 uppercase tracking-wide w-[15%]">Response</th>
-                        <th className="text-left px-4 py-3 font-bold text-xs text-slate-700 uppercase tracking-wide w-[25%]">Remarks</th>
-                        <th className="text-left px-4 py-3 font-bold text-xs text-slate-700 uppercase tracking-wide w-[25%]">Responsibility</th>
+                        <th className="text-left px-2 sm:px-4 py-2 sm:py-3 font-bold text-[10px] sm:text-xs text-slate-700 uppercase tracking-wide w-[35%]">Checklist Item</th>
+                        <th className="text-center px-2 sm:px-4 py-2 sm:py-3 font-bold text-[10px] sm:text-xs text-slate-700 uppercase tracking-wide w-[15%]">Response</th>
+                        <th className="text-left px-2 sm:px-4 py-2 sm:py-3 font-bold text-[10px] sm:text-xs text-slate-700 uppercase tracking-wide w-[25%]">Remarks</th>
+                        <th className="text-left px-2 sm:px-4 py-2 sm:py-3 font-bold text-[10px] sm:text-xs text-slate-700 uppercase tracking-wide w-[25%]">Responsibility</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -609,8 +609,8 @@ export function Form() {
                           
                           return (
                             <tr key={it._id} className={`hover:bg-blue-50 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}`}>
-                              <td className="px-4 py-3 align-top">
-                                <div className="font-semibold text-sm text-slate-800 mb-1">{it.label}</div>
+                              <td className="px-2 sm:px-4 py-2 sm:py-3 align-top">
+                                <div className="font-semibold text-xs sm:text-sm text-slate-800 mb-1">{it.label}</div>
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <span className="text-[10px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
                                     {it.departmentScope === 'ALL' ? 'All departments' : it.department?.name || 'Dept specific'}
@@ -622,7 +622,7 @@ export function Form() {
                                   )}
                                 </div>
                               </td>
-                              <td className="px-4 py-3 align-middle" colSpan={isTextType ? 3 : 1}>
+                              <td className="px-2 sm:px-4 py-2 sm:py-3 align-middle" colSpan={isTextType ? 3 : 1}>
                                 {/* Handle different response types */}
                                 {responseType === 'TEXT' ? (
                                   <textarea

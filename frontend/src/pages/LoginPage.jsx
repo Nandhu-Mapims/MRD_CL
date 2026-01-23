@@ -81,12 +81,6 @@ export function LoginPage() {
             >
               {loading ? 'Logging in...' : 'Sign In'}
             </button>
-            <div className="mt-4 sm:mt-5 md:mt-6 pt-4 sm:pt-5 md:pt-6 border-t border-slate-200">
-              <p className="text-[10px] sm:text-xs text-slate-500 text-center">
-                Default Admin: <span className="font-mono">admin@hospital.com</span> /{' '}
-                <span className="font-mono">Admin@123</span>
-              </p>
-            </div>
           </form>
         </div>
       </div>
