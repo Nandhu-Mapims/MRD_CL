@@ -20,7 +20,8 @@
     "seed:nabh": "node src/scripts/seedNABHQualityStandards.js",
     "seed:dummy-forms": "node src/scripts/seedDummyFormsChecklists.js",
     "seed:missing": "node src/scripts/seedMissingSubmissions.js",
-    "seed:comprehensive": "node src/scripts/seedComprehensiveData.js"
+    "seed:comprehensive": "node src/scripts/seedComprehensiveData.js",
+    "reset-admin": "node src/scripts/resetAdminPassword.js"
   },
   "keywords": [],
   "author": "",
