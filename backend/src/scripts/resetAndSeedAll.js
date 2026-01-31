@@ -2,16 +2,17 @@ const dotenv = require('dotenv');
 const bcrypt = require('bcrypt');
 const connectDB = require('../config/db');
 const Department = require('../models/Department');
-const ChecklistItem = require('../models/ChecklistItem');
 const User = require('../models/User');
 const ChiefDoctor = require('../models/ChiefDoctor');
 const Patient = require('../models/Patient');
 const Admission = require('../models/Admission');
 const FormTemplate = require('../models/FormTemplate');
+const ChecklistItem = require('../models/ChecklistItem');
 const AuditSubmission = require('../models/AuditSubmission');
 
 dotenv.config();
 
+// Department data
 const DEPARTMENTS = [
   { name: 'Obstetrics & Gynecology', code: 'OG' },
   { name: 'General Medicine', code: 'GM' },
@@ -23,51 +24,22 @@ const DEPARTMENTS = [
   { name: 'General Surgery', code: 'GS' },
   { name: 'Anesthesiology', code: 'ANAE' },
   { name: 'Nursing Services', code: 'NUS' },
-  { name: 'Medical Records Department', code: 'MRD' },
-  { name: 'Quality Department', code: 'QUALITY' },
 ];
 
-// Chief Doctors / Unit Chiefs with their respective departments
+// Chief Doctors with their respective departments
 const CHIEF_DOCTORS = [
   { name: 'Dr. Rajesh Kumar', designation: 'Chief of Medicine', deptCode: 'GM' },
   { name: 'Dr. Priya Sharma', designation: 'Chief of Surgery', deptCode: 'GS' },
   { name: 'Dr. Amit Patel', designation: 'Head of Orthopedics', deptCode: 'ORTHO' },
   { name: 'Dr. Sunita Singh', designation: 'Chief Cardiologist', deptCode: 'CS' },
   { name: 'Dr. Vikram Reddy', designation: 'Head of Pediatrics', deptCode: 'PED' },
-  { name: 'Mr. Rajan Nair', designation: 'MRD In-charge', deptCode: 'MRD' },
-  { name: 'Dr. Divya Menon', designation: 'Quality Head', deptCode: 'QUALITY' },
 ];
 
-// HOD (Head of Department) names - one for each department
-const HOD_NAMES = [
-  { name: 'Dr. Reddy', deptCode: 'OG' },
-  { name: 'Dr. Sharma', deptCode: 'GM' },
-  { name: 'Dr. Patel', deptCode: 'ORTHO' },
-  { name: 'Dr. Singh', deptCode: 'PED' },
-  { name: 'Dr. Rao', deptCode: 'OPHTHAL' },
-  { name: 'Dr. Gupta', deptCode: 'CS' },
-  { name: 'Dr. Verma', deptCode: 'ENT' },
-  { name: 'Dr. Mehta', deptCode: 'GS' },
-  { name: 'Dr. Nair', deptCode: 'ANAE' },
-  { name: 'Dr. Iyer', deptCode: 'NUS' },
-  { name: 'Mr. Rajan Nair', deptCode: 'MRD' },
-  { name: 'Dr. Divya Menon', deptCode: 'QUALITY' },
-];
-
-// Auditor / department user names - one per department (clinical, MRD, Quality, etc.)
-const DEPARTMENT_AUDITORS = [
-  { name: 'Dr. Rama Krishna', deptCode: 'OG' },
-  { name: 'Dr. Siva Prasad', deptCode: 'GM' },
-  { name: 'Dr. Venkatesh', deptCode: 'ORTHO' },
-  { name: 'Dr. Lakshmi', deptCode: 'PED' },
-  { name: 'Dr. Ramesh', deptCode: 'OPHTHAL' },
-  { name: 'Dr. Anjali', deptCode: 'CS' },
-  { name: 'Dr. Mohan', deptCode: 'ENT' },
-  { name: 'Dr. Priya', deptCode: 'GS' },
-  { name: 'Dr. Kumar', deptCode: 'ANAE' },
-  { name: 'Dr. Geetha', deptCode: 'NUS' },
-  { name: 'Mr. Suresh Kumar', deptCode: 'MRD' },
-  { name: 'Ms. Meera Joseph', deptCode: 'QUALITY' },
+// Doctor names for department users
+const DOCTOR_NAMES = [
+  'Dr. Rajesh Kumar', 'Dr. Priya Sharma', 'Dr. Amit Patel', 'Dr. Sunita Singh',
+  'Dr. Vikram Reddy', 'Dr. Anjali Gupta', 'Dr. Rahul Verma', 'Dr. Kavita Jain',
+  'Dr. Suresh Mehta', 'Dr. Meera Shah', 'Dr. Arjun Desai', 'Dr. Deepika Rao',
 ];
 
 // Sample patient names
@@ -122,34 +94,34 @@ const randomDoctor = () => {
 
 const RUN = async () => {
   try {
-    console.log('🚀 Starting database seed with correct flow...\n');
+    console.log('🚀 Starting complete database reset and seed...\n');
     await connectDB();
 
     // ============= STEP 1: DELETE ALL DATA =============
-    console.log('🧹 STEP 1: Clearing existing data...');
+    console.log('🧹 STEP 1: Deleting all existing data...');
     await AuditSubmission.deleteMany({});
-    console.log('   ✅ Cleared audit submissions');
+    console.log('   ✅ Deleted all audit submissions');
     await ChecklistItem.deleteMany({});
-    console.log('   ✅ Cleared checklist items');
+    console.log('   ✅ Deleted all checklist items');
     await FormTemplate.deleteMany({});
-    console.log('   ✅ Cleared form templates');
+    console.log('   ✅ Deleted all form templates');
     await Admission.deleteMany({});
-    console.log('   ✅ Cleared admissions');
+    console.log('   ✅ Deleted all admissions');
     await Patient.deleteMany({});
-    console.log('   ✅ Cleared patients');
+    console.log('   ✅ Deleted all patients');
     await ChiefDoctor.deleteMany({});
-    console.log('   ✅ Cleared chief doctors');
+    console.log('   ✅ Deleted all chief doctors');
     await User.deleteMany({});
-    console.log('   ✅ Cleared users');
+    console.log('   ✅ Deleted all users');
     await Department.deleteMany({});
-    console.log('   ✅ Cleared departments\n');
+    console.log('   ✅ Deleted all departments\n');
 
     // ============= STEP 2: SEED DEPARTMENTS =============
     console.log('📋 STEP 2: Creating departments...');
     const createdDepts = await Department.insertMany(DEPARTMENTS);
     console.log(`   ✅ Created ${createdDepts.length} departments\n`);
 
-    // Create department maps for easy lookup
+    // Create department maps
     const deptCodeMap = new Map();
     const deptIdMap = new Map();
     createdDepts.forEach(dept => {
@@ -161,54 +133,48 @@ const RUN = async () => {
     console.log('👥 STEP 3: Creating users...');
     
     // Admin user
-    const adminEmail = 'admin@hospital.com';
     const adminPassword = 'TataTiago@2026';
     const adminHash = await bcrypt.hash(adminPassword, 10);
     const adminUser = await User.create({
       name: 'System Administrator',
-      email: adminEmail,
+      email: 'admin@hospital.com',
       passwordHash: adminHash,
       role: 'admin',
       isActive: true,
     });
-    console.log(`   ✅ Created admin: ${adminEmail}`);
+    console.log(`   ✅ Created admin: admin@hospital.com`);
 
-    // Department users (doctors) with specific names assigned to departments
-    const doctorUsers = [];
+    // Department users with realistic doctor names
+    const departmentUsers = [];
     const userMap = new Map(); // departmentId -> [users]
 
     for (let i = 0; i < createdDepts.length; i++) {
       const dept = createdDepts[i];
+      const deptCode = dept.code.toLowerCase();
+      const email = `${deptCode}@hospital.com`;
+      const password = `${dept.code}@123`;
+      const passwordHash = await bcrypt.hash(password, 10);
       
-      // Find auditor/department user assigned to this department
-      const auditorInfo = DEPARTMENT_AUDITORS.find(d => d.deptCode === dept.code);
-      const auditorName = auditorInfo ? auditorInfo.name : `User ${dept.code}`;
-
-      // Generate email from first name (e.g., "Dr. Rama Krishna" -> "rama@hospital.com", "Mr. Suresh Kumar" -> "suresh.mrd@hospital.com")
-      const nameWithoutPrefix = auditorName.replace(/^(Dr\.|Mr\.|Ms\.)\s*/i, '').trim();
-      const firstName = nameWithoutPrefix.split(' ')[0].toLowerCase();
-      const emailLocal = dept.code === 'MRD' ? `${firstName}.mrd` : dept.code === 'QUALITY' ? `${firstName}.quality` : firstName;
-      const auditorEmail = `${emailLocal}@hospital.com`;
-      const auditorPassword = `${firstName.charAt(0).toUpperCase()}${firstName.substring(1)}@123`;
-      const passwordHash = await bcrypt.hash(auditorPassword, 10);
-
+      // Use realistic doctor name instead of "Department Name User"
+      const doctorName = DOCTOR_NAMES[i % DOCTOR_NAMES.length];
+      
       const user = await User.create({
-        name: auditorName,
-        email: auditorEmail,
+        name: doctorName,
+        email,
         passwordHash,
         role: 'auditor',
         department: dept._id,
         isActive: true,
       });
-
-      doctorUsers.push({ name: auditorName, dept: dept.name, email: auditorEmail, password: auditorPassword });
-
+      
+      departmentUsers.push({ name: doctorName, dept: dept.name, email, password });
+      
       if (!userMap.has(dept._id.toString())) {
         userMap.set(dept._id.toString(), []);
       }
       userMap.get(dept._id.toString()).push(user);
-
-      console.log(`   ✅ Created auditor: ${auditorName} (${auditorEmail}) for ${dept.name}`);
+      
+      console.log(`   ✅ Created user: ${doctorName} (${email}) for ${dept.name}`);
     }
     console.log('');
 
@@ -216,7 +182,6 @@ const RUN = async () => {
     console.log('👨‍⚕️ STEP 4: Creating chief doctors...');
     const createdChiefs = [];
     const chiefUsers = [];
-    const chiefUserMap = new Map(); // Map chief name -> User document
     
     for (let i = 0; i < CHIEF_DOCTORS.length; i++) {
       const chief = CHIEF_DOCTORS[i];
@@ -232,15 +197,15 @@ const RUN = async () => {
       const chiefDoc = await ChiefDoctor.create({
         name: chief.name,
         designation: chief.designation,
-        department: chiefDept._id,
+        department: chiefDept._id, // Link to department
         isActive: true,
         order: i,
       });
       createdChiefs.push(chiefDoc);
       
-      // Create user account for chief with 'chief' role
-      const chiefEmail = `chief.${chiefDept.code.toLowerCase()}@hospital.com`;
-      const chiefPassword = `Chief${chiefDept.code}@123`;
+      // Create user account for chief with 'user' role
+      const chiefEmail = `chief${i + 1}@hospital.com`;
+      const chiefPassword = `Chief@${i + 1}23`;
       const chiefPasswordHash = await bcrypt.hash(chiefPassword, 10);
       
       const chiefUser = await User.create({
@@ -252,55 +217,16 @@ const RUN = async () => {
         isActive: true,
       });
       
-      chiefUserMap.set(chief.name, chiefUser);
-      
       chiefUsers.push({
         name: chief.name,
         designation: chief.designation,
         department: chiefDept.name,
         email: chiefEmail,
         password: chiefPassword,
-        user: chiefUser, // Store user document reference
       });
       
       console.log(`   ✅ Created chief: ${chief.name} (${chief.designation}) - ${chiefDept.name}`);
       console.log(`      Login: ${chiefEmail} / ${chiefPassword}`);
-    }
-    console.log('');
-
-    // ============= STEP 4.5: SEED HOD ACCOUNTS =============
-    console.log('👔 STEP 4.5: Creating HOD (Head of Department) accounts...');
-    const hodUsers = [];
-    
-    for (const dept of createdDepts) {
-      // Find HOD name for this department
-      const hodInfo = HOD_NAMES.find(h => h.deptCode === dept.code);
-      const hodName = hodInfo ? hodInfo.name : `Dr. HOD ${dept.code}`;
-      
-      // Generate email from HOD name (strip Dr./Mr./Ms.)
-      const nameWithoutPrefix = hodName.replace(/^(Dr\.|Mr\.|Ms\.)\s*/i, '').trim();
-      const firstName = nameWithoutPrefix.split(' ')[0].toLowerCase();
-      const hodEmail = `hod.${firstName}@hospital.com`;
-      const hodPassword = `HOD${dept.code}@123`;
-      const hodPasswordHash = await bcrypt.hash(hodPassword, 10);
-      
-      const hodUser = await User.create({
-        name: hodName,
-        email: hodEmail,
-        passwordHash: hodPasswordHash,
-        role: 'chief', // HOD uses 'chief' role to access department logs and doctor performance
-        department: dept._id,
-        isActive: true,
-      });
-      
-      hodUsers.push({
-        name: hodName,
-        department: dept.name,
-        email: hodEmail,
-        password: hodPassword,
-      });
-      
-      console.log(`   ✅ Created HOD: ${hodName} (${hodEmail}) for ${dept.name}`);
     }
     console.log('');
 
@@ -317,6 +243,7 @@ const RUN = async () => {
         departments: [dept._id],
         isMultiDepartment: false,
         isActive: true,
+        version: 1,
       });
       formTemplates.push(form);
       console.log(`   ✅ Created form: ${form.name}`);
@@ -426,11 +353,11 @@ const RUN = async () => {
     
     const patients = [];
     const admissions = [];
-    const sixMonthsAgo = new Date();
-    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    const twoMonthsAgo = new Date();
+    twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
     const today = new Date();
     
-    const numPatients = 50; // Increased from 30 to 50 for more data
+    const numPatients = 30; // 30 patients
     
     for (let i = 1; i <= numPatients; i++) {
       const firstName = FIRST_NAMES[Math.floor(Math.random() * FIRST_NAMES.length)];
@@ -457,7 +384,7 @@ const RUN = async () => {
       const numAdmissions = Math.random() > 0.7 ? 2 : 1;
       
       for (let j = 0; j < numAdmissions; j++) {
-        const admissionDate = randomDate(sixMonthsAgo, today);
+        const admissionDate = randomDate(twoMonthsAgo, today);
         const isDischarged = Math.random() > 0.3;
         const dischargeDate = isDischarged 
           ? new Date(admissionDate.getTime() + Math.random() * (today.getTime() - admissionDate.getTime()))
@@ -493,29 +420,6 @@ const RUN = async () => {
     console.log('📊 STEP 8: Creating audit submissions...');
     
     const submissions = [];
-    const correctiveActions = [
-      'Immediate review of patient identification process',
-      'Staff training on consent documentation',
-      'Medication reconciliation process updated',
-      'Allergy documentation protocol reinforced',
-      'Vital signs monitoring schedule standardized',
-      'Infection control audit conducted',
-      'Patient education materials updated',
-      'Discharge planning checklist implemented',
-    ];
-    
-    const preventiveActions = [
-      'Regular audits scheduled monthly',
-      'Staff competency assessment planned',
-      'Process improvement team formed',
-      'Quality indicators monitoring established',
-      'Training program developed',
-      'Standard operating procedures updated',
-      'Patient feedback system implemented',
-      'Continuous monitoring protocol initiated',
-    ];
-    
-    let submissionCount = 0;
     
     for (const admission of admissions) {
       const deptId = admission.department.toString();
@@ -537,49 +441,31 @@ const RUN = async () => {
       // Select random user from department
       const submittingUser = users[Math.floor(Math.random() * users.length)];
       
-      // Select random chief (prefer chief from same department if available)
-      const deptChiefs = createdChiefs.filter(c => {
-        const chiefDept = deptCodeMap.get(CHIEF_DOCTORS.find(cd => cd.name === c.name)?.deptCode);
-        return chiefDept && chiefDept._id.toString() === deptId;
-      });
-      const assignedChief = deptChiefs.length > 0 
-        ? deptChiefs[Math.floor(Math.random() * deptChiefs.length)]
-        : createdChiefs[Math.floor(Math.random() * createdChiefs.length)];
+      // Select random chief
+      const assignedChief = createdChiefs[Math.floor(Math.random() * createdChiefs.length)];
       
-      // Submit 80-100% of checklist items (increased from 60-100%)
-      const numToSubmit = Math.floor(items.length * (0.8 + Math.random() * 0.2));
+      // Submit 60-100% of checklist items
+      const numToSubmit = Math.floor(items.length * (0.6 + Math.random() * 0.4));
       const selectedItems = items.slice(0, numToSubmit);
       
+      const auditDate = new Date(admission.admissionDate);
+      auditDate.setUTCHours(0, 0, 0, 0);
+      const hour = 8 + Math.floor(Math.random() * 10);
+      const minute = Math.floor(Math.random() * 60);
+      const auditTime = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+
       for (const item of selectedItems) {
-        // 80% compliance rate (80% YES, 20% NO) - slightly lower for more realistic data
-        const responseValue = Math.random() < 0.80 ? 'YES' : 'NO';
-        
-        // Distribute submissions over time (more recent submissions)
-        const daysSinceAdmission = Math.floor((today.getTime() - admission.admissionDate.getTime()) / (1000 * 60 * 60 * 24));
-        const daysAgo = Math.floor(Math.random() * Math.min(daysSinceAdmission, 180)); // Within last 6 months or since admission
-        const submissionDate = new Date(today.getTime() - (daysAgo * 24 * 60 * 60 * 1000));
-        
-        const remarks = Math.random() > 0.5
-          ? ['Completed as per protocol', 'Verified and documented', 'All requirements met', 'Reviewed and confirmed', 'Documented in chart'][Math.floor(Math.random() * 5)]
-          : null;
-        
-        // 30% of submissions have corrective/preventive actions (for chief dashboard)
-        const hasActions = Math.random() < 0.3 && responseValue === 'NO';
-        const corrective = hasActions 
-          ? correctiveActions[Math.floor(Math.random() * correctiveActions.length)]
-          : '';
-        const preventive = hasActions 
-          ? preventiveActions[Math.floor(Math.random() * preventiveActions.length)]
-          : '';
-        
-        // Find chief user who can add actions
-        const chiefUserDoc = chiefUserMap.get(assignedChief.name);
-        const correctivePreventiveBy = hasActions && chiefUserDoc ? chiefUserDoc._id : null;
-        const correctivePreventiveAt = hasActions && correctivePreventiveBy
-          ? new Date(submissionDate.getTime() + Math.random() * (today.getTime() - submissionDate.getTime()))
-          : null;
-        
-        // Ensure createdAt and updatedAt are set explicitly for department logs
+        // 85% compliance rate (85% YES, 15% NO). YES - no remarks; NO - remarks required
+        const responseValue = Math.random() < 0.85 ? 'YES' : 'NO';
+        const submissionDate = new Date(
+          admission.admissionDate.getTime() +
+          Math.random() * (today.getTime() - admission.admissionDate.getTime())
+        );
+        const remarks =
+          responseValue === 'NO'
+            ? ['Documentation pending', 'To be completed', 'Follow-up required', 'Noted for correction'][Math.floor(Math.random() * 4)]
+            : '';
+
         const submission = await AuditSubmission.create({
           department: dept._id,
           formTemplate: form._id,
@@ -592,37 +478,27 @@ const RUN = async () => {
           responseValue,
           yesNoNa: responseValue,
           remarks,
-          responsibility: ['Nurse', 'Doctor', 'Staff', 'Pharmacist', 'Lab Technician'][Math.floor(Math.random() * 5)],
+          responsibility: ['Nurse', 'Doctor', 'Staff'][Math.floor(Math.random() * 3)],
           submittedBy: submittingUser._id,
           submittedAt: submissionDate,
-          createdAt: submissionDate, // Explicitly set for department logs query
-          updatedAt: hasActions && correctivePreventiveAt ? correctivePreventiveAt : submissionDate, // Set to submissionDate unless edited
+          auditDate,
+          auditTime,
           unitChief: assignedChief.name,
-          corrective,
-          preventive,
-          correctivePreventiveBy: correctivePreventiveBy?._id,
-          correctivePreventiveAt,
           isLocked: true,
         });
         submissions.push(submission);
-        submissionCount++;
-        
-        if (submissionCount % 50 === 0) {
-          console.log(`   ✅ Created ${submissionCount} submissions...`);
-        }
       }
     }
     console.log(`   ✅ Created ${submissions.length} audit submissions\n`);
 
     // ============= SUMMARY =============
     console.log('='.repeat(70));
-    console.log('🎉 DATABASE SEED COMPLETED SUCCESSFULLY!');
+    console.log('🎉 DATABASE RESET AND SEED COMPLETED SUCCESSFULLY!');
     console.log('='.repeat(70));
     console.log('\n📊 DATA SUMMARY:');
     console.log(`   ✅ Departments: ${createdDepts.length}`);
-    console.log(`   ✅ Users: ${doctorUsers.length + chiefUsers.length + hodUsers.length + 1} (1 admin + ${chiefUsers.length} chiefs + ${hodUsers.length} HODs + ${doctorUsers.length} auditors)`);
-    console.log(`   ✅ Chief Doctors: ${createdChiefs.length}`);
-    console.log(`   ✅ HOD Accounts: ${hodUsers.length}`);
+    console.log(`   ✅ Users: ${departmentUsers.length + chiefUsers.length + 1} (1 admin + ${chiefUsers.length} chiefs + ${departmentUsers.length} doctors)`);
+    console.log(`   ✅ Chief Doctors: ${createdChiefs.length} (with login accounts)`);
     console.log(`   ✅ Form Templates: ${formTemplates.length}`);
     console.log(`   ✅ Checklist Items: ${Array.from(checklistItemsByForm.values()).reduce((sum, items) => sum + items.length, 0)}`);
     console.log(`   ✅ Patients: ${patients.length}`);
@@ -643,40 +519,25 @@ const RUN = async () => {
     console.log('🔑 LOGIN CREDENTIALS:');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.log('\n👤 ADMIN ACCOUNT:');
-    console.log(`   Email:    ${adminEmail}`);
+    console.log(`   Email:    admin@hospital.com`);
     console.log(`   Password: ${adminPassword}`);
     console.log(`   Role:     Admin (Full Access)`);
     
     console.log('\n👨‍⚕️ CHIEF DOCTOR ACCOUNTS (for validation & performance tracking):');
-    chiefUsers.forEach((chief) => {
-      console.log(`\n   ${chief.name} (${chief.designation}) - ${chief.department}:`);
+    chiefUsers.forEach((chief, i) => {
+      console.log(`\n   ${i + 1}. ${chief.name} (${chief.designation}) - ${chief.department}:`);
       console.log(`   Email:    ${chief.email}`);
       console.log(`   Password: ${chief.password}`);
+      console.log(`   Access:   Chief Dashboard, Doctor Performance`);
     });
     
-    console.log('\n👔 HOD ACCOUNTS (Head of Department - View logs & doctor performance):');
-    hodUsers.forEach((hod) => {
-      console.log(`\n   ${hod.name} - ${hod.department}:`);
-      console.log(`   Email:    ${hod.email}`);
-      console.log(`   Password: ${hod.password}`);
-      console.log(`   Access:   Department Logs, Auditor Performance`);
-    });
-    
-    console.log('\n👥 AUDITOR ACCOUNTS (Can submit audit forms):');
-    doctorUsers.forEach(u => {
+    console.log('\n👥 DEPARTMENT USERS (Doctors):');
+    departmentUsers.forEach(u => {
       console.log(`\n   ${u.name} - ${u.dept}:`);
       console.log(`   Email:    ${u.email}`);
       console.log(`   Password: ${u.password}`);
     });
     
-    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('\n⚠️  SECURITY NOTE:');
-    console.log('   Please change all default passwords after first login!');
-    console.log('\n📝 PASSWORD PATTERN:');
-    console.log('   Admin:    TataTiago@2026');
-    console.log('   Doctors:  {FirstName}@123 (e.g., Rama@123, Siva@123)');
-    console.log('   Chiefs:   Chief{DEPT_CODE}@123 (e.g., ChiefOG@123)');
-    console.log('   HODs:     HOD{DEPT_CODE}@123 (e.g., HODOG@123, HODGM@123)');
     console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.log('\n✅ Database is ready to use!');
     console.log('🚀 Start your backend: npm start');
@@ -692,5 +553,3 @@ const RUN = async () => {
 };
 
 RUN();
-
-

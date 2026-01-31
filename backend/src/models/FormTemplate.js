@@ -12,6 +12,14 @@ const formTemplateSchema = new mongoose.Schema(
     ],
     // Flag to indicate this form is common (e.g. ANAE, NUS) for all departments
     isCommon: { type: Boolean, default: false },
+    // Assigned users (doctors) who can access this form
+    // If empty, all users in the department can access
+    assignedUsers: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+      },
+    ],
     // Sections within the form (e.g., "ADMISSION SLIP", "CONSENT", "OT", etc.)
     sections: [
       {

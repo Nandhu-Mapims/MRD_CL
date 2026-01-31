@@ -11,8 +11,55 @@ export function DepartmentLogs() {
   const [previewData, setPreviewData] = useState(null)
   const [loadingPreview, setLoadingPreview] = useState(false)
   const [admissions, setAdmissions] = useState([])
+  const [groupsFromUHID, setGroupsFromUHID] = useState([])
   const [selectedIPID, setSelectedIPID] = useState(null)
+  const [selectedGroup, setSelectedGroup] = useState(null)
   const [loadingAdmissions, setLoadingAdmissions] = useState(false)
+
+  // Build preview data from submissions (date+time+IPID group)
+  const buildPreviewFromSubmissions = (submissions, uhidVal) => {
+    if (!submissions || submissions.length === 0) return null
+    const patient = submissions[0]?.patient || { uhid: uhidVal || selectedUhid, patientName: submissions[0]?.patientName || 'N/A' }
+    const deptMap = new Map()
+    submissions.forEach(sub => {
+      const deptId = sub.department?._id || sub.department
+      const deptName = sub.department?.name || 'Unknown Department'
+      const deptCode = sub.department?.code || 'N/A'
+      if (!deptMap.has(deptId)) {
+        deptMap.set(deptId, {
+          department: { _id: deptId, name: deptName, code: deptCode },
+          sections: new Map(),
+          submittedBy: sub.submittedBy,
+          submittedAt: sub.submittedAt
+        })
+      }
+      const deptData = deptMap.get(deptId)
+      const sectionName = sub.checklistItemId?.section || 'General'
+      if (!deptData.sections.has(sectionName)) {
+        deptData.sections.set(sectionName, { sectionName, items: [] })
+      }
+      deptData.sections.get(sectionName).items.push({
+        checklistItemId: {
+          _id: sub.checklistItemId?._id,
+          label: sub.checklistItemId?.label || 'N/A',
+          responseType: sub.checklistItemId?.responseType || 'YES_NO'
+        },
+        responseValue: sub.responseValue || sub.yesNoNa || 'N/A',
+        remarks: sub.remarks || '-',
+        corrective: sub.corrective || '-',
+        preventive: sub.preventive || '-',
+      })
+    })
+    return {
+      patient,
+      departments: Array.from(deptMap.values()).map(dept => ({
+        department: dept.department,
+        sections: Array.from(dept.sections.values()),
+        submittedBy: dept.submittedBy,
+        submittedAt: dept.submittedAt
+      }))
+    }
+  }
 
   useEffect(() => {
     loadLogs()
@@ -45,78 +92,65 @@ export function DepartmentLogs() {
     setExpandedDepts(newExpanded)
   }
 
-  // Load admissions for UHID
+  // Load admissions or submission groups for UHID (prefer grouped by date+time+IPID)
   const loadAdmissionsForPreview = async (uhid) => {
     if (!uhid || !uhid.trim()) return
     
     setLoadingAdmissions(true)
     setAdmissions([])
+    setGroupsFromUHID([])
     setSelectedIPID(null)
+    setSelectedGroup(null)
     setPreviewData(null)
     
     try {
       const normalizedUHID = uhid.trim().toUpperCase()
-      console.log('[loadAdmissionsForPreview] Fetching admissions for UHID:', normalizedUHID)
-      const url = `/admissions/patient/${encodeURIComponent(normalizedUHID)}`
-      console.log('[loadAdmissionsForPreview] API URL:', url)
-      console.log('[loadAdmissionsForPreview] Making API call at:', new Date().toISOString())
-      
-      const startTime = Date.now()
-      
-      // Add timeout wrapper
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => {
-          reject(new Error('Request timeout: Backend server may not be responding. Please check if the server is running on port 5000.'))
-        }, 15000) // 15 second timeout
-      })
-      
-      const admissionsData = await Promise.race([
-        apiClient.get(url),
-        timeoutPromise
-      ])
-      
-      const endTime = Date.now()
-      console.log(`[loadAdmissionsForPreview] API call completed in ${endTime - startTime}ms`)
-      console.log('[loadAdmissionsForPreview] Admissions data received:', admissionsData)
-      
-      // Handle different response formats
-      let admissionsList = []
-      if (Array.isArray(admissionsData)) {
-        admissionsList = admissionsData
-      } else if (admissionsData?.admissions) {
-        admissionsList = admissionsData.admissions
-      } else if (admissionsData?.data?.admissions) {
-        admissionsList = admissionsData.data.admissions
+      let groups = []
+      try {
+        const auditsRes = await apiClient.get(`/audits/uhid/${encodeURIComponent(normalizedUHID)}`)
+        if (auditsRes?.groupedByDateAndIPID && auditsRes.groupedByDateAndIPID.length > 0) {
+          groups = auditsRes.groupedByDateAndIPID
+          setGroupsFromUHID(groups)
+        }
+      } catch (auditErr) {
+        if (auditErr.response?.status !== 404) console.error('Error loading audits by UHID:', auditErr)
       }
-      
-      setAdmissions(admissionsList)
-      
-      // If no admissions found, try to get submissions to create a virtual admission
-      if (admissionsList.length === 0) {
-        try {
-          const submissions = await apiClient.get(`/audits/uhid/${encodeURIComponent(normalizedUHID)}`)
-          if (submissions && submissions.length > 0) {
-            // Extract unique IPIDs from submissions
-            const uniqueIPIDs = [...new Set(submissions.map(s => s.ipid).filter(Boolean))]
-            if (uniqueIPIDs.length > 0) {
-              // Create virtual admission objects from submissions
+      if (groups.length === 0) {
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('Request timeout: Backend server may not be responding. Please check if the server is running on port 5000.')), 15000)
+        })
+        const admissionsData = await Promise.race([
+          apiClient.get(`/admissions/patient/${encodeURIComponent(normalizedUHID)}`),
+          timeoutPromise
+        ])
+        let admissionsList = []
+        if (Array.isArray(admissionsData)) admissionsList = admissionsData
+        else if (admissionsData?.admissions) admissionsList = admissionsData.admissions
+        else if (admissionsData?.data?.admissions) admissionsList = admissionsData.data.admissions
+        setAdmissions(admissionsList)
+        if (admissionsList.length === 0) {
+          try {
+            const submissions = await apiClient.get(`/audits/uhid/${encodeURIComponent(normalizedUHID)}`)
+            const raw = submissions?.submissions || (Array.isArray(submissions) ? submissions : [])
+            if (raw.length > 0) {
+              const uniqueIPIDs = [...new Set(raw.map(s => s.ipid).filter(Boolean))]
               const virtualAdmissions = uniqueIPIDs.map(ipid => {
-                const subWithIPID = submissions.find(s => s.ipid === ipid)
+                const subWithIPID = raw.find(s => s.ipid === ipid)
                 return {
-                  ipid: ipid,
+                  ipid,
                   uhid: normalizedUHID,
                   admissionDate: subWithIPID?.submittedAt || new Date(),
                   status: 'Admitted',
                   ward: subWithIPID?.ward || subWithIPID?.patient?.ward || 'N/A',
                   unitNo: subWithIPID?.unitNo || subWithIPID?.patient?.unitNo || 'N/A',
-                  isVirtual: true // Flag to indicate this is created from submissions
+                  isVirtual: true
                 }
               })
               setAdmissions(virtualAdmissions)
             }
+          } catch (subErr) {
+            console.error('Error loading submissions as fallback:', subErr)
           }
-        } catch (subErr) {
-          console.error('Error loading submissions as fallback:', subErr)
         }
       }
     } catch (err) {
@@ -232,7 +266,8 @@ export function DepartmentLogs() {
           },
           responseValue: sub.responseValue || sub.yesNoNa || 'N/A',
           remarks: sub.remarks || '-',
-          responsibility: sub.responsibility || '-',
+          corrective: sub.corrective || '-',
+          preventive: sub.preventive || '-',
         })
       })
       
@@ -275,6 +310,13 @@ export function DepartmentLogs() {
 
   const handleIPIDClick = async (ipid) => {
     await loadChecklistByIPID(ipid)
+  }
+
+  const handleGroupClick = (group) => {
+    setSelectedGroup(group)
+    setSelectedIPID(group.ipid)
+    const data = buildPreviewFromSubmissions(group.submissions, selectedUhid)
+    if (data) setPreviewData(data)
   }
 
   const formatDate = (dateString) => {
@@ -329,17 +371,19 @@ export function DepartmentLogs() {
   if (error) {
     return (
       <div className="space-y-6">
-        <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl shadow-xl p-6 sm:p-8">
-          <h2 className="text-2xl sm:text-3xl font-bold mb-2">Department Activity Logs</h2>
-          <p className="text-blue-100">Track form submissions and edits across all departments</p>
+        <div className="bg-white/95 backdrop-blur-md border border-indigo-200/50 rounded-2xl shadow-xl px-5 py-4 sm:py-5">
+          <h1 className="text-2xl sm:text-3xl font-semibold text-slate-900">Department Activity Logs</h1>
+          <p className="mt-1 text-sm text-slate-600">Track form submissions and edits across all departments</p>
         </div>
-        <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-6 text-center">
-          <div className="text-4xl mb-4">⚠️</div>
-          <p className="text-blue-800 font-semibold mb-2">Error Loading Department Logs</p>
-          <p className="text-blue-600 text-sm mb-4">{error}</p>
+        <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
+          <svg className="w-12 h-12 mx-auto mb-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <p className="text-red-800 font-semibold mb-2">Error Loading Department Logs</p>
+          <p className="text-red-600 text-sm mb-4">{error}</p>
           <button
             onClick={loadLogs}
-            className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+            className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors shadow-sm"
           >
             Retry
           </button>
@@ -351,13 +395,15 @@ export function DepartmentLogs() {
   if (!logs || !logs.departments || logs.departments.length === 0) {
     return (
       <div className="space-y-6">
-        <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl shadow-xl p-6 sm:p-8">
-          <h2 className="text-2xl sm:text-3xl font-bold mb-2">Department Activity Logs</h2>
-          <p className="text-blue-100">Track form submissions and edits across all departments</p>
+        <div className="bg-white/95 backdrop-blur-md border border-indigo-200/50 rounded-2xl shadow-xl px-5 py-4 sm:py-5">
+          <h1 className="text-2xl sm:text-3xl font-semibold text-slate-900">Department Activity Logs</h1>
+          <p className="mt-1 text-sm text-slate-600">Track form submissions and edits across all departments</p>
         </div>
-        <div className="bg-white rounded-xl shadow-lg p-12 text-center border-2 border-dashed border-slate-300">
-          <div className="text-6xl mb-4">📋</div>
-          <p className="text-slate-600 text-lg font-medium mb-2">No department activity yet</p>
+        <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-xl p-12 text-center border border-dashed border-slate-300">
+          <svg className="w-16 h-16 mx-auto mb-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          <p className="text-slate-700 text-lg font-medium mb-2">No department activity yet</p>
           <p className="text-sm text-slate-500">
             Start submitting forms to see activity logs here
           </p>
@@ -369,64 +415,63 @@ export function DepartmentLogs() {
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-blue-800 text-white rounded-xl shadow-2xl p-6 sm:p-8 relative overflow-hidden">
-        <div className="absolute inset-0 bg-black opacity-5"></div>
-        <div className="relative z-10">
-          <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-2 drop-shadow-lg">
-            Department Activity Logs
-          </h2>
-          <p className="text-blue-100 text-sm sm:text-base">
-            Track form submissions, submission dates, and recent edits for all departments
-          </p>
-        </div>
-        <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-5 rounded-full -mr-32 -mt-32"></div>
-        <div className="absolute bottom-0 left-0 w-48 h-48 bg-white opacity-5 rounded-full -ml-24 -mb-24"></div>
+      <div className="bg-white/95 backdrop-blur-md border border-indigo-200/50 rounded-2xl shadow-xl px-5 py-4 sm:py-5">
+        <h1 className="text-2xl sm:text-3xl font-semibold text-slate-900">Department Activity Logs</h1>
+        <p className="mt-1 text-sm text-slate-600">
+          Track form submissions, submission dates, and recent edits for all departments
+        </p>
       </div>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-gradient-to-br from-white to-blue-50 rounded-xl shadow-lg p-6 border border-blue-100">
+        <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-xl p-6 border border-slate-200">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-slate-600 mb-1 font-medium uppercase tracking-wide">
                 Total Departments
               </p>
-              <p className="text-3xl font-bold text-blue-600">{logs.totalDepartments}</p>
+              <p className="text-3xl font-bold text-slate-900">{logs.totalDepartments}</p>
             </div>
-            <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
-              <span className="text-2xl">🏢</span>
+            <div className="w-14 h-14 bg-indigo-50 rounded-xl flex items-center justify-center">
+              <svg className="w-7 h-7 text-indigo-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+              </svg>
             </div>
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-white to-green-50 rounded-xl shadow-lg p-6 border border-green-100">
+        <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-xl p-6 border border-slate-200">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-slate-600 mb-1 font-medium uppercase tracking-wide">
                 Total Forms Submitted
               </p>
-              <p className="text-3xl font-bold text-green-600">
+              <p className="text-3xl font-bold text-slate-900">
                 {logs.departments.reduce((sum, dept) => sum + dept.totalFormsSubmitted, 0)}
               </p>
             </div>
-            <div className="w-14 h-14 bg-gradient-to-br from-green-500 to-green-600 rounded-xl flex items-center justify-center shadow-lg">
-              <span className="text-2xl">📝</span>
+            <div className="w-14 h-14 bg-indigo-50 rounded-xl flex items-center justify-center">
+              <svg className="w-7 h-7 text-indigo-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
             </div>
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-white to-orange-50 rounded-xl shadow-lg p-6 border border-orange-100">
+        <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-xl p-6 border border-slate-200">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-slate-600 mb-1 font-medium uppercase tracking-wide">
                 Recently Edited
               </p>
-              <p className="text-3xl font-bold text-orange-600">
+              <p className="text-3xl font-bold text-amber-600">
                 {logs.departments.reduce((sum, dept) => sum + dept.recentlyEditedCount, 0)}
               </p>
             </div>
-            <div className="w-14 h-14 bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl flex items-center justify-center shadow-lg">
-              <span className="text-2xl">✏️</span>
+            <div className="w-14 h-14 bg-amber-50 rounded-xl flex items-center justify-center">
+              <svg className="w-7 h-7 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
             </div>
           </div>
         </div>
@@ -440,20 +485,20 @@ export function DepartmentLogs() {
           return (
             <div
               key={deptLog.department._id}
-              className="bg-white rounded-xl shadow-lg border border-slate-100 overflow-hidden"
+              className="bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-slate-200 overflow-hidden"
             >
               {/* Department Header */}
               <div
-                className="bg-gradient-to-r from-blue-50 to-blue-100 p-4 sm:p-6 cursor-pointer hover:from-blue-100 hover:to-blue-200 transition-colors"
+                className="bg-slate-50 p-4 sm:p-6 cursor-pointer hover:bg-slate-100 transition-colors border-b border-slate-200"
                 onClick={() => toggleExpand(deptLog.department._id)}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
-                      <h3 className="text-lg sm:text-xl font-bold text-slate-800">
+                      <h3 className="text-lg sm:text-xl font-semibold text-slate-900">
                         {deptLog.department.name}
                       </h3>
-                      <span className="px-3 py-1 bg-blue-600 text-white text-xs font-semibold rounded-full">
+                      <span className="px-3 py-1 bg-indigo-50 text-indigo-700 text-xs font-semibold rounded-full border border-indigo-100">
                         {deptLog.department.code}
                       </span>
                     </div>
@@ -528,8 +573,8 @@ export function DepartmentLogs() {
                   {/* Patient-Based View (Primary for single department) */}
                   {deptLog.patients && deptLog.patients.length > 0 && (
                     <div>
-                      <h4 className="text-base font-bold text-slate-800 mb-3 flex items-center gap-2">
-                        <span>👤</span> Forms by Patient ID (UHID) - {deptLog.patients.length} Patient{deptLog.patients.length !== 1 ? 's' : ''}
+                      <h4 className="text-base font-semibold text-slate-900 mb-3">
+                        Forms by Patient ID (UHID) - {deptLog.patients.length} Patient{deptLog.patients.length !== 1 ? 's' : ''}
                       </h4>
                       <div className="bg-slate-50 rounded-lg p-4 max-h-96 overflow-y-auto">
                         <div className="space-y-3">
@@ -546,7 +591,7 @@ export function DepartmentLogs() {
                                       onClick={() => {
                                         loadPreviewData(patient.uhid)
                                       }}
-                                      className="font-bold text-lg text-blue-600 hover:text-blue-800 hover:underline transition-colors"
+                                      className="font-semibold text-lg text-indigo-700 hover:text-indigo-800 hover:underline transition-colors"
                                     >
                                       UHID: {patient.uhid}
                                     </button>
@@ -576,8 +621,8 @@ export function DepartmentLogs() {
                   {/* Submission Dates Timeline */}
                   {deptLog.submissionDates && deptLog.submissionDates.length > 0 && (
                     <div>
-                      <h4 className="text-base font-bold text-slate-800 mb-3 flex items-center gap-2">
-                        <span>📅</span> Submission Timeline (Last 30 Days)
+                      <h4 className="text-base font-semibold text-slate-900 mb-3">
+                        Submission Timeline (Last 30 Days)
                       </h4>
                       <div className="bg-slate-50 rounded-lg p-4 max-h-64 overflow-y-auto">
                         <div className="space-y-2">
@@ -610,8 +655,8 @@ export function DepartmentLogs() {
                   {/* Recently Edited Forms */}
                   {deptLog.recentlyEdited && deptLog.recentlyEdited.length > 0 && (
                     <div>
-                      <h4 className="text-base font-bold text-slate-800 mb-3 flex items-center gap-2">
-                        <span>✏️</span> Recently Edited Forms
+                      <h4 className="text-base font-semibold text-slate-900 mb-3">
+                        Recently Edited Forms
                       </h4>
                       <div className="bg-orange-50 rounded-lg p-4 max-h-96 overflow-y-auto">
                         <div className="space-y-2">
@@ -664,8 +709,8 @@ export function DepartmentLogs() {
                   {/* All Recent Submissions */}
                   {deptLog.allSubmissions && deptLog.allSubmissions.length > 0 && (
                     <div>
-                      <h4 className="text-base font-bold text-slate-800 mb-3 flex items-center gap-2">
-                        <span>📋</span> Recent Submissions (Last 100)
+                      <h4 className="text-base font-semibold text-slate-900 mb-3">
+                        Recent Submissions (Last 100)
                       </h4>
                       <div className="bg-slate-50 rounded-lg p-4 max-h-96 overflow-y-auto">
                         <div className="overflow-x-auto">
@@ -745,25 +790,21 @@ export function DepartmentLogs() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-2 sm:p-4">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-6xl max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col">
             {/* Header */}
-            <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-4 flex items-center justify-between shadow-lg">
+            <div className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
               <div className="flex-1">
-                <h2 className="text-xl font-bold mb-1 flex items-center gap-2">
-                  <span>📋</span>
+                <h2 className="text-xl font-semibold text-slate-900 mb-1">
                   {selectedIPID ? (
                     <>Checklist - IPID: <span className="font-mono">{selectedIPID}</span></>
                   ) : (
                     <>Admissions - UHID: <span className="font-mono">{selectedUhid}</span></>
                   )}
                 </h2>
-                <p className="text-sm text-blue-100 flex items-center gap-2">
+                <p className="text-sm text-slate-600 flex items-center gap-2">
                   {previewData?.patient?.patientName ? (
-                    <>
-                      <span>👤</span>
-                      <span className="font-medium">Patient: {previewData.patient.patientName}</span>
-                    </>
+                    <span className="font-medium">Patient: {previewData.patient.patientName}</span>
                   ) : (
                     <span className="flex items-center gap-2">
-                      <span className="inline-block animate-spin rounded-full h-3 w-3 border-t-2 border-b-2 border-white"></span>
+                      <span className="inline-block animate-spin rounded-full h-3 w-3 border-t-2 border-b-2 border-indigo-700"></span>
                       Loading...
                     </span>
                   )}
@@ -775,7 +816,7 @@ export function DepartmentLogs() {
                   setSelectedUhid('')
                   setPreviewData(null)
                 }}
-                className="ml-4 text-white hover:text-blue-200 hover:bg-blue-700 rounded-full p-2 transition-colors text-2xl font-bold w-10 h-10 flex items-center justify-center"
+                className="ml-4 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full p-2 transition-colors text-2xl font-bold w-10 h-10 flex items-center justify-center"
                 aria-label="Close modal"
               >
                 ×
@@ -784,25 +825,59 @@ export function DepartmentLogs() {
 
             {/* Content */}
             <div className="flex-1 overflow-y-auto p-6">
-              {/* IPID List - Show when UHID is entered but no IPID selected */}
-              {selectedUhid && !selectedIPID && (
+              {/* List: groups (date+time+IPID) or admissions (IPID) */}
+              {selectedUhid && !selectedIPID && !previewData?.departments?.length && (
                 <div className="mb-6">
                   <h3 className="text-lg font-bold text-slate-800 mb-4">
-                    📋 Select Admission (IPID) for UHID: {selectedUhid}
+                    {groupsFromUHID.length > 0 ? '📋 Select Audit (Date + Time + IPID)' : '📋 Select Admission (IPID)'} for UHID: {selectedUhid}
                   </h3>
                   {loadingAdmissions ? (
                     <div className="text-center py-8">
                       <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-600 mb-4"></div>
-                      <div className="text-slate-600 font-medium">Loading admissions...</div>
+                      <div className="text-slate-600 font-medium">Loading...</div>
                       <div className="text-xs text-slate-400 mt-2">
                         If this takes too long, check if backend server is running on port 5000
                       </div>
+                    </div>
+                  ) : groupsFromUHID.length > 0 ? (
+                    <div className="space-y-2">
+                      {groupsFromUHID.map((group, idx) => {
+                        const dateStr = group.date ? new Date(group.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'
+                        const timeStr = group.auditTime || (group.submissions?.[0]?.submittedAt ? new Date(group.submissions[0].submittedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '')
+                        return (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => handleGroupClick(group)}
+                            className="w-full text-left p-4 rounded-lg border-2 border-slate-200 bg-white hover:border-blue-400 hover:bg-blue-50 transition-all"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-3 mb-2 flex-wrap">
+                                  <span className="text-lg font-bold text-blue-600 hover:text-blue-800 hover:underline">
+                                    IPID: {group.ipid}
+                                  </span>
+                                  <span className="text-sm font-medium text-slate-600 bg-slate-100 px-2 py-1 rounded">{dateStr}</span>
+                                  <span className="text-sm font-medium text-indigo-700 bg-indigo-50 px-2 py-1 rounded">{timeStr}</span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2 text-sm text-slate-600">
+                                  <div><span className="font-medium">Ward:</span> {group.submissions?.[0]?.ward || group.submissions?.[0]?.patient?.ward || 'N/A'}</div>
+                                  <div><span className="font-medium">Unit:</span> {group.submissions?.[0]?.unitNo || group.submissions?.[0]?.patient?.unitNo || 'N/A'}</div>
+                                </div>
+                              </div>
+                              <div className="ml-4">
+                                <span className="text-blue-600 text-sm font-semibold">View Checklist →</span>
+                              </div>
+                            </div>
+                          </button>
+                        )
+                      })}
                     </div>
                   ) : admissions.length === 0 ? (
                     <div className="text-center py-8 text-slate-500 bg-yellow-50 border border-yellow-200 rounded-lg">
                       <div className="text-4xl mb-2">📭</div>
                       <p className="font-semibold mb-1">No admissions found</p>
-                      <p className="text-sm">No admission records found for UHID: {selectedUhid}</p>
+                      <p className="text-sm">No admission or audit records for UHID: {selectedUhid}</p>
                       {previewData?.error && (
                         <p className="text-xs mt-2 text-red-600">{previewData.error}</p>
                       )}
@@ -824,12 +899,8 @@ export function DepartmentLogs() {
                                 </span>
                               </div>
                               <div className="grid grid-cols-2 gap-2 text-sm text-slate-600">
-                                <div>
-                                  <span className="font-medium">Ward:</span> {admission.ward}
-                                </div>
-                                <div>
-                                  <span className="font-medium">Unit:</span> {admission.unitNo}
-                                </div>
+                                <div><span className="font-medium">Ward:</span> {admission.ward}</div>
+                                <div><span className="font-medium">Unit:</span> {admission.unitNo}</div>
                               </div>
                             </div>
                             <div className="ml-4">
@@ -911,7 +982,10 @@ export function DepartmentLogs() {
                                         Remarks
                                       </th>
                                       <th className="px-4 py-3 text-left font-semibold text-slate-700 align-top min-w-[150px]">
-                                        Responsibility
+                                        Corrective
+                                      </th>
+                                      <th className="px-4 py-3 text-left font-semibold text-slate-700 align-top min-w-[150px]">
+                                        Preventive
                                       </th>
                                         </>
                                       )}
@@ -929,7 +1003,7 @@ export function DepartmentLogs() {
                                             {item.checklistItemId?.label || 'N/A'}
                                           </div>
                                         </td>
-                                          <td className={`px-4 py-3 align-top ${isTextType ? 'text-left' : 'text-center'}`} colSpan={isTextType ? 3 : 1}>
+                                          <td className={`px-4 py-3 align-top ${isTextType ? 'text-left' : 'text-center'}`} colSpan={isTextType ? 4 : 1}>
                                             {isTextType ? (
                                               <div className="break-words whitespace-pre-wrap bg-blue-50 border border-blue-200 rounded p-2 text-slate-700">
                                                 {item.responseValue || 'N/A'}
@@ -951,7 +1025,14 @@ export function DepartmentLogs() {
                                         </td>
                                         <td className="px-4 py-3 align-top text-slate-600">
                                           <div className="break-words max-w-[150px]">
-                                            {item.responsibility && item.responsibility !== '-' ? item.responsibility : (
+                                            {item.corrective && item.corrective !== '-' ? item.corrective : (
+                                              <span className="text-slate-400 italic">-</span>
+                                            )}
+                                          </div>
+                                        </td>
+                                        <td className="px-4 py-3 align-top text-slate-600">
+                                          <div className="break-words max-w-[150px]">
+                                            {item.preventive && item.preventive !== '-' ? item.preventive : (
                                               <span className="text-slate-400 italic">-</span>
                                             )}
                                           </div>
@@ -1055,11 +1136,12 @@ export function DepartmentLogs() {
                 <button
                   onClick={() => {
                     setSelectedIPID(null)
+                    setSelectedGroup(null)
                     setPreviewData(null)
                   }}
-                  className="bg-slate-600 hover:bg-slate-700 text-white font-semibold px-6 py-2.5 rounded-lg text-sm transition-all shadow-md hover:shadow-lg transform hover:scale-[1.02]"
+                  className="border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-medium px-6 py-2.5 rounded-lg text-sm transition-all"
                 >
-                  ← Back to IPID List
+                  ← Back to List
                 </button>
               )}
               <button
@@ -1068,9 +1150,11 @@ export function DepartmentLogs() {
                   setSelectedUhid('')
                   setPreviewData(null)
                   setSelectedIPID(null)
+                  setSelectedGroup(null)
                   setAdmissions([])
+                  setGroupsFromUHID([])
                 }}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-8 py-2.5 rounded-lg text-sm transition-all shadow-md hover:shadow-lg transform hover:scale-[1.02]"
+                className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-medium px-8 py-2.5 rounded-lg text-sm transition-all shadow-sm"
               >
                 Close
               </button>

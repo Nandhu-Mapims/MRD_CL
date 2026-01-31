@@ -5,7 +5,7 @@ const Admission = require('../models/Admission');
 // User submit audit
 exports.submitAudit = async (req, res) => {
   try {
-    const { uhid, patientName, departmentId, formTemplateId, items, ward, unitNo, ipid, admissionDate } = req.body;
+    const { uhid, patientName, departmentId, formTemplateId, items, ward, unitNo, ipid, admissionDate, unitChief, auditDate: auditDateInput, auditTime: auditTimeInput } = req.body;
     // JWT payload uses 'sub' field for user ID, not '_id'
     const userId = req.user?.sub || req.user?._id;
 
@@ -79,22 +79,42 @@ exports.submitAudit = async (req, res) => {
       }
     }
 
-    // Check for duplicate submission: same UHID, IPID, and Department
-    // This check must happen BEFORE creating any submissions to prevent data override
+    // Audit date and time for uniqueness: Dept+UHID+IPID+Date+Time (one entry per date+time)
+    const now = new Date();
+    const auditDateStr = auditDateInput && typeof auditDateInput === 'string' ? auditDateInput.trim() : null;
+    const auditTimeStr = auditTimeInput && typeof auditTimeInput === 'string' ? auditTimeInput.trim() : null;
+    const auditDate = auditDateStr ? new Date(auditDateStr + 'T00:00:00.000Z') : new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+    const auditTime = auditTimeStr || now.getUTCHours().toString().padStart(2, '0') + ':' + now.getUTCMinutes().toString().padStart(2, '0');
+
+    // Check for duplicate: same UHID, IPID, Department, Date, and Time
     const existingSubmission = await AuditSubmission.findOne({
       uhid: normalizedUHID,
       ipid: normalizedIPID,
       department: departmentId,
+      auditDate,
+      auditTime,
     });
 
     if (existingSubmission) {
-      return res.status(400).json({ 
-        message: 'No Duplicate IPID: A checklist has already been submitted for this UHID, IPID, and Department combination. Only one submission is allowed per department for the same admission.',
+      return res.status(400).json({
+        message: 'Duplicate: A checklist has already been submitted for this UHID, IPID, Department, Date and Time. Use a different date/time for another audit.',
         existingSubmission: {
           submittedAt: existingSubmission.submittedAt,
           submittedBy: existingSubmission.submittedBy,
+          auditDate: existingSubmission.auditDate,
+          auditTime: existingSubmission.auditTime,
         }
       });
+    }
+
+    // YES - no remarks needed; NO - remarks required
+    for (const it of items) {
+      const val = (it.responseValue || it.yesNoNa || '').toString().toUpperCase();
+      if (val === 'NO' && (!it.remarks || !String(it.remarks).trim())) {
+        return res.status(400).json({
+          message: 'Remarks are required when "NO" is selected. Please add remarks for all NO responses.',
+        });
+      }
     }
 
     // Create audit submissions with patient and admission reference - all locked by default
@@ -106,13 +126,16 @@ exports.submitAudit = async (req, res) => {
       uhid: normalizedUHID,
       ipid: normalizedIPID,
       patientName: normalizedPatientName,
+      unitChief: unitChief?.trim() || undefined,
       checklistItemId: it.checklistItemId,
       yesNoNa: it.yesNoNa || undefined,
       responseValue: it.responseValue || it.yesNoNa || '',
       remarks: it.remarks || '',
       responsibility: it.responsibility || '',
       submittedBy: userId,
-      submittedAt: new Date(),
+      submittedAt: now,
+      auditDate,
+      auditTime,
       isLocked: true,
     }));
 
@@ -437,7 +460,34 @@ exports.getSubmissionsByUHID = async (req, res) => {
       return res.status(404).json({ message: 'No valid submissions found for this UHID (checklist items may have been deleted)' });
     }
 
-    res.json(submissions);
+    // Group by date + time + IPID (one audit session per date+time+IPID)
+    const groupKey = (sub) => {
+      const d = sub.auditDate ? new Date(sub.auditDate) : new Date(sub.submittedAt);
+      const dateStr = d.toISOString().slice(0, 10);
+      const timeStr = sub.auditTime || (sub.submittedAt ? new Date(sub.submittedAt).toISOString().slice(11, 16) : '00:00');
+      return `${dateStr}|${timeStr}|${sub.ipid || ''}`;
+    };
+    const grouped = {};
+    submissions.forEach((sub) => {
+      const key = groupKey(sub);
+      const d = sub.auditDate ? new Date(sub.auditDate) : new Date(sub.submittedAt);
+      const timeStr = sub.auditTime || (sub.submittedAt ? new Date(sub.submittedAt).toISOString().slice(11, 16) : '00:00');
+      if (!grouped[key]) grouped[key] = { date: sub.auditDate || sub.submittedAt, auditTime: timeStr, ipid: sub.ipid, submissions: [] };
+      grouped[key].submissions.push(sub);
+    });
+    const groupedByDateAndIPID = Object.values(grouped).map((g) => ({
+      date: g.date,
+      auditTime: g.auditTime,
+      ipid: g.ipid,
+      submissions: g.submissions,
+    })).sort((a, b) => {
+      const da = new Date(a.date);
+      const db = new Date(b.date);
+      if (da.getTime() !== db.getTime()) return db.getTime() - da.getTime();
+      return (b.auditTime || '').localeCompare(a.auditTime || '');
+    });
+
+    res.json({ submissions, groupedByDateAndIPID });
   } catch (err) {
     console.error('getSubmissionsByUHID error', err);
     res.status(500).json({ message: 'Server error' });
@@ -480,11 +530,11 @@ exports.getSubmissionsByIPID = async (req, res) => {
   }
 };
 
-// Check if submission exists for UHID, IPID, and Department
+// Check if submission exists for UHID, IPID, Department, Date, and Time
 exports.checkDuplicateSubmission = async (req, res) => {
   try {
-    const { uhid, ipid, departmentId } = req.query;
-    
+    const { uhid, ipid, departmentId, auditDate: auditDateQuery, auditTime: auditTimeQuery } = req.query;
+
     if (!uhid || !ipid || !departmentId) {
       return res.status(400).json({ message: 'UHID, IPID, and Department ID are required' });
     }
@@ -492,20 +542,52 @@ exports.checkDuplicateSubmission = async (req, res) => {
     const normalizedUHID = uhid.trim().toUpperCase();
     const normalizedIPID = ipid.trim().toUpperCase();
 
-    const existingSubmission = await AuditSubmission.findOne({
+    const query = {
       uhid: normalizedUHID,
       ipid: normalizedIPID,
       department: departmentId,
-    })
-    .populate('submittedBy', 'name email')
-    .select('submittedAt submittedBy');
+    };
+
+    if (auditDateQuery && auditTimeQuery) {
+      const auditDate = new Date(auditDateQuery.trim() + 'T00:00:00.000Z');
+      query.auditDate = auditDate;
+      query.auditTime = auditTimeQuery.trim();
+    }
+    // If no auditDate/auditTime, check for any submission (backward compat: old submissions without auditDate/auditTime)
+    else {
+      const anyExisting = await AuditSubmission.findOne({
+        uhid: normalizedUHID,
+        ipid: normalizedIPID,
+        department: departmentId,
+      })
+        .populate('submittedBy', 'name email')
+        .select('submittedAt submittedBy auditDate auditTime');
+
+      if (anyExisting) {
+        return res.json({
+          exists: true,
+          message: 'A checklist has already been submitted for this UHID, IPID, and Department. Use a different date/time for another audit.',
+          submittedAt: anyExisting.submittedAt,
+          submittedBy: anyExisting.submittedBy,
+          auditDate: anyExisting.auditDate,
+          auditTime: anyExisting.auditTime,
+        });
+      }
+      return res.json({ exists: false });
+    }
+
+    const existingSubmission = await AuditSubmission.findOne(query)
+      .populate('submittedBy', 'name email')
+      .select('submittedAt submittedBy auditDate auditTime');
 
     if (existingSubmission) {
-      return res.json({ 
+      return res.json({
         exists: true,
-        message: 'No Duplicate IPID: A checklist has already been submitted for this UHID, IPID, and Department combination.',
+        message: 'A checklist has already been submitted for this UHID, IPID, Department, Date and Time.',
         submittedAt: existingSubmission.submittedAt,
         submittedBy: existingSubmission.submittedBy,
+        auditDate: existingSubmission.auditDate,
+        auditTime: existingSubmission.auditTime,
       });
     }
 
@@ -1114,4 +1196,741 @@ exports.getExecutiveAnalytics = async (req, res) => {
   }
 }
 
-// ... existing code ...
+// Comprehensive Analytics: Time-series data with date range filtering
+exports.getTimeSeriesAnalytics = async (req, res) => {
+  try {
+    const { startDate, endDate, groupBy = 'day' } = req.query; // groupBy: 'day', 'week', 'month'
+    
+    // Build date filter
+    const dateFilter = {};
+    if (startDate || endDate) {
+      dateFilter.submittedAt = {};
+      if (startDate) dateFilter.submittedAt.$gte = new Date(startDate);
+      if (endDate) dateFilter.submittedAt.$lte = new Date(endDate);
+    }
+
+    // Determine grouping format based on groupBy parameter
+    let dateGroupFormat = {};
+    switch (groupBy) {
+      case 'day':
+        dateGroupFormat = {
+          year: { $year: '$submittedAt' },
+          month: { $month: '$submittedAt' },
+          day: { $dayOfMonth: '$submittedAt' }
+        };
+        break;
+      case 'week':
+        dateGroupFormat = {
+          year: { $year: '$submittedAt' },
+          week: { $week: '$submittedAt' }
+        };
+        break;
+      case 'month':
+        dateGroupFormat = {
+          year: { $year: '$submittedAt' },
+          month: { $month: '$submittedAt' }
+        };
+        break;
+      default:
+        dateGroupFormat = {
+          year: { $year: '$submittedAt' },
+          month: { $month: '$submittedAt' },
+          day: { $dayOfMonth: '$submittedAt' }
+        };
+    }
+
+    const timeSeriesData = await AuditSubmission.aggregate([
+      { $match: dateFilter },
+      {
+        $group: {
+          _id: dateGroupFormat,
+          totalSubmissions: { $sum: 1 },
+          compliant: {
+            $sum: {
+              $cond: [
+                { $in: [{ $toUpper: { $ifNull: ['$responseValue', '$yesNoNa'] } }, ['YES']] },
+                1,
+                0
+              ]
+            }
+          },
+          nonCompliant: {
+            $sum: {
+              $cond: [
+                { $in: [{ $toUpper: { $ifNull: ['$responseValue', '$yesNoNa'] } }, ['NO']] },
+                1,
+                0
+              ]
+            }
+          },
+          uniqueCases: { $addToSet: '$uhid' },
+          uniqueAdmissions: { $addToSet: '$ipid' },
+          uniqueDepartments: { $addToSet: '$department' },
+          uniqueUsers: { $addToSet: '$submittedBy' }
+        }
+      },
+      {
+        $project: {
+          _id: 1,
+          totalSubmissions: 1,
+          compliant: 1,
+          nonCompliant: 1,
+          uniqueCases: { $size: '$uniqueCases' },
+          uniqueAdmissions: { $size: '$uniqueAdmissions' },
+          uniqueDepartments: { $size: '$uniqueDepartments' },
+          uniqueUsers: { $size: '$uniqueUsers' },
+          complianceRate: {
+            $cond: [
+              { $gt: ['$totalSubmissions', 0] },
+              { $round: [{ $multiply: [{ $divide: ['$compliant', '$totalSubmissions'] }, 100] }] },
+              0
+            ]
+          }
+        }
+      },
+      { $sort: { '_id.year': 1, '_id.month': 1, '_id.day': 1, '_id.week': 1 } }
+    ]);
+
+    // Format dates for frontend
+    const formattedData = timeSeriesData.map(item => {
+      let dateLabel = '';
+      if (groupBy === 'day') {
+        dateLabel = new Date(item._id.year, item._id.month - 1, item._id.day).toLocaleDateString('en-US', { 
+          month: 'short', 
+          day: 'numeric',
+          year: 'numeric' 
+        });
+      } else if (groupBy === 'week') {
+        dateLabel = `Week ${item._id.week}, ${item._id.year}`;
+      } else {
+        dateLabel = new Date(item._id.year, item._id.month - 1, 1).toLocaleDateString('en-US', { 
+          month: 'short', 
+          year: 'numeric' 
+        });
+      }
+
+      return {
+        date: dateLabel,
+        timestamp: new Date(item._id.year, item._id.month - 1, item._id.day || 1),
+        ...item
+      };
+    });
+
+    res.json({
+      groupBy,
+      dateRange: {
+        start: startDate ? new Date(startDate) : null,
+        end: endDate ? new Date(endDate) : null
+      },
+      data: formattedData,
+      summary: {
+        totalDataPoints: formattedData.length,
+        totalSubmissions: formattedData.reduce((sum, d) => sum + d.totalSubmissions, 0),
+        totalCases: formattedData.reduce((sum, d) => sum + d.uniqueCases, 0),
+        averageComplianceRate: formattedData.length > 0
+          ? Math.round(formattedData.reduce((sum, d) => sum + d.complianceRate, 0) / formattedData.length)
+          : 0
+      }
+    });
+  } catch (err) {
+    console.error('getTimeSeriesAnalytics error', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+// User Activity Analytics
+exports.getUserActivityAnalytics = async (req, res) => {
+  try {
+    const { startDate, endDate, departmentId } = req.query;
+    const User = require('../models/User');
+    
+    const dateFilter = {};
+    if (startDate || endDate) {
+      dateFilter.submittedAt = {};
+      if (startDate) dateFilter.submittedAt.$gte = new Date(startDate);
+      if (endDate) dateFilter.submittedAt.$lte = new Date(endDate);
+    }
+    
+    if (departmentId) {
+      dateFilter.department = departmentId;
+    }
+
+    const userActivity = await AuditSubmission.aggregate([
+      { $match: dateFilter },
+      {
+        $group: {
+          _id: '$submittedBy',
+          totalSubmissions: { $sum: 1 },
+          compliant: {
+            $sum: {
+              $cond: [
+                { $in: [{ $toUpper: { $ifNull: ['$responseValue', '$yesNoNa'] } }, ['YES']] },
+                1,
+                0
+              ]
+            }
+          },
+          nonCompliant: {
+            $sum: {
+              $cond: [
+                { $in: [{ $toUpper: { $ifNull: ['$responseValue', '$yesNoNa'] } }, ['NO']] },
+                1,
+                0
+              ]
+            }
+          },
+          uniqueCases: { $addToSet: '$uhid' },
+          uniqueDepartments: { $addToSet: '$department' },
+          firstSubmission: { $min: '$submittedAt' },
+          lastSubmission: { $max: '$submittedAt' }
+        }
+      },
+      {
+        $lookup: {
+          from: 'users',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'userInfo'
+        }
+      },
+      {
+        $unwind: { path: '$userInfo', preserveNullAndEmptyArrays: true }
+      },
+      {
+        $project: {
+          userId: '$_id',
+          userName: '$userInfo.name',
+          userEmail: '$userInfo.email',
+          userRole: '$userInfo.role',
+          totalSubmissions: 1,
+          compliant: 1,
+          nonCompliant: 1,
+          uniqueCases: { $size: '$uniqueCases' },
+          uniqueDepartments: { $size: '$uniqueDepartments' },
+          complianceRate: {
+            $cond: [
+              { $gt: ['$totalSubmissions', 0] },
+              { $round: [{ $multiply: [{ $divide: ['$compliant', '$totalSubmissions'] }, 100] }] },
+              0
+            ]
+          },
+          firstSubmission: 1,
+          lastSubmission: 1
+        }
+      },
+      { $sort: { totalSubmissions: -1 } }
+    ]);
+
+    res.json({
+      dateRange: {
+        start: startDate ? new Date(startDate) : null,
+        end: endDate ? new Date(endDate) : null
+      },
+      users: userActivity,
+      summary: {
+        totalUsers: userActivity.length,
+        totalSubmissions: userActivity.reduce((sum, u) => sum + u.totalSubmissions, 0),
+        averageComplianceRate: userActivity.length > 0
+          ? Math.round(userActivity.reduce((sum, u) => sum + u.complianceRate, 0) / userActivity.length)
+          : 0
+      }
+    });
+  } catch (err) {
+    console.error('getUserActivityAnalytics error', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+// Admission/IPID Statistics
+exports.getAdmissionAnalytics = async (req, res) => {
+  try {
+    const { startDate, endDate, status } = req.query;
+    const Admission = require('../models/Admission');
+    
+    const dateFilter = {};
+    if (startDate || endDate) {
+      dateFilter.admissionDate = {};
+      if (startDate) dateFilter.admissionDate.$gte = new Date(startDate);
+      if (endDate) dateFilter.admissionDate.$lte = new Date(endDate);
+    }
+    
+    if (status) {
+      dateFilter.status = status;
+    }
+
+    // Get admission statistics
+    const admissionStats = await Admission.aggregate([
+      { $match: dateFilter },
+      {
+        $group: {
+          _id: '$status',
+          count: { $sum: 1 },
+          avgLengthOfStay: {
+            $avg: {
+              $cond: [
+                { $ne: ['$dischargeDate', null] },
+                {
+                  $divide: [
+                    { $subtract: ['$dischargeDate', '$admissionDate'] },
+                    1000 * 60 * 60 * 24 // Convert to days
+                  ]
+                },
+                null
+              ]
+            }
+          }
+        }
+      }
+    ]);
+
+    // Get submissions per admission
+    const submissionsPerAdmission = await AuditSubmission.aggregate([
+      {
+        $match: dateFilter.admissionDate ? {
+          submittedAt: dateFilter.admissionDate
+        } : {}
+      },
+      {
+        $group: {
+          _id: '$ipid',
+          submissionCount: { $sum: 1 },
+          departmentCount: { $addToSet: '$department' },
+          compliantCount: {
+            $sum: {
+              $cond: [
+                { $in: [{ $toUpper: { $ifNull: ['$responseValue', '$yesNoNa'] } }, ['YES']] },
+                1,
+                0
+              ]
+            }
+          },
+          nonCompliantCount: {
+            $sum: {
+              $cond: [
+                { $in: [{ $toUpper: { $ifNull: ['$responseValue', '$yesNoNa'] } }, ['NO']] },
+                1,
+                0
+              ]
+            }
+          }
+        }
+      },
+      {
+        $project: {
+          ipid: '$_id',
+          submissionCount: 1,
+          departmentCount: { $size: '$departmentCount' },
+          complianceRate: {
+            $cond: [
+              { $gt: ['$submissionCount', 0] },
+              { $round: [{ $multiply: [{ $divide: ['$compliantCount', '$submissionCount'] }, 100] }] },
+              0
+            ]
+          }
+        }
+      },
+      { $sort: { submissionCount: -1 } }
+    ]);
+
+    // Ward and Unit statistics
+    const wardStats = await Admission.aggregate([
+      { $match: dateFilter },
+      {
+        $group: {
+          _id: '$ward',
+          count: { $sum: 1 }
+        }
+      },
+      { $sort: { count: -1 } },
+      { $limit: 10 }
+    ]);
+
+    const unitStats = await Admission.aggregate([
+      { $match: dateFilter },
+      {
+        $group: {
+          _id: '$unitNo',
+          count: { $sum: 1 }
+        }
+      },
+      { $sort: { count: -1 } },
+      { $limit: 10 }
+    ]);
+
+    res.json({
+      dateRange: {
+        start: startDate ? new Date(startDate) : null,
+        end: endDate ? new Date(endDate) : null
+      },
+      admissionStatus: admissionStats,
+      submissionsPerAdmission: {
+        average: submissionsPerAdmission.length > 0
+          ? Math.round(submissionsPerAdmission.reduce((sum, a) => sum + a.submissionCount, 0) / submissionsPerAdmission.length)
+          : 0,
+        distribution: submissionsPerAdmission.slice(0, 20) // Top 20
+      },
+      wardDistribution: wardStats,
+      unitDistribution: unitStats,
+      summary: {
+        totalAdmissions: admissionStats.reduce((sum, s) => sum + s.count, 0),
+        totalIPIDs: submissionsPerAdmission.length,
+        averageSubmissionsPerAdmission: submissionsPerAdmission.length > 0
+          ? Math.round(submissionsPerAdmission.reduce((sum, a) => sum + a.submissionCount, 0) / submissionsPerAdmission.length)
+          : 0
+      }
+    });
+  } catch (err) {
+    console.error('getAdmissionAnalytics error', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+// Form Template Performance Analytics
+exports.getFormTemplateAnalytics = async (req, res) => {
+  try {
+    const { startDate, endDate, departmentId } = req.query;
+    const FormTemplate = require('../models/FormTemplate');
+    
+    const dateFilter = {};
+    if (startDate || endDate) {
+      dateFilter.submittedAt = {};
+      if (startDate) dateFilter.submittedAt.$gte = new Date(startDate);
+      if (endDate) dateFilter.submittedAt.$lte = new Date(endDate);
+    }
+    
+    if (departmentId) {
+      dateFilter.department = departmentId;
+    }
+
+    const formStats = await AuditSubmission.aggregate([
+      { $match: dateFilter },
+      {
+        $group: {
+          _id: '$formTemplate',
+          totalSubmissions: { $sum: 1 },
+          compliant: {
+            $sum: {
+              $cond: [
+                { $in: [{ $toUpper: { $ifNull: ['$responseValue', '$yesNoNa'] } }, ['YES']] },
+                1,
+                0
+              ]
+            }
+          },
+          nonCompliant: {
+            $sum: {
+              $cond: [
+                { $in: [{ $toUpper: { $ifNull: ['$responseValue', '$yesNoNa'] } }, ['NO']] },
+                1,
+                0
+              ]
+            }
+          },
+          uniqueCases: { $addToSet: '$uhid' },
+          uniqueDepartments: { $addToSet: '$department' }
+        }
+      },
+      {
+        $lookup: {
+          from: 'formtemplates',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'formInfo'
+        }
+      },
+      {
+        $unwind: { path: '$formInfo', preserveNullAndEmptyArrays: true }
+      },
+      {
+        $project: {
+          formId: '$_id',
+          formName: '$formInfo.name',
+          formDescription: '$formInfo.description',
+          isActive: '$formInfo.isActive',
+          totalSubmissions: 1,
+          compliant: 1,
+          nonCompliant: 1,
+          uniqueCases: { $size: '$uniqueCases' },
+          uniqueDepartments: { $size: '$uniqueDepartments' },
+          complianceRate: {
+            $cond: [
+              { $gt: ['$totalSubmissions', 0] },
+              { $round: [{ $multiply: [{ $divide: ['$compliant', '$totalSubmissions'] }, 100] }] },
+              0
+            ]
+          }
+        }
+      },
+      { $sort: { totalSubmissions: -1 } }
+    ]);
+
+    res.json({
+      dateRange: {
+        start: startDate ? new Date(startDate) : null,
+        end: endDate ? new Date(endDate) : null
+      },
+      forms: formStats,
+      summary: {
+        totalForms: formStats.length,
+        totalSubmissions: formStats.reduce((sum, f) => sum + f.totalSubmissions, 0),
+        averageComplianceRate: formStats.length > 0
+          ? Math.round(formStats.reduce((sum, f) => sum + f.complianceRate, 0) / formStats.length)
+          : 0
+      }
+    });
+  } catch (err) {
+    console.error('getFormTemplateAnalytics error', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+// Comprehensive Dashboard Analytics (all-in-one endpoint)
+exports.getComprehensiveAnalytics = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    
+    const dateFilter = {};
+    if (startDate || endDate) {
+      dateFilter.submittedAt = {};
+      if (startDate) dateFilter.submittedAt.$gte = new Date(startDate);
+      if (endDate) dateFilter.submittedAt.$lte = new Date(endDate);
+    }
+
+    // Get all analytics in parallel
+    const [
+      timeSeriesDaily,
+      timeSeriesWeekly,
+      timeSeriesMonthly,
+      userActivity,
+      admissionStats,
+      formStats,
+      departmentStats
+    ] = await Promise.all([
+      // Daily trends (last 30 days)
+      AuditSubmission.aggregate([
+        {
+          $match: {
+            ...dateFilter,
+            submittedAt: {
+              $gte: startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+            }
+          }
+        },
+        {
+          $group: {
+            _id: {
+              year: { $year: '$submittedAt' },
+              month: { $month: '$submittedAt' },
+              day: { $dayOfMonth: '$submittedAt' }
+            },
+            total: { $sum: 1 },
+            compliant: {
+              $sum: {
+                $cond: [
+                  { $in: [{ $toUpper: { $ifNull: ['$responseValue', '$yesNoNa'] } }, ['YES']] },
+                  1,
+                  0
+                ]
+              }
+            },
+            cases: { $addToSet: '$uhid' }
+          }
+        },
+        { $sort: { '_id.year': 1, '_id.month': 1, '_id.day': 1 } },
+        { $limit: 30 }
+      ]),
+      // Weekly trends (last 12 weeks)
+      AuditSubmission.aggregate([
+        {
+          $match: {
+            ...dateFilter,
+            submittedAt: {
+              $gte: startDate ? new Date(startDate) : new Date(Date.now() - 84 * 24 * 60 * 60 * 1000)
+            }
+          }
+        },
+        {
+          $group: {
+            _id: {
+              year: { $year: '$submittedAt' },
+              week: { $week: '$submittedAt' }
+            },
+            total: { $sum: 1 },
+            compliant: {
+              $sum: {
+                $cond: [
+                  { $in: [{ $toUpper: { $ifNull: ['$responseValue', '$yesNoNa'] } }, ['YES']] },
+                  1,
+                  0
+                ]
+              }
+            },
+            cases: { $addToSet: '$uhid' }
+          }
+        },
+        { $sort: { '_id.year': 1, '_id.week': 1 } },
+        { $limit: 12 }
+      ]),
+      // Monthly trends (last 12 months)
+      AuditSubmission.aggregate([
+        {
+          $match: {
+            ...dateFilter,
+            submittedAt: {
+              $gte: startDate ? new Date(startDate) : new Date(Date.now() - 365 * 24 * 60 * 60 * 1000)
+            }
+          }
+        },
+        {
+          $group: {
+            _id: {
+              year: { $year: '$submittedAt' },
+              month: { $month: '$submittedAt' }
+            },
+            total: { $sum: 1 },
+            compliant: {
+              $sum: {
+                $cond: [
+                  { $in: [{ $toUpper: { $ifNull: ['$responseValue', '$yesNoNa'] } }, ['YES']] },
+                  1,
+                  0
+                ]
+              }
+            },
+            cases: { $addToSet: '$uhid' }
+          }
+        },
+        { $sort: { '_id.year': 1, '_id.month': 1 } },
+        { $limit: 12 }
+      ]),
+      // Top users
+      AuditSubmission.aggregate([
+        { $match: dateFilter },
+        {
+          $group: {
+            _id: '$submittedBy',
+            total: { $sum: 1 },
+            cases: { $addToSet: '$uhid' }
+          }
+        },
+        { $sort: { total: -1 } },
+        { $limit: 10 }
+      ]),
+      // Admission stats
+      AuditSubmission.aggregate([
+        { $match: dateFilter },
+        {
+          $group: {
+            _id: '$ipid',
+            submissionCount: { $sum: 1 },
+            departments: { $addToSet: '$department' }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalAdmissions: { $sum: 1 },
+            avgSubmissionsPerAdmission: { $avg: '$submissionCount' },
+            avgDepartmentsPerAdmission: { $avg: { $size: '$departments' } }
+          }
+        }
+      ]),
+      // Form stats
+      AuditSubmission.aggregate([
+        { $match: dateFilter },
+        {
+          $group: {
+            _id: '$formTemplate',
+            total: { $sum: 1 },
+            cases: { $addToSet: '$uhid' }
+          }
+        },
+        { $sort: { total: -1 } },
+        { $limit: 10 }
+      ]),
+      // Department stats
+      AuditSubmission.aggregate([
+        { $match: dateFilter },
+        {
+          $group: {
+            _id: '$department',
+            total: { $sum: 1 },
+            compliant: {
+              $sum: {
+                $cond: [
+                  { $in: [{ $toUpper: { $ifNull: ['$responseValue', '$yesNoNa'] } }, ['YES']] },
+                  1,
+                  0
+                ]
+              }
+            },
+            cases: { $addToSet: '$uhid' }
+          }
+        },
+        { $sort: { total: -1 } }
+      ])
+    ]);
+
+    // Format the data
+    const formatTimeSeries = (data, format) => {
+      return data.map(item => {
+        let dateLabel = '';
+        if (format === 'day') {
+          dateLabel = new Date(item._id.year, item._id.month - 1, item._id.day).toLocaleDateString('en-US', { 
+            month: 'short', 
+            day: 'numeric' 
+          });
+        } else if (format === 'week') {
+          dateLabel = `Week ${item._id.week}, ${item._id.year}`;
+        } else {
+          dateLabel = new Date(item._id.year, item._id.month - 1, 1).toLocaleDateString('en-US', { 
+            month: 'short', 
+            year: 'numeric' 
+          });
+        }
+        return {
+          date: dateLabel,
+          submissions: item.total,
+          complianceRate: item.total > 0 ? Math.round((item.compliant / item.total) * 100) : 0,
+          cases: item.cases.length
+        };
+      });
+    };
+
+    res.json({
+      dateRange: {
+        start: startDate ? new Date(startDate) : null,
+        end: endDate ? new Date(endDate) : null
+      },
+      timeSeries: {
+        daily: formatTimeSeries(timeSeriesDaily, 'day'),
+        weekly: formatTimeSeries(timeSeriesWeekly, 'week'),
+        monthly: formatTimeSeries(timeSeriesMonthly, 'month')
+      },
+      topUsers: userActivity.slice(0, 10).map(u => ({
+        userId: u._id,
+        totalSubmissions: u.total,
+        uniqueCases: u.cases.length
+      })),
+      admissionStats: admissionStats[0] || {
+        totalAdmissions: 0,
+        avgSubmissionsPerAdmission: 0,
+        avgDepartmentsPerAdmission: 0
+      },
+      topForms: formStats.slice(0, 10).map(f => ({
+        formId: f._id,
+        totalSubmissions: f.total,
+        uniqueCases: f.cases.length
+      })),
+      departmentStats: departmentStats.map(d => ({
+        departmentId: d._id,
+        totalSubmissions: d.total,
+        complianceRate: d.total > 0 ? Math.round((d.compliant / d.total) * 100) : 0,
+        uniqueCases: d.cases.length
+      }))
+    });
+  } catch (err) {
+    console.error('getComprehensiveAnalytics error', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};

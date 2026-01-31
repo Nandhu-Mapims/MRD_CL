@@ -11,81 +11,118 @@ export function PatientReport() {
   const [consultantName, setConsultantName] = useState('')
   const [ward, setWard] = useState('')
   const [unitNo, setUnitNo] = useState('')
+  const [unitChief, setUnitChief] = useState('')
   const [admissions, setAdmissions] = useState([])
+  const [groupsFromUHID, setGroupsFromUHID] = useState([]) // grouped by date+time+IPID
   const [selectedIPID, setSelectedIPID] = useState(null)
+  const [selectedGroup, setSelectedGroup] = useState(null) // { date, auditTime, ipid, submissions }
   const [loadingAdmissions, setLoadingAdmissions] = useState(false)
 
-  // Load admissions for UHID
+  // Build report data from a list of submissions (same structure as loadChecklistByIPID)
+  const buildReportDataFromSubmissions = (submissions) => {
+    if (!submissions || submissions.length === 0) return null
+    const deptMap = new Map()
+    const patient = submissions[0]?.patient || { uhid: submissions[0]?.uhid || uhid?.trim().toUpperCase(), patientName: submissions[0]?.patientName || 'N/A' }
+    submissions.forEach(sub => {
+      const deptId = sub.department?._id || sub.department
+      const deptName = sub.department?.name || 'Unknown Department'
+      const deptCode = sub.department?.code || 'N/A'
+      const formId = sub.formTemplate?._id || sub.formTemplate
+      const formName = sub.formTemplate?.name || 'Unknown Form'
+      const key = `${deptId}_${formId}`
+      if (!deptMap.has(key)) {
+        deptMap.set(key, {
+          department: { _id: deptId, name: deptName, code: deptCode },
+          form: { _id: formId, name: formName },
+          submittedBy: sub.submittedBy,
+          submittedAt: sub.submittedAt,
+          sections: new Map()
+        })
+      }
+      const deptData = deptMap.get(key)
+      const sectionName = sub.checklistItemId?.section || 'General'
+      if (!deptData.sections.has(sectionName)) {
+        deptData.sections.set(sectionName, { sectionName, items: [] })
+      }
+      const section = deptData.sections.get(sectionName)
+      section.items.push({
+        checklistItemId: {
+          _id: sub.checklistItemId?._id,
+          label: sub.checklistItemId?.label || 'N/A',
+          section: sub.checklistItemId?.section,
+          responseType: sub.checklistItemId?.responseType || 'YES_NO',
+          order: 0,
+        },
+        responseValue: sub.responseValue || sub.yesNoNa || '',
+        remarks: sub.remarks || '',
+        corrective: sub.corrective || '',
+        preventive: sub.preventive || '',
+        submittedAt: sub.submittedAt,
+      })
+    })
+    return {
+      patient,
+      departments: Array.from(deptMap.values()).map(deptData => ({
+        department: deptData.department,
+        form: deptData.form,
+        submittedBy: deptData.submittedBy,
+        submittedAt: deptData.submittedAt,
+        sections: Array.from(deptData.sections.values()).map(section => ({
+          sectionName: section.sectionName,
+          items: section.items.sort((a, b) => (a.checklistItemId?.order || 0) - (b.checklistItemId?.order || 0)),
+        })),
+      })),
+      totalSubmissions: submissions.length,
+    }
+  }
+
+  // Load admissions and/or submission groups for UHID
   const loadAdmissions = async (uhidValue) => {
     if (!uhidValue || !uhidValue.trim()) return
     
     setLoadingAdmissions(true)
     setAdmissions([])
+    setGroupsFromUHID([])
     setError('')
     setSelectedIPID(null)
+    setSelectedGroup(null)
     setReportData(null)
     
     try {
       const normalizedUHID = uhidValue.trim().toUpperCase()
-      const admissionsData = await apiClient.get(`/admissions/patient/${encodeURIComponent(normalizedUHID)}`)
-      console.log('Admissions data received:', admissionsData)
-      
-      // Handle different response formats
-      let admissionsList = []
-      if (Array.isArray(admissionsData)) {
-        admissionsList = admissionsData
-      } else if (admissionsData?.admissions) {
-        admissionsList = admissionsData.admissions
-      } else if (admissionsData?.data?.admissions) {
-        admissionsList = admissionsData.data.admissions
-      }
-      
-      setAdmissions(admissionsList)
-      
-      // If no admissions found, try to get submissions to create a virtual admission
-      if (admissionsList.length === 0) {
-        try {
-          const submissions = await apiClient.get(`/audits/uhid/${encodeURIComponent(normalizedUHID)}`)
-          if (submissions && submissions.length > 0) {
-            // Extract unique IPIDs from submissions
-            const uniqueIPIDs = [...new Set(submissions.map(s => s.ipid).filter(Boolean))]
-            if (uniqueIPIDs.length > 0) {
-              // Create virtual admission objects from submissions
-              const virtualAdmissions = uniqueIPIDs.map(ipid => {
-                const subWithIPID = submissions.find(s => s.ipid === ipid)
-                return {
-                  ipid: ipid,
-                  uhid: normalizedUHID,
-                  admissionDate: subWithIPID?.submittedAt || new Date(),
-                  status: 'Admitted',
-                  ward: subWithIPID?.ward || subWithIPID?.patient?.ward || 'N/A',
-                  unitNo: subWithIPID?.unitNo || subWithIPID?.patient?.unitNo || 'N/A',
-                  isVirtual: true // Flag to indicate this is created from submissions
-                }
-              })
-              setAdmissions(virtualAdmissions)
-            }
-          }
-        } catch (subErr) {
-          console.error('Error loading submissions as fallback:', subErr)
+      // Prefer submissions grouped by date+time+IPID for report/logs
+      let groups = []
+      try {
+        const auditsRes = await apiClient.get(`/audits/uhid/${encodeURIComponent(normalizedUHID)}`)
+        if (auditsRes?.groupedByDateAndIPID && auditsRes.groupedByDateAndIPID.length > 0) {
+          groups = auditsRes.groupedByDateAndIPID
+          setGroupsFromUHID(groups)
         }
+      } catch (auditErr) {
+        if (auditErr.response?.status !== 404) console.error('Error loading audits by UHID:', auditErr)
       }
-    } catch (err) {
-      console.error('Error loading admissions:', err)
-      console.error('Error details:', err.response?.data || err.message)
-      setAdmissions([])
-      if (err.response?.status === 404) {
-        // Try fallback to submissions
+      // If no groups, try admissions API
+      let hasData = groups.length > 0
+      if (!hasData) {
         try {
-          const submissions = await apiClient.get(`/audits/uhid/${encodeURIComponent(uhidValue.trim().toUpperCase())}`)
-          if (submissions && submissions.length > 0) {
-            const uniqueIPIDs = [...new Set(submissions.map(s => s.ipid).filter(Boolean))]
-            if (uniqueIPIDs.length > 0) {
+          const admissionsData = await apiClient.get(`/admissions/patient/${encodeURIComponent(normalizedUHID)}`)
+          let admissionsList = []
+          if (Array.isArray(admissionsData)) admissionsList = admissionsData
+          else if (admissionsData?.admissions) admissionsList = admissionsData.admissions
+          else if (admissionsData?.data?.admissions) admissionsList = admissionsData.data.admissions
+          if (admissionsList.length > 0) {
+            setAdmissions(admissionsList)
+            hasData = true
+          } else {
+            const submissions = await apiClient.get(`/audits/uhid/${encodeURIComponent(normalizedUHID)}`)
+            const raw = submissions?.submissions || (Array.isArray(submissions) ? submissions : [])
+            if (raw.length > 0) {
+              const uniqueIPIDs = [...new Set(raw.map(s => s.ipid).filter(Boolean))]
               const virtualAdmissions = uniqueIPIDs.map(ipid => {
-                const subWithIPID = submissions.find(s => s.ipid === ipid)
+                const subWithIPID = raw.find(s => s.ipid === ipid)
                 return {
-                  ipid: ipid,
-                  uhid: uhidValue.trim().toUpperCase(),
+                  ipid,
+                  uhid: normalizedUHID,
                   admissionDate: subWithIPID?.submittedAt || new Date(),
                   status: 'Admitted',
                   ward: subWithIPID?.ward || subWithIPID?.patient?.ward || 'N/A',
@@ -94,12 +131,22 @@ export function PatientReport() {
                 }
               })
               setAdmissions(virtualAdmissions)
-              return
+              hasData = true
             }
           }
-        } catch (subErr) {
-          console.error('Fallback also failed:', subErr)
+        } catch (admErr) {
+          if (admErr.response?.status === 404) setError(`No admissions found for UHID: ${normalizedUHID}`)
+          else setError(admErr.response?.data?.message || admErr.message || 'Failed to load')
         }
+      }
+      if (!hasData && groups.length === 0) {
+        setError(`No admissions or audit submissions found for UHID: ${normalizedUHID}`)
+      }
+    } catch (err) {
+      console.error('Error loading admissions:', err)
+      setAdmissions([])
+      setGroupsFromUHID([])
+      if (err.response?.status === 404) {
         setError(`No admissions found for UHID: ${uhidValue.trim().toUpperCase()}`)
       } else {
         setError(err.response?.data?.message || err.message || 'Failed to load admissions')
@@ -174,7 +221,8 @@ export function PatientReport() {
           },
           responseValue: sub.responseValue || sub.yesNoNa || '',
           remarks: sub.remarks || '',
-          responsibility: sub.responsibility || '',
+          corrective: sub.corrective || '',
+          preventive: sub.preventive || '',
           submittedAt: sub.submittedAt,
         })
       })
@@ -197,11 +245,16 @@ export function PatientReport() {
         totalSubmissions: submissions.length,
       }
       
-      // Auto-populate ward and unitNo from admission
+      // Auto-populate ward, unitNo, and unitChief from admission or submission
       const admission = submissions[0]?.admission
+      const firstSubmission = submissions[0]
       if (admission) {
         if (admission.ward && !ward.trim()) setWard(admission.ward)
         if (admission.unitNo && !unitNo.trim()) setUnitNo(admission.unitNo)
+      }
+      // Unit Chief is stored in submission
+      if (firstSubmission?.unitChief) {
+        setUnitChief(firstSubmission.unitChief)
       }
       
       // Auto-populate consultant name from the first department's submitter
@@ -232,11 +285,24 @@ export function PatientReport() {
       setError('Please enter a UHID')
       return
     }
-
-    // First, load admissions list
     await loadAdmissions(uhid.trim())
-    
-    // Don't load checklist yet - wait for user to select IPID
+  }
+
+  // Select a group (date+time+IPID) and build report from its submissions
+  const handleGroupClick = (group) => {
+    setSelectedGroup(group)
+    setSelectedIPID(group.ipid)
+    const data = buildReportDataFromSubmissions(group.submissions)
+    setReportData(data)
+    setError('')
+    const firstSub = group.submissions[0]
+    if (firstSub?.unitChief) setUnitChief(firstSub.unitChief)
+    if (firstSub?.ward && !ward.trim()) setWard(firstSub.ward)
+    if (firstSub?.unitNo && !unitNo.trim()) setUnitNo(firstSub.unitNo)
+    if (data?.departments?.length > 0) {
+      const firstDept = data.departments.find(d => d.submittedBy?.name)
+      if (firstDept?.submittedBy?.name) setConsultantName(firstDept.submittedBy.name)
+    }
   }
 
   const handleIPIDClick = async (ipid) => {
@@ -258,15 +324,18 @@ export function PatientReport() {
     doc.setTextColor(0, 0, 0)
     doc.text('MAPIMS - CASECHEET AUDIT CHECKLIST', 105, 15, { align: 'center' })
     
-    // Consultant, Ward, Unit fields
+    // Consultant, Ward, Unit, Unit Chief fields
     let yPos = 22
     doc.setFontSize(9)
     doc.text('CONSULTANT NAME:', 20, yPos)
     doc.text(consultantName || '_______________________', 60, yPos)
-    doc.text('WARD:', 130, yPos)
-    doc.text(ward || '___________', 145, yPos)
-    doc.text('UNIT NO:', 170, yPos)
-    doc.text(unitNo || '____', 185, yPos)
+    doc.text('UNIT CHIEF:', 120, yPos)
+    doc.text(unitChief || '___________', 150, yPos)
+    yPos += 5
+    doc.text('WARD:', 20, yPos)
+    doc.text(ward || '___________', 38, yPos)
+    doc.text('UNIT NO:', 90, yPos)
+    doc.text(unitNo || '____', 110, yPos)
 
     yPos = 40
 
@@ -287,21 +356,21 @@ export function PatientReport() {
     doc.text(`Department Name: ${departmentNames}`, 100, yPos)
     yPos += 8
 
-    // Main table header
-    doc.setFontSize(8)
+    // Main table header (landscape layout needed for more columns)
+    doc.setFontSize(7)
     doc.setFont(undefined, 'bold')
     doc.setFillColor(240, 240, 240)
-    doc.rect(20, yPos, 170, 6, 'F')
+    doc.rect(15, yPos, 180, 8, 'F')
     
-    // Table headers
-    doc.text('STANDARD & OBJECTIVE ELEMENTS', 22, yPos + 4)
-    doc.text('Yes', 120, yPos + 4)
-    doc.text('No', 135, yPos + 4)
-    doc.text('COMPLIANCE', 145, yPos + 2)
-    doc.text('Remarks (NA)', 145, yPos + 4.5)
-    doc.text('Responsibility', 165, yPos + 4)
+    // Table headers - adjusted positions for all 6 columns
+    doc.text('STANDARD & OBJECTIVE ELEMENTS', 17, yPos + 5)
+    doc.text('Y', 90, yPos + 5)
+    doc.text('N', 97, yPos + 5)
+    doc.text('Remarks', 105, yPos + 5)
+    doc.text('Corrective', 130, yPos + 5)
+    doc.text('Preventive', 160, yPos + 5)
 
-    yPos += 7
+    yPos += 9
 
     // Department-wise checklist
     reportData.departments.forEach((deptData) => {
@@ -343,34 +412,41 @@ export function PatientReport() {
           const isYes = responseValue === 'YES' || responseValue === 'Yes'
           const isNo = responseValue === 'NO' || responseValue === 'No'
           const remarks = item.remarks || ''
-          const responsibility = item.responsibility || ''
+          const corrective = item.corrective || ''
+          const preventive = item.preventive || ''
 
-          // Item label
-          doc.setFontSize(8)
+          // Item label (truncated if too long)
+          doc.setFontSize(7)
           doc.setFont(undefined, 'normal')
-          doc.text(`${idx + 1}. ${label}`, 22, yPos)
+          const labelLines = doc.splitTextToSize(`${idx + 1}. ${label}`, 70)
+          doc.text(labelLines[0], 17, yPos)
 
           // Yes checkbox
-          doc.rect(120, yPos - 3, 3, 3, isYes ? 'F' : 'S')
+          doc.rect(90, yPos - 3, 3, 3, isYes ? 'F' : 'S')
           if (isYes) {
             doc.setFontSize(6)
-            doc.text('✓', 120.5, yPos - 1.5)
+            doc.text('✓', 90.5, yPos - 1.5)
           }
 
           // No checkbox
-          doc.rect(135, yPos - 3, 3, 3, isNo ? 'F' : 'S')
+          doc.rect(97, yPos - 3, 3, 3, isNo ? 'F' : 'S')
           if (isNo) {
             doc.setFontSize(6)
-            doc.text('✓', 135.5, yPos - 1.5)
+            doc.text('✓', 97.5, yPos - 1.5)
           }
 
-          // Remarks
-          doc.setFontSize(7)
+          // Remarks (truncated)
+          doc.setFontSize(6)
           const remarksLines = doc.splitTextToSize(remarks || '-', 20)
-          doc.text(remarksLines[0] || '-', 145, yPos)
+          doc.text(remarksLines[0] || '-', 105, yPos)
 
-          // Responsibility
-          doc.text(responsibility || '-', 165, yPos)
+          // Corrective (truncated)
+          const correctiveLines = doc.splitTextToSize(corrective || '-', 25)
+          doc.text(correctiveLines[0] || '-', 130, yPos)
+
+          // Preventive (truncated)
+          const preventiveLines = doc.splitTextToSize(preventive || '-', 25)
+          doc.text(preventiveLines[0] || '-', 160, yPos)
 
           yPos += 5
         })
@@ -608,12 +684,12 @@ export function PatientReport() {
 
       <div className="space-y-6">
         {/* Header Card */}
-        <div className="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden no-print">
-          <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-5">
-            <h2 className="text-2xl sm:text-3xl font-bold text-white mb-1">
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden no-print">
+          <div className="bg-white border-b border-slate-200 px-6 py-5">
+            <h1 className="text-2xl sm:text-3xl font-semibold text-slate-900 mb-1">
               Patient Report Dashboard
-            </h2>
-            <p className="text-sm sm:text-base text-blue-100">
+            </h1>
+            <p className="text-sm sm:text-base text-slate-600">
               Generate comprehensive audit checklist reports for patient admissions
             </p>
           </div>
@@ -624,10 +700,7 @@ export function PatientReport() {
               <div className="flex flex-col sm:flex-row gap-4">
                 <div className="flex-1">
                   <label className="block text-sm font-semibold text-slate-700 mb-2">
-                    <span className="flex items-center gap-2">
-                      <span className="text-blue-600">🔍</span>
-                      Enter Unique Hospital ID (UHID)
-                    </span>
+                    Enter Unique Hospital ID (UHID)
                   </label>
                   <input
                     type="text"
@@ -642,7 +715,7 @@ export function PatientReport() {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full sm:w-auto bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold px-8 py-3 rounded-lg shadow-lg transition-all disabled:opacity-60 disabled:cursor-not-allowed transform hover:scale-[1.02] text-base min-w-[140px]"
+                    className="w-full sm:w-auto bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-semibold px-8 py-3 rounded-lg shadow-sm transition-all disabled:opacity-60 disabled:cursor-not-allowed text-base min-w-[140px]"
                   >
                     {loading ? (
                       <span className="flex items-center gap-2">
@@ -659,8 +732,7 @@ export function PatientReport() {
               {/* Additional Fields - Only show when report is loaded */}
               {reportData && (
                 <div className="mt-6 pt-6 border-t border-slate-200">
-                  <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">
-                    <span className="text-blue-600">📋</span>
+                  <h3 className="text-sm font-semibold text-slate-700 mb-4">
                     Report Details
                   </h3>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -694,6 +766,14 @@ export function PatientReport() {
                         {unitNo || reportData?.patient?.unitNo || 'Not provided'}
                       </div>
                     </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-2">
+                        Unit Chief
+                      </label>
+                      <div className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm bg-slate-50 text-slate-700 font-medium">
+                        {unitChief || 'Not provided'}
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -723,30 +803,84 @@ export function PatientReport() {
           </div>
         </div>
 
-        {/* IPID List - Show when UHID is entered but no IPID selected */}
-      {uhid && !selectedIPID && (
-        <div className="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden">
-          <div className="bg-gradient-to-r from-slate-50 to-blue-50 px-6 py-4 border-b border-slate-200">
-            <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-              <span className="text-blue-600">📋</span>
-              Select Admission (IPID)
+        {/* List: groups (date+time+IPID) or admissions (IPID) - when UHID entered, no report selected */}
+      {uhid && !selectedIPID && !reportData && (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+          <div className="bg-slate-50 px-6 py-4 border-b border-slate-200">
+            <h3 className="text-xl font-semibold text-slate-900">
+              {groupsFromUHID.length > 0 ? 'Select Audit (Date + Time + IPID)' : 'Select Admission (IPID)'}
             </h3>
             <p className="text-sm text-slate-600 mt-1">
-              UHID: <span className="font-mono font-semibold text-blue-700">{uhid.trim().toUpperCase()}</span>
+              UHID: <span className="font-mono font-semibold text-indigo-700">{uhid.trim().toUpperCase()}</span>
             </p>
           </div>
           <div className="p-6">
             {loadingAdmissions ? (
               <div className="text-center py-12">
                 <div className="inline-block animate-spin rounded-full h-10 w-10 border-3 border-blue-600 border-t-transparent mb-4"></div>
-                <div className="text-slate-600 font-medium">Loading admissions...</div>
+                <div className="text-slate-600 font-medium">Loading...</div>
+              </div>
+            ) : groupsFromUHID.length > 0 ? (
+              <div className="space-y-3">
+                {groupsFromUHID.map((group, idx) => {
+                  const dateStr = group.date ? new Date(group.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'
+                  const timeStr = group.auditTime || (group.submissions?.[0]?.submittedAt ? new Date(group.submissions[0].submittedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '')
+                  const ward = group.submissions?.[0]?.ward || group.submissions?.[0]?.patient?.ward || 'N/A'
+                  const unitNo = group.submissions?.[0]?.unitNo || group.submissions?.[0]?.patient?.unitNo || 'N/A'
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => handleGroupClick(group)}
+                      className="w-full text-left p-5 rounded-lg border border-slate-200 bg-white hover:border-indigo-300 hover:bg-indigo-50 transition-all shadow-sm hover:shadow-md group"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-3 flex-wrap">
+                            <span className="text-xl font-semibold text-indigo-700 group-hover:text-indigo-800 transition-colors">
+                              IPID: {group.ipid}
+                            </span>
+                            <span className="text-sm font-medium text-slate-600 bg-slate-100 px-2 py-1 rounded">
+                              {dateStr}
+                            </span>
+                            <span className="text-sm font-medium text-slate-600 bg-indigo-50 text-indigo-700 px-2 py-1 rounded">
+                              {timeStr}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4 text-sm">
+                            <div className="flex items-center gap-2">
+                              <span className="text-slate-500">🏥</span>
+                              <div>
+                                <div className="text-xs text-slate-500">Ward</div>
+                                <div className="font-semibold text-slate-700">{ward}</div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-slate-500">🏢</span>
+                              <div>
+                                <div className="text-xs text-slate-500">Unit</div>
+                                <div className="font-semibold text-slate-700">{unitNo}</div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="ml-6 flex items-center">
+                          <span className="text-indigo-700 text-sm font-semibold group-hover:text-indigo-800 transition-colors flex items-center gap-2">
+                            View Report
+                            <span className="text-lg group-hover:translate-x-1 transition-transform">→</span>
+                          </span>
+                        </div>
+                      </div>
+                    </button>
+                  )
+                })}
               </div>
             ) : admissions.length === 0 ? (
               <div className="text-center py-12 bg-amber-50 border-2 border-amber-200 rounded-lg">
                 <div className="text-5xl mb-3">📭</div>
                 <p className="font-semibold text-amber-800 mb-2">No Admissions Found</p>
                 <p className="text-sm text-amber-700">
-                  No admission records found for UHID: <span className="font-mono font-semibold">{uhid.trim().toUpperCase()}</span>
+                  No admission or audit records for UHID: <span className="font-mono font-semibold">{uhid.trim().toUpperCase()}</span>
                 </p>
               </div>
             ) : (
@@ -756,12 +890,12 @@ export function PatientReport() {
                     key={idx}
                     type="button"
                     onClick={() => handleIPIDClick(admission.ipid)}
-                    className="w-full text-left p-5 rounded-lg border-2 border-slate-200 bg-white hover:border-blue-400 hover:bg-gradient-to-r hover:from-blue-50 hover:to-slate-50 transition-all shadow-sm hover:shadow-md group"
+                    className="w-full text-left p-5 rounded-lg border border-slate-200 bg-white hover:border-indigo-300 hover:bg-indigo-50 transition-all shadow-sm hover:shadow-md group"
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-3">
-                          <span className="text-xl font-bold text-blue-600 group-hover:text-blue-700 transition-colors">
+                          <span className="text-xl font-semibold text-indigo-700 group-hover:text-indigo-800 transition-colors">
                             IPID: {admission.ipid}
                           </span>
                         </div>
@@ -783,7 +917,7 @@ export function PatientReport() {
                         </div>
                       </div>
                       <div className="ml-6 flex items-center">
-                        <span className="text-blue-600 text-sm font-semibold group-hover:text-blue-700 transition-colors flex items-center gap-2">
+                        <span className="text-indigo-700 text-sm font-semibold group-hover:text-indigo-800 transition-colors flex items-center gap-2">
                           View Report
                           <span className="text-lg group-hover:translate-x-1 transition-transform">→</span>
                         </span>
@@ -801,20 +935,21 @@ export function PatientReport() {
         {selectedIPID && reportData && reportData.totalSubmissions > 0 && (
         <div className="space-y-6">
           {/* Action Bar */}
-          <div className="bg-white rounded-xl shadow-lg border border-slate-200 p-4 no-print">
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 no-print">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center gap-3">
-                <div className="px-4 py-2 bg-blue-50 rounded-lg border border-blue-200">
+                <div className="px-4 py-2 bg-indigo-50 rounded-lg border border-indigo-200">
                   <div className="text-xs text-slate-600 mb-1">Selected IPID</div>
-                  <div className="font-mono font-bold text-blue-700 text-lg">{selectedIPID}</div>
+                  <div className="font-mono font-semibold text-indigo-700 text-lg">{selectedIPID}</div>
                 </div>
                 <button
                   type="button"
                   onClick={() => {
                     setSelectedIPID(null)
+                    setSelectedGroup(null)
                     setReportData(null)
                   }}
-                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-blue-600 hover:bg-slate-50 rounded-lg transition-colors border border-slate-300 hover:border-blue-300"
+                  className="px-4 py-2 text-sm font-medium text-slate-700 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg transition-colors border border-slate-300 hover:border-indigo-300"
                 >
                   ← Back to List
                 </button>
@@ -822,16 +957,20 @@ export function PatientReport() {
               <div className="flex flex-wrap gap-3">
                 <button
                   onClick={handleExportPDF}
-                  className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold px-6 py-2.5 rounded-lg shadow-md transition-all transform hover:scale-[1.02] text-sm flex items-center gap-2"
+                  className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-medium px-6 py-2.5 rounded-lg shadow-sm transition-all text-sm flex items-center gap-2"
                 >
-                  <span>📄</span>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
                   Export to PDF
                 </button>
                 <button
                   onClick={() => window.print()}
-                  className="bg-gradient-to-r from-slate-600 to-slate-700 hover:from-slate-700 hover:to-slate-800 text-white font-semibold px-6 py-2.5 rounded-lg shadow-md transition-all transform hover:scale-[1.02] text-sm flex items-center gap-2"
+                  className="border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-medium px-6 py-2.5 rounded-lg transition-all text-sm flex items-center gap-2"
                 >
-                  <span>🖨️</span>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                  </svg>
                   Print
                 </button>
               </div>
@@ -857,12 +996,18 @@ export function PatientReport() {
                 </h1>
               </div>
 
-              {/* Consultant, Ward, Unit fields */}
-              <div className="mb-4 print:mb-3 text-xs print:text-[10px] grid grid-cols-3 gap-4">
+              {/* Consultant, Ward, Unit, Unit Chief fields */}
+              <div className="mb-4 print:mb-3 text-xs print:text-[10px] grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div>
                   <span className="font-semibold">CONSULTANT NAME:</span>{' '}
                   <span className="border-b border-slate-400 inline-block min-w-[150px]">
                     {consultantName || (reportData?.departments?.[0]?.submittedBy?.name || '_______________________')}
+                  </span>
+                </div>
+                <div>
+                  <span className="font-semibold">UNIT CHIEF:</span>{' '}
+                  <span className="border-b border-slate-400 inline-block min-w-[120px]">
+                    {unitChief || '___________'}
                   </span>
                 </div>
                 <div>
@@ -915,20 +1060,23 @@ export function PatientReport() {
                 >
                   <thead style={{ display: 'table-header-group' }}>
                     <tr className="bg-slate-200" style={{ backgroundColor: '#e2e8f0', display: 'table-row' }}>
-                      <th className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-left font-bold align-top" style={{ width: '45%', border: '1.5px solid #1e293b', verticalAlign: 'middle', display: 'table-cell' }}>
+                      <th className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-left font-bold align-top" style={{ width: '30%', border: '1.5px solid #1e293b', verticalAlign: 'middle', display: 'table-cell' }}>
                         STANDARD & OBJECTIVE ELEMENTS
                       </th>
-                      <th className="border border-slate-800 px-1 py-2.5 print:px-0.5 print:py-2 text-center font-bold" style={{ width: '6%', border: '1.5px solid #1e293b', verticalAlign: 'middle', display: 'table-cell' }}>
+                      <th className="border border-slate-800 px-1 py-2.5 print:px-0.5 print:py-2 text-center font-bold" style={{ width: '5%', border: '1.5px solid #1e293b', verticalAlign: 'middle', display: 'table-cell' }}>
                         Yes
                       </th>
-                      <th className="border border-slate-800 px-1 py-2.5 print:px-0.5 print:py-2 text-center font-bold" style={{ width: '6%', border: '1.5px solid #1e293b', verticalAlign: 'middle', display: 'table-cell' }}>
+                      <th className="border border-slate-800 px-1 py-2.5 print:px-0.5 print:py-2 text-center font-bold" style={{ width: '5%', border: '1.5px solid #1e293b', verticalAlign: 'middle', display: 'table-cell' }}>
                         No
                       </th>
-                      <th className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-center font-bold align-top" style={{ width: '20%', border: '1.5px solid #1e293b', verticalAlign: 'middle', display: 'table-cell' }}>
+                      <th className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-center font-bold align-top" style={{ width: '15%', border: '1.5px solid #1e293b', verticalAlign: 'middle', display: 'table-cell' }}>
                         COMPLIANCE<br />Remarks (NA)
                       </th>
-                      <th className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-center font-bold" style={{ width: '23%', border: '1.5px solid #1e293b', verticalAlign: 'middle', display: 'table-cell' }}>
-                        Responsibility
+                      <th className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-center font-bold" style={{ width: '15%', border: '1.5px solid #1e293b', verticalAlign: 'middle', display: 'table-cell' }}>
+                        Corrective Action
+                      </th>
+                      <th className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-center font-bold" style={{ width: '15%', border: '1.5px solid #1e293b', verticalAlign: 'middle', display: 'table-cell' }}>
+                        Preventive Action
                       </th>
                     </tr>
                   </thead>
@@ -937,25 +1085,25 @@ export function PatientReport() {
                     {reportData.departments.map((deptData, deptIndex) => (
                       <React.Fragment key={deptIndex}>
                         {/* Department Header Row */}
-                        <tr 
-                          className="dept-header" 
-                          style={{ 
-                            backgroundColor: '#dbeafe', 
-                            pageBreakAfter: 'avoid',
-                            breakAfter: 'avoid',
-                            display: 'table-row',
-                          }}
-                        >
-                          <td 
-                            colSpan="5" 
-                            className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 font-bold text-sm print:text-xs" 
-                            style={{ 
-                              border: '1.5px solid #1e293b', 
-                              fontWeight: 'bold',
-                              backgroundColor: '#dbeafe',
-                              display: 'table-cell',
-                            }}
-                          >
+                            <tr 
+                              className="dept-header" 
+                              style={{ 
+                                backgroundColor: '#dbeafe', 
+                                pageBreakAfter: 'avoid',
+                                breakAfter: 'avoid',
+                                display: 'table-row',
+                              }}
+                            >
+                              <td 
+                                colSpan="6" 
+                                className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 font-bold text-sm print:text-xs" 
+                                style={{ 
+                                  border: '1.5px solid #1e293b', 
+                                  fontWeight: 'bold',
+                                  backgroundColor: '#dbeafe',
+                                  display: 'table-cell',
+                                }}
+                              >
                             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-2">
                               <div>
                                 <span className="font-bold">
@@ -1001,7 +1149,7 @@ export function PatientReport() {
                               }}
                             >
                               <td 
-                                colSpan="5" 
+                                colSpan="6" 
                                 className="border border-slate-800 px-2 py-2 print:px-1.5 print:py-1.5 font-semibold text-xs print:text-[10px]" 
                                 style={{ 
                                   border: '1.5px solid #1e293b', 
@@ -1023,7 +1171,8 @@ export function PatientReport() {
                               const isYes = !isTextType && (responseValue === 'YES' || responseValue === 'Yes' || responseValue === 'yes')
                               const isNo = !isTextType && (responseValue === 'NO' || responseValue === 'No' || responseValue === 'no')
                               const remarks = item.remarks || '-'
-                              const responsibility = item.responsibility || '-'
+                              const corrective = item.corrective || ''
+                              const preventive = item.preventive || ''
 
                               // For TEXT type, render a single row spanning all columns
                               if (isTextType) {
@@ -1037,41 +1186,41 @@ export function PatientReport() {
                                       breakInside: 'avoid',
                                     }}
                                   >
-                                    <td 
-                                      colSpan="5"
-                                      className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-slate-700" 
+                                  <td 
+                                    colSpan="6"
+                                    className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-slate-700" 
+                                    style={{ 
+                                      border: '1.5px solid #1e293b', 
+                                      verticalAlign: 'top', 
+                                      lineHeight: '1.4',
+                                      display: 'table-cell',
+                                      wordWrap: 'break-word',
+                                      overflowWrap: 'break-word',
+                                    }}
+                                  >
+                                    <div style={{ marginBottom: '4px', fontWeight: '500' }}>
+                                      <span style={{ fontWeight: '500' }}>{itemIndex + 1}.</span> {label}
+                                    </div>
+                                    <div 
                                       style={{ 
-                                        border: '1.5px solid #1e293b', 
-                                        verticalAlign: 'top', 
-                                        lineHeight: '1.4',
-                                        display: 'table-cell',
+                                        backgroundColor: '#e0f2fe', 
+                                        border: '1px solid #0284c7', 
+                                        borderRadius: '4px', 
+                                        padding: '8px', 
+                                        marginTop: '4px',
+                                        whiteSpace: 'pre-wrap',
                                         wordWrap: 'break-word',
                                         overflowWrap: 'break-word',
+                                        fontStyle: 'italic',
+                                        fontSize: '9pt',
+                                        lineHeight: '1.4',
                                       }}
+                                      className="print:text-[8pt]"
                                     >
-                                      <div style={{ marginBottom: '4px', fontWeight: '500' }}>
-                                        <span style={{ fontWeight: '500' }}>{itemIndex + 1}.</span> {label}
-                                      </div>
-                                      <div 
-                                        style={{ 
-                                          backgroundColor: '#e0f2fe', 
-                                          border: '1px solid #0284c7', 
-                                          borderRadius: '4px', 
-                                          padding: '8px', 
-                                          marginTop: '4px',
-                                          whiteSpace: 'pre-wrap',
-                                          wordWrap: 'break-word',
-                                          overflowWrap: 'break-word',
-                                          fontStyle: 'italic',
-                                          fontSize: '9pt',
-                                          lineHeight: '1.4',
-                                        }}
-                                        className="print:text-[8pt]"
-                                      >
-                                        {responseValue || 'N/A'}
-                                      </div>
-                                    </td>
-                                  </tr>
+                                      {responseValue || 'N/A'}
+                                    </div>
+                                  </td>
+                                </tr>
                                 )
                               }
 
@@ -1164,19 +1313,35 @@ export function PatientReport() {
                                     </div>
                                   </td>
                                   <td 
-                                    className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-center text-slate-700 text-[10px] print:text-[8px]" 
+                                    className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-slate-700 text-[10px] print:text-[8px]" 
                                     style={{ 
                                       border: '1.5px solid #1e293b', 
-                                      verticalAlign: 'middle', 
+                                      verticalAlign: 'top', 
                                       lineHeight: '1.3',
                                       display: 'table-cell',
                                       wordWrap: 'break-word',
                                       overflowWrap: 'break-word',
-                                      maxWidth: '23%',
+                                      maxWidth: '15%',
                                     }}
                                   >
-                                    <div style={{ wordWrap: 'break-word', overflowWrap: 'break-word' }}>
-                                      {responsibility}
+                                    <div style={{ wordWrap: 'break-word', overflowWrap: 'break-word', fontStyle: item.corrective ? 'normal' : 'italic', color: item.corrective ? 'inherit' : '#94a3b8' }}>
+                                      {item.corrective || '—'}
+                                    </div>
+                                  </td>
+                                  <td 
+                                    className="border border-slate-800 px-2 py-2.5 print:px-1.5 print:py-2 text-slate-700 text-[10px] print:text-[8px]" 
+                                    style={{ 
+                                      border: '1.5px solid #1e293b', 
+                                      verticalAlign: 'top', 
+                                      lineHeight: '1.3',
+                                      display: 'table-cell',
+                                      wordWrap: 'break-word',
+                                      overflowWrap: 'break-word',
+                                      maxWidth: '15%',
+                                    }}
+                                  >
+                                    <div style={{ wordWrap: 'break-word', overflowWrap: 'break-word', fontStyle: item.preventive ? 'normal' : 'italic', color: item.preventive ? 'inherit' : '#94a3b8' }}>
+                                      {item.preventive || '—'}
                                     </div>
                                   </td>
                                 </tr>

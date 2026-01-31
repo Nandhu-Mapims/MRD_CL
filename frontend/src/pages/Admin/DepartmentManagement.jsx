@@ -52,21 +52,21 @@ export function DepartmentManagement() {
       </div>
       <form
         onSubmit={handleSubmit}
-        className="bg-white shadow rounded p-4 grid grid-cols-1 md:grid-cols-4 gap-3 items-end"
+        className="bg-white shadow-sm rounded-xl border border-slate-200 p-4 grid grid-cols-1 md:grid-cols-4 gap-3 items-end"
       >
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Name</label>
+          <label className="block text-xs font-medium text-slate-700 mb-1">Name</label>
           <input
-            className="border rounded w-full px-2 py-1 text-sm"
+            className="border border-slate-300 rounded-lg w-full px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Code</label>
+          <label className="block text-xs font-medium text-slate-700 mb-1">Code</label>
           <input
-            className="border rounded w-full px-2 py-1 text-sm"
+            className="border border-slate-300 rounded-lg w-full px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             value={code}
             onChange={(e) => setCode(e.target.value)}
             required
@@ -75,7 +75,7 @@ export function DepartmentManagement() {
         <div>
           <button
             type="submit"
-            className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-medium px-3 py-2 rounded-lg text-sm w-full shadow-md transition-all"
+            className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-medium px-3 py-2 rounded-lg text-sm w-full shadow-sm transition-all"
           >
             {editing ? 'Update' : 'Add'} Department
           </button>
@@ -88,7 +88,7 @@ export function DepartmentManagement() {
               setName('')
               setCode('')
             }}
-            className="text-xs text-slate-500 underline"
+            className="text-xs text-indigo-700 hover:text-indigo-800 font-medium"
           >
             Cancel edit
           </button>
@@ -96,15 +96,15 @@ export function DepartmentManagement() {
       </form>
 
       {/* Desktop Table View */}
-      <div className="hidden md:block bg-white shadow rounded-lg overflow-hidden">
+      <div className="hidden md:block bg-white shadow-sm rounded-xl overflow-hidden border border-slate-200">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-gradient-to-r from-blue-700 via-blue-600 to-blue-500 text-white">
+            <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
-                <th className="text-left px-4 lg:px-6 py-3 font-semibold text-xs lg:text-sm">Name</th>
-                <th className="text-left px-4 lg:px-6 py-3 font-semibold text-xs lg:text-sm">Code</th>
-                <th className="text-left px-4 lg:px-6 py-3 font-semibold text-xs lg:text-sm">Status</th>
-                <th className="text-center px-4 lg:px-6 py-3 font-semibold text-xs lg:text-sm">Actions</th>
+                <th className="text-left px-4 lg:px-6 py-3 font-semibold text-xs lg:text-sm text-slate-700 uppercase tracking-wide">Name</th>
+                <th className="text-left px-4 lg:px-6 py-3 font-semibold text-xs lg:text-sm text-slate-700 uppercase tracking-wide">Code</th>
+                <th className="text-left px-4 lg:px-6 py-3 font-semibold text-xs lg:text-sm text-slate-700 uppercase tracking-wide">Status</th>
+                <th className="text-center px-4 lg:px-6 py-3 font-semibold text-xs lg:text-sm text-slate-700 uppercase tracking-wide">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
@@ -115,7 +115,7 @@ export function DepartmentManagement() {
                   <td className="px-4 lg:px-6 py-3">
                     <span
                       className={`px-2 lg:px-3 py-1 rounded-full text-xs font-medium ${
-                        d.isActive ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'
+                        d.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'
                       }`}
                     >
                       {d.isActive ? 'Active' : 'Inactive'}
@@ -125,13 +125,13 @@ export function DepartmentManagement() {
                     <div className="flex items-center justify-center gap-2">
                       <button
                         onClick={() => handleEdit(d)}
-                        className="text-blue-600 hover:text-blue-700 text-xs lg:text-sm font-medium px-2 lg:px-3 py-1 rounded hover:bg-blue-50 transition-colors"
+                        className="text-indigo-700 hover:text-indigo-800 text-xs lg:text-sm font-medium px-2 lg:px-3 py-1 rounded hover:bg-indigo-50 transition-colors"
                       >
                         Edit
                       </button>
                       <button
                         onClick={() => toggleActive(d)}
-                        className="text-blue-600 hover:text-blue-700 text-xs lg:text-sm font-medium px-2 lg:px-3 py-1 rounded hover:bg-blue-50 transition-colors"
+                        className="text-slate-700 hover:text-slate-800 text-xs lg:text-sm font-medium px-2 lg:px-3 py-1 rounded hover:bg-slate-100 transition-colors"
                       >
                         {d.isActive ? 'Disable' : 'Enable'}
                       </button>
@@ -147,7 +147,7 @@ export function DepartmentManagement() {
       {/* Mobile Card View */}
       <div className="md:hidden space-y-3">
         {departments.map((d) => (
-          <div key={d._id} className="bg-white rounded-lg shadow-md border border-slate-200 p-4">
+          <div key={d._id} className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
             <div className="flex items-start justify-between mb-3">
               <div className="flex-1">
                 <h3 className="font-semibold text-slate-800 text-sm mb-1">{d.name}</h3>
@@ -155,7 +155,7 @@ export function DepartmentManagement() {
               </div>
               <span
                 className={`px-2 py-1 rounded-full text-xs font-medium ${
-                  d.isActive ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'
+                  d.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'
                 }`}
               >
                 {d.isActive ? 'Active' : 'Inactive'}
@@ -164,13 +164,13 @@ export function DepartmentManagement() {
             <div className="flex gap-2 pt-3 border-t border-slate-200">
               <button
                 onClick={() => handleEdit(d)}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-3 py-2 rounded-lg transition-colors"
+                className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white text-xs font-medium px-3 py-2 rounded-lg transition-colors"
               >
                 Edit
               </button>
               <button
                 onClick={() => toggleActive(d)}
-                className="flex-1 bg-slate-600 hover:bg-slate-700 text-white text-xs font-medium px-3 py-2 rounded-lg transition-colors"
+                className="flex-1 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium px-3 py-2 rounded-lg transition-colors"
               >
                 {d.isActive ? 'Disable' : 'Enable'}
               </button>

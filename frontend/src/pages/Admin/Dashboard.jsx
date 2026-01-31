@@ -77,10 +77,10 @@ export function Dashboard() {
   const MetricsSkeleton = () => (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
       {[1, 2, 3, 4].map(i => (
-        <div key={i} className="bg-gradient-to-br from-white to-blue-50 rounded-xl shadow-lg p-4 sm:p-6 border border-blue-100">
-          <div className="h-3 bg-slate-200 rounded w-1/2 mb-3 animate-pulse" />
-          <div className="h-8 bg-slate-200 rounded w-1/3 mb-2 animate-pulse" />
-          <div className="h-2 bg-slate-200 rounded w-2/3 animate-pulse" />
+        <div key={i} className="bg-white/95 backdrop-blur-md rounded-2xl shadow-lg p-4 sm:p-6 border border-indigo-200/50">
+          <div className="h-3 bg-gradient-to-r from-indigo-100 to-purple-100 rounded w-1/2 mb-3 animate-pulse" />
+          <div className="h-8 bg-gradient-to-r from-indigo-200 to-purple-200 rounded w-1/3 mb-2 animate-pulse" />
+          <div className="h-2 bg-gradient-to-r from-indigo-100 to-purple-100 rounded w-2/3 animate-pulse" />
         </div>
       ))}
     </div>
@@ -89,15 +89,15 @@ export function Dashboard() {
   if (loading && !stats) {
     return (
       <div className="space-y-4 sm:space-y-6">
-        <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-blue-800 text-white rounded-xl shadow-2xl p-6 sm:p-8 relative overflow-hidden">
-          <div className="absolute inset-0 bg-black opacity-5"></div>
-          <div className="relative z-10">
-            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-2 drop-shadow-lg">
-              Audit Dashboard
-            </h2>
-            <p className="text-blue-100 text-sm sm:text-base">
-              Comprehensive department-wise compliance and case analytics
-            </p>
+        <div className="bg-white/95 backdrop-blur-md border border-indigo-200/50 rounded-2xl shadow-xl px-5 py-4 sm:py-5">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">Admin Dashboard</h1>
+              <p className="mt-1 text-sm text-slate-600">Comprehensive department-wise compliance and case analytics</p>
+            </div>
+            <span className="inline-flex items-center rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 px-3 py-1 text-xs font-semibold text-white shadow-lg shadow-indigo-500/50">
+              ADMIN ROLE
+            </span>
           </div>
         </div>
         <MetricsSkeleton />
@@ -108,17 +108,26 @@ export function Dashboard() {
   if (error) {
     return (
       <div className="space-y-6">
-        <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl shadow-xl p-6 sm:p-8">
-          <h2 className="text-2xl sm:text-3xl font-bold mb-2">Audit Dashboard</h2>
-          <p className="text-blue-100">Department-wise compliance and case analytics</p>
+        <div className="bg-white/95 backdrop-blur-md border border-indigo-200/50 rounded-2xl shadow-xl px-5 py-4 sm:py-5">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">Admin Dashboard</h1>
+              <p className="mt-1 text-sm text-slate-600">Department-wise compliance and case analytics</p>
+            </div>
+            <span className="inline-flex items-center rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 px-3 py-1 text-xs font-semibold text-white shadow-lg shadow-indigo-500/50">
+              ADMIN ROLE
+            </span>
+          </div>
         </div>
-        <div className="bg-red-50 border-2 border-red-200 rounded-xl p-6 text-center">
-          <div className="text-4xl mb-4">⚠️</div>
+        <div className="bg-red-50 border-2 border-red-300 rounded-2xl p-6 text-center shadow-lg">
+          <svg className="w-12 h-12 mx-auto mb-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
           <p className="text-red-800 font-semibold mb-2">Error Loading Dashboard Data</p>
           <p className="text-red-600 text-sm mb-4">{error}</p>
           <button
             onClick={loadData}
-            className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors"
+            className="px-6 py-2 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white rounded-lg font-medium transition-all shadow-lg hover:shadow-xl"
           >
             Retry
           </button>
@@ -130,13 +139,22 @@ export function Dashboard() {
   if (!stats || !stats.departmentStats || stats.departmentStats.length === 0) {
     return (
       <div className="space-y-6">
-        <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl shadow-xl p-6 sm:p-8">
-          <h2 className="text-2xl sm:text-3xl font-bold mb-2">Audit Dashboard</h2>
-          <p className="text-blue-100">Department-wise compliance and case analytics</p>
+        <div className="bg-white/95 backdrop-blur-md border border-indigo-200/50 rounded-2xl shadow-xl px-5 py-4 sm:py-5">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">Admin Dashboard</h1>
+              <p className="mt-1 text-sm text-slate-600">Department-wise compliance and case analytics</p>
+            </div>
+            <span className="inline-flex items-center rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 px-3 py-1 text-xs font-semibold text-white shadow-lg shadow-indigo-500/50">
+              ADMIN ROLE
+            </span>
+          </div>
         </div>
-        <div className="bg-white rounded-xl shadow-lg p-12 text-center border-2 border-dashed border-slate-300">
-          <div className="text-6xl mb-4">📊</div>
-          <p className="text-slate-600 text-lg font-medium mb-2">No audit data available yet</p>
+        <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-xl p-12 text-center border-2 border-dashed border-indigo-300">
+          <svg className="w-16 h-16 mx-auto mb-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+          </svg>
+          <p className="text-slate-700 text-lg font-medium mb-2">No audit data available yet</p>
           <p className="text-sm text-slate-500">
             Start creating audit submissions to see statistics here
           </p>
@@ -175,102 +193,103 @@ export function Dashboard() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      {/* Elegant Header */}
-      <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-blue-800 text-white rounded-xl shadow-2xl p-6 sm:p-8 relative overflow-hidden">
-        <div className="absolute inset-0 bg-black opacity-5"></div>
-        <div className="relative z-10">
-          <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-2 drop-shadow-lg">
-            Audit Dashboard
-          </h2>
-          <p className="text-blue-100 text-sm sm:text-base">
-            Comprehensive department-wise compliance and case analytics
-          </p>
+      {/* Header */}
+      <div className="bg-white/95 backdrop-blur-md border border-indigo-200/50 rounded-2xl shadow-xl px-5 py-4 sm:py-5">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">Admin Dashboard</h1>
+            <p className="mt-1 text-sm text-slate-600">Comprehensive department-wise compliance and case analytics</p>
+          </div>
+          <span className="inline-flex items-center rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 px-3 py-1 text-xs font-semibold text-white shadow-lg shadow-indigo-500/50">
+            ADMIN ROLE
+          </span>
         </div>
-        <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-5 rounded-full -mr-32 -mt-32"></div>
-        <div className="absolute bottom-0 left-0 w-48 h-48 bg-white opacity-5 rounded-full -ml-24 -mb-24"></div>
       </div>
 
-      {/* Enhanced Summary Cards */}
+      {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
-        <div className="bg-gradient-to-br from-white to-blue-50 rounded-xl shadow-lg p-4 sm:p-6 border border-blue-100 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+        <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-lg p-4 sm:p-6 border border-indigo-200/50 hover:shadow-xl hover:scale-[1.02] transition-all duration-200">
           <div className="flex items-center justify-between">
             <div className="min-w-0 flex-1">
               <p className="text-[10px] sm:text-xs text-slate-600 mb-1 font-medium uppercase tracking-wide">
                 Total Cases
               </p>
-              <p className="text-2xl sm:text-3xl md:text-4xl font-bold text-blue-600">{totalCases}</p>
+              <p className="text-2xl sm:text-3xl md:text-4xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">{totalCases}</p>
               <p className="text-[9px] sm:text-xs text-slate-500 mt-1">Unique patients</p>
             </div>
-            <div className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center flex-shrink-0 ml-3 shadow-lg">
-              <span className="text-xl sm:text-2xl md:text-3xl">📋</span>
+            <div className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-xl flex items-center justify-center flex-shrink-0 ml-3 shadow-sm">
+              <svg className="w-6 h-6 sm:w-7 sm:h-7 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
             </div>
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-white to-blue-50 rounded-xl shadow-lg p-4 sm:p-6 border border-blue-100 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+        <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-lg p-4 sm:p-6 border border-indigo-200/50 hover:shadow-xl hover:scale-[1.02] transition-all duration-200">
           <div className="flex items-center justify-between">
             <div className="min-w-0 flex-1">
               <p className="text-[10px] sm:text-xs text-slate-600 mb-1 font-medium uppercase tracking-wide">
                 Submissions
               </p>
-              <p className="text-2xl sm:text-3xl md:text-4xl font-bold text-blue-600">
+              <p className="text-2xl sm:text-3xl md:text-4xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
                 {overall.totalSubmissions || 0}
               </p>
               <p className="text-[9px] sm:text-xs text-slate-500 mt-1">Total entries</p>
             </div>
-            <div className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center flex-shrink-0 ml-3 shadow-lg">
-              <span className="text-xl sm:text-2xl md:text-3xl">📝</span>
+            <div className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-xl flex items-center justify-center flex-shrink-0 ml-3 shadow-sm">
+              <svg className="w-6 h-6 sm:w-7 sm:h-7 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
             </div>
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-white to-green-50 rounded-xl shadow-lg p-4 sm:p-6 border border-green-100 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+        <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-lg p-4 sm:p-6 border border-indigo-200/50 hover:shadow-xl hover:scale-[1.02] transition-all duration-200">
           <div className="flex items-center justify-between">
             <div className="min-w-0 flex-1">
               <p className="text-[10px] sm:text-xs text-slate-600 mb-1 font-medium uppercase tracking-wide">
                 Compliance
               </p>
-              <p className="text-2xl sm:text-3xl md:text-4xl font-bold text-green-600">{totalCompliance}%</p>
+              <p className="text-2xl sm:text-3xl md:text-4xl font-bold text-emerald-600">{totalCompliance}%</p>
               <p className="text-[9px] sm:text-xs text-slate-500 mt-1">Overall rate</p>
             </div>
-            <div className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 bg-gradient-to-br from-green-500 to-green-600 rounded-xl flex items-center justify-center flex-shrink-0 ml-3 shadow-lg">
-              <span className="text-xl sm:text-2xl md:text-3xl">✅</span>
+            <div className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 bg-gradient-to-br from-emerald-100 to-green-100 rounded-xl flex items-center justify-center flex-shrink-0 ml-3 shadow-sm">
+              <svg className="w-6 h-6 sm:w-7 sm:h-7 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
             </div>
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-white to-orange-50 rounded-xl shadow-lg p-4 sm:p-6 border border-orange-100 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+        <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-lg p-4 sm:p-6 border border-indigo-200/50 hover:shadow-xl hover:scale-[1.02] transition-all duration-200">
           <div className="flex items-center justify-between">
             <div className="min-w-0 flex-1">
               <p className="text-[10px] sm:text-xs text-slate-600 mb-1 font-medium uppercase tracking-wide">
                 Open Issues
               </p>
-              <p className="text-2xl sm:text-3xl md:text-4xl font-bold text-orange-600">
+              <p className="text-2xl sm:text-3xl md:text-4xl font-bold text-amber-600">
                 {overall.totalOpenIssues || 0}
               </p>
               <p className="text-[9px] sm:text-xs text-slate-500 mt-1">Requires attention</p>
             </div>
-            <div className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl flex items-center justify-center flex-shrink-0 ml-3 shadow-lg">
-              <span className="text-xl sm:text-2xl md:text-3xl">⚠️</span>
+            <div className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 bg-gradient-to-br from-amber-100 to-orange-100 rounded-xl flex items-center justify-center flex-shrink-0 ml-3 shadow-sm">
+              <svg className="w-6 h-6 sm:w-7 sm:h-7 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Enhanced Charts Row */}
+      {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-        {/* Cases by Department - Enhanced Bar Chart */}
-        <div className="bg-white rounded-xl shadow-lg p-5 sm:p-6 border border-slate-100 hover:shadow-xl transition-shadow duration-300">
-          <div className="flex items-center justify-between mb-4 sm:mb-5">
-            <div>
-              <h3 className="text-base sm:text-lg font-bold text-slate-800 mb-1">
-                Cases Count by Department
-              </h3>
-              <p className="text-xs sm:text-sm text-slate-500">Patient cases distribution</p>
-            </div>
-            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-              <span className="text-lg">📊</span>
-            </div>
+        {/* Cases by Department */}
+        <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-xl p-5 sm:p-6 border border-indigo-200/50">
+          <div className="mb-4 sm:mb-5">
+            <h3 className="text-base sm:text-lg font-semibold text-slate-900 mb-1">
+              Cases Count by Department
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-500">Patient cases distribution</p>
           </div>
           <ResponsiveContainer width="100%" height={280} className="sm:h-[320px]">
             <BarChart data={barChartData} margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
@@ -319,18 +338,13 @@ export function Dashboard() {
           </ResponsiveContainer>
         </div>
 
-        {/* Cases Distribution - Enhanced Pie Chart */}
-        <div className="bg-white rounded-xl shadow-lg p-5 sm:p-6 border border-slate-100 hover:shadow-xl transition-shadow duration-300">
-          <div className="flex items-center justify-between mb-4 sm:mb-5">
-            <div>
-              <h3 className="text-base sm:text-lg font-bold text-slate-800 mb-1">
-                Cases Distribution
-              </h3>
-              <p className="text-xs sm:text-sm text-slate-500">Percentage breakdown</p>
-            </div>
-            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-              <span className="text-lg">🥧</span>
-            </div>
+        {/* Cases Distribution */}
+        <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-xl p-5 sm:p-6 border border-indigo-200/50">
+          <div className="mb-4 sm:mb-5">
+            <h3 className="text-base sm:text-lg font-semibold text-slate-900 mb-1">
+              Cases Distribution
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-500">Percentage breakdown</p>
           </div>
           <ResponsiveContainer width="100%" height={280} className="sm:h-[320px]">
             <PieChart>
@@ -364,18 +378,13 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* Enhanced Compliance Chart */}
-      <div className="bg-white rounded-xl shadow-lg p-5 sm:p-6 border border-slate-100 hover:shadow-xl transition-shadow duration-300">
-        <div className="flex items-center justify-between mb-4 sm:mb-5">
-          <div>
-            <h3 className="text-base sm:text-lg font-bold text-slate-800 mb-1">
-              Compliance Rate by Department
-            </h3>
-            <p className="text-xs sm:text-sm text-slate-500">Trend analysis across departments</p>
-          </div>
-          <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-            <span className="text-lg">📈</span>
-          </div>
+      {/* Compliance Chart */}
+      <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-xl p-5 sm:p-6 border border-indigo-200/50">
+        <div className="mb-4 sm:mb-5">
+          <h3 className="text-base sm:text-lg font-semibold text-slate-900 mb-1">
+            Compliance Rate by Department
+          </h3>
+          <p className="text-xs sm:text-sm text-slate-500">Trend analysis across departments</p>
         </div>
         <ResponsiveContainer width="100%" height={280} className="sm:h-[320px]">
           <AreaChart data={complianceData} margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
@@ -429,22 +438,15 @@ export function Dashboard() {
         </ResponsiveContainer>
       </div>
 
-      {/* Enhanced Department-wise Detailed Stats */}
-      <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-slate-100">
-        <div className="bg-gradient-to-r from-blue-700 via-blue-600 to-blue-500 text-white px-5 sm:px-6 py-4 sm:py-5 shadow-lg">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
-              <span className="text-xl">📋</span>
-            </div>
-            <div>
-              <h3 className="text-base sm:text-lg font-bold">Department-wise Statistics</h3>
-              <p className="text-blue-100 text-xs sm:text-sm">Detailed breakdown by department</p>
-            </div>
-          </div>
+      {/* Department-wise Detailed Stats */}
+      <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-xl overflow-hidden border border-indigo-200/50">
+        <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border-b border-indigo-200/50 px-5 sm:px-6 py-4 sm:py-5">
+          <h3 className="text-base sm:text-lg font-semibold text-slate-900">Department-wise Statistics</h3>
+          <p className="text-slate-600 text-xs sm:text-sm mt-1">Detailed breakdown by department</p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[800px]">
-            <thead className="bg-gradient-to-r from-blue-50 to-blue-100">
+            <thead className="bg-slate-50">
               <tr>
                 <th className="px-4 sm:px-6 py-3 text-left text-xs font-bold text-slate-700 uppercase tracking-wider">
                   Department
@@ -477,7 +479,7 @@ export function Dashboard() {
                     <div className="text-xs text-slate-500">({dept.name})</div>
                   </td>
                   <td className="px-4 sm:px-6 py-4 text-center">
-                    <span className="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs sm:text-sm font-semibold">
+                    <span className="inline-flex items-center px-3 py-1 bg-slate-100 text-slate-700 rounded-full text-xs sm:text-sm font-semibold">
                       {dept.cases}
                     </span>
                   </td>
@@ -485,20 +487,20 @@ export function Dashboard() {
                     {dept.submissions}
                   </td>
                   <td className="px-4 sm:px-6 py-4 text-center">
-                    <span className="inline-flex items-center px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs sm:text-sm font-semibold">
+                    <span className="inline-flex items-center px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full text-xs sm:text-sm font-semibold">
                       {dept.compliant}
                     </span>
                   </td>
                   <td className="px-4 sm:px-6 py-4 text-center">
-                    <span className="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs sm:text-sm font-semibold">
+                    <span className="inline-flex items-center px-3 py-1 bg-slate-100 text-slate-700 rounded-full text-xs sm:text-sm font-semibold">
                       {dept.nonCompliant}
                     </span>
                   </td>
                   <td className="px-4 sm:px-6 py-4">
                     <div className="flex items-center justify-center gap-2">
-                      <div className="w-20 sm:w-24 md:w-32 bg-slate-100 rounded-full h-2 overflow-hidden shadow-inner">
+                      <div className="w-20 sm:w-24 md:w-32 bg-slate-200 rounded-full h-2 overflow-hidden">
                         <div
-                          className="h-full bg-gradient-to-r from-blue-500 via-blue-600 to-blue-700 rounded-full transition-all duration-500"
+                          className="h-full bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full transition-all duration-500"
                           style={{ width: `${dept.compliance}%` }}
                         />
                       </div>

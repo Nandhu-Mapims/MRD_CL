@@ -34,6 +34,32 @@ const auditSubmissionSchema = new mongoose.Schema(
       uppercase: true,
       index: true,
     },
+    // Unit Chief (optional)
+    unitChief: {
+      type: String,
+      trim: true,
+    },
+    // Corrective action (filled by Unit Chief)
+    corrective: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    // Preventive action (filled by Unit Chief)
+    preventive: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    // Corrective/Preventive filled by
+    correctivePreventiveBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+    },
+    // Corrective/Preventive filled at
+    correctivePreventiveAt: {
+      type: Date,
+    },
     // Admission reference
     admission: {
       type: mongoose.Schema.Types.ObjectId,
@@ -72,6 +98,18 @@ const auditSubmissionSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+    // Audit date (date-only) and time for uniqueness: Dept+UHID+IPID+Date+Time
+    auditDate: {
+      type: Date,
+      required: false,
+      index: true,
+    },
+    auditTime: {
+      type: String,
+      trim: true,
+      required: false,
+      index: true,
+    },
     // Lock flag to prevent editing after submission
     isLocked: {
       type: Boolean,
@@ -92,6 +130,7 @@ auditSubmissionSchema.index({ uhid: 1, submittedAt: -1 }); // For patient timeli
 auditSubmissionSchema.index({ ipid: 1, submittedAt: -1 }); // For admission timeline queries
 auditSubmissionSchema.index({ department: 1, formTemplate: 1 }); // For form-level queries
 auditSubmissionSchema.index({ 'responseValue': 1 }); // For compliance queries
+auditSubmissionSchema.index({ uhid: 1, ipid: 1, department: 1, auditDate: 1, auditTime: 1 }); // For duplicate check
 
 module.exports = mongoose.model('AuditSubmission', auditSubmissionSchema);
 

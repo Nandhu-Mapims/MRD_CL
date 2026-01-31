@@ -1,366 +1,488 @@
-import React from 'react'
+import React, { useState, useMemo } from 'react'
 
 export function UserManual() {
-  return (
-    <div className="max-w-5xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl shadow-lg p-6 text-white">
-        <h1 className="text-3xl font-bold mb-2">📖 User Manual</h1>
-        <p className="text-blue-100">Complete guide to using the Hospital Audit System</p>
-      </div>
+  const [searchQuery, setSearchQuery] = useState('')
 
-      {/* Table of Contents */}
-      <div className="bg-white rounded-lg shadow-md p-6 border border-slate-200">
-        <h2 className="text-2xl font-bold text-slate-800 mb-4 flex items-center gap-2">
-          <span>📑</span> Table of Contents
-        </h2>
-        <ul className="space-y-2 text-slate-700">
-          <li><a href="#getting-started" className="text-blue-600 hover:underline">1. Getting Started</a></li>
-          <li><a href="#login" className="text-blue-600 hover:underline">2. Login</a></li>
-          <li><a href="#navigation" className="text-blue-600 hover:underline">3. Navigation</a></li>
-          <li><a href="#filling-forms" className="text-blue-600 hover:underline">4. Filling Audit Forms</a></li>
-          <li><a href="#viewing-reports" className="text-blue-600 hover:underline">5. Viewing Reports</a></li>
-          <li><a href="#department-logs" className="text-blue-600 hover:underline">6. Department Logs</a></li>
-          <li><a href="#faq" className="text-blue-600 hover:underline">7. Frequently Asked Questions</a></li>
-        </ul>
-      </div>
+  // All manual content organized by sections
+  const sections = [
+    {
+      id: 'login',
+      title: 'Login',
+      icon: '🔐',
+      content: [
+        { type: 'text', value: 'Enter your email and password to login. Contact admin if you forgot your password.' },
+        { type: 'steps', value: ['Go to login page', 'Enter email and password', 'Click "Login"'] }
+      ],
+      keywords: ['login', 'password', 'email', 'sign in', 'access', 'credentials']
+    },
+    {
+      id: 'roles',
+      title: 'User Roles',
+      icon: '👥',
+      content: [
+        { type: 'roles', value: [
+          { role: 'Admin', color: 'blue', desc: 'Full system access. Manage users, departments, forms.' },
+          { role: 'Auditor', color: 'green', desc: 'Submit checklists. View reports and department logs.' },
+          { role: 'Chief/HOD', color: 'purple', desc: 'Review submissions. Add corrective & preventive actions.' }
+        ]}
+      ],
+      keywords: ['role', 'admin', 'auditor', 'chief', 'hod', 'permission', 'access']
+    },
+    {
+      id: 'submit-checklist',
+      title: 'Submit Checklist (Auditor)',
+      icon: '📝',
+      content: [
+        { type: 'steps', value: [
+          'Click form name in navigation (e.g., "Audit Checklist")',
+          'Enter UHID (from OP Card) and IPID (Admission ID)',
+          'Enter Patient Name, Ward, Unit No',
+          'Select Unit Chief from dropdown',
+          'Set Audit Date (default: today) and Audit Time (default: current time) – used to identify this audit session',
+          'Answer YES or NO for each item',
+          'Add remarks if NO is selected (mandatory)',
+          'Click "Submit Checklist"'
+        ]},
+        { type: 'tip', value: 'You can audit the same admission (UHID + IPID) multiple times per day: use a different Audit Time for each submission. Uniqueness is UHID + IPID + Department + Date + Time.' },
+        { type: 'warning', value: 'One submission per UHID + IPID + Department + Date + Time. Submissions are locked after submit (cannot edit).' }
+      ],
+      keywords: ['submit', 'checklist', 'form', 'uhid', 'ipid', 'patient', 'ward', 'unit', 'audit date', 'audit time', 'yes', 'no', 'remarks', 'auditor']
+    },
+    {
+      id: 'chief-review',
+      title: 'Review & Add Actions (Chief)',
+      icon: '👔',
+      content: [
+        { type: 'steps', value: [
+          'Open "Chief Dashboard" from navigation',
+          'Click on a patient to expand submissions',
+          'View checklist responses (read-only)',
+          'Enter Corrective Action in the text field',
+          'Enter Preventive Action in the text field',
+          'Click "Save" for that row',
+          'Auditor receives notification automatically'
+        ]},
+        { type: 'tip', value: 'Use "Apply to All" to set same actions for all submissions of a patient.' }
+      ],
+      keywords: ['chief', 'hod', 'review', 'corrective', 'preventive', 'action', 'dashboard']
+    },
+    {
+      id: 'patient-report',
+      title: 'Patient Report',
+      icon: '📋',
+      content: [
+        { type: 'steps', value: [
+          'Click "Patient Report" in navigation',
+          'Enter UHID and click "Search"',
+          'Select one audit from the list – each row shows Date, Time, and IPID (grouped by audit session)',
+          'View the complete audit report for that session',
+          'Use "Export to PDF" or "Print" as needed',
+          'Use "Back to List" to choose another audit for the same UHID'
+        ]},
+        { type: 'text', value: 'Results are grouped by Date + Time + IPID, so you can open a specific audit session (e.g. morning vs afternoon audit for the same admission).' },
+        { type: 'table', value: {
+          headers: ['Column', 'Description'],
+          rows: [
+            ['Checklist Item', 'The audit question'],
+            ['YES / NO', 'Auditor response'],
+            ['Remarks', 'Comments (if NO)'],
+            ['Corrective Action', 'Added by Chief'],
+            ['Preventive Action', 'Added by Chief']
+          ]
+        }}
+      ],
+      keywords: ['report', 'patient', 'uhid', 'ipid', 'date', 'time', 'print', 'pdf', 'export']
+    },
+    {
+      id: 'department-logs',
+      title: 'Department Logs',
+      icon: '📊',
+      content: [
+        { type: 'text', value: 'View all audit submissions for your department. When you open a patient by UHID, audits are grouped by Date + Time + IPID.' },
+        { type: 'steps', value: [
+          'Click "Department Logs" in navigation',
+          'Expand a department and click a UHID (e.g. "UHID: 12345") to open the preview modal',
+          'Select one audit from the list – each row shows Date, Time, and IPID for that audit session',
+          'View checklist responses, remarks, and corrective/preventive actions for that session',
+          'Use "Back to List" to pick another audit, or "Close" to exit'
+        ]}
+      ],
+      keywords: ['department', 'logs', 'view', 'submissions', 'filter', 'preview', 'uhid', 'date', 'time', 'ipid']
+    },
+    {
+      id: 'notifications',
+      title: 'Notifications',
+      icon: '🔔',
+      content: [
+        { type: 'text', value: 'Auditors receive notifications when Chiefs add actions to their submissions.' },
+        { type: 'steps', value: [
+          'Bell icon shows unread count',
+          'Click bell to view notifications',
+          'Click notification to mark as read',
+          '"Mark all read" clears all'
+        ]}
+      ],
+      keywords: ['notification', 'bell', 'alert', 'unread', 'message']
+    },
+    {
+      id: 'admin-departments',
+      title: 'Manage Departments (Admin)',
+      icon: '🏢',
+      content: [
+        { type: 'text', value: 'Navigate to: Configure → Departments' },
+        { type: 'list', value: [
+          'Create departments with name and code',
+          'Edit department details',
+          'Activate or deactivate departments'
+        ]}
+      ],
+      keywords: ['admin', 'department', 'create', 'manage', 'configure']
+    },
+    {
+      id: 'admin-users',
+      title: 'Manage Users (Admin)',
+      icon: '👤',
+      content: [
+        { type: 'text', value: 'Navigate to: Configure → Users' },
+        { type: 'list', value: [
+          'Create users with name, email, password',
+          'Assign role: Admin, Auditor, or Chief',
+          'Assign to department',
+          'Reset passwords or deactivate'
+        ]}
+      ],
+      keywords: ['admin', 'user', 'create', 'password', 'role', 'manage']
+    },
+    {
+      id: 'admin-forms',
+      title: 'Create Forms (Admin)',
+      icon: '📄',
+      content: [
+        { type: 'text', value: 'Navigate to: Create Forms → Forms' },
+        { type: 'list', value: [
+          'Create form templates with name',
+          'Assign to departments',
+          'Add checklist items via Form Builder'
+        ]},
+        { type: 'text', value: 'Navigate to: Create Forms → Form Builder' },
+        { type: 'list', value: [
+          'Select form template',
+          'Add items with labels',
+          'Choose type: YES/NO or TEXT',
+          'Organize into sections'
+        ]}
+      ],
+      keywords: ['admin', 'form', 'create', 'checklist', 'builder', 'item', 'template']
+    },
+    {
+      id: 'admin-assign',
+      title: 'Assign Forms to Users (Admin)',
+      icon: '📋',
+      content: [
+        { type: 'text', value: 'Navigate to: Configure → Assign Forms' },
+        { type: 'list', value: [
+          'Select a form template',
+          'Choose users to assign',
+          'Users see assigned forms in navigation'
+        ]}
+      ],
+      keywords: ['admin', 'assign', 'form', 'user', 'access']
+    },
+    {
+      id: 'audit-flow',
+      title: 'Audit Flow Overview',
+      icon: '🔄',
+      content: [
+        { type: 'text', value: 'End-to-end flow: submit checklist with Audit Date + Time → system enforces one submission per UHID + IPID + Department + Date + Time → reports and logs show audits grouped by Date + Time + IPID.' },
+        { type: 'steps', value: [
+          'Submit: Auditor fills form, sets Audit Date and Audit Time (defaults: today and current time), submits.',
+          'Uniqueness: Same UHID + IPID + Department + same Date + same Time = one submission. Use a different date or time to submit another audit for the same admission.',
+          'Patient Report: Enter UHID → list shows one row per audit (Date, Time, IPID) → select one to view that audit’s report.',
+          'Department Logs: Click UHID in logs → list shows audits by Date, Time, IPID → select one to view that audit’s checklist.'
+        ]}
+      ],
+      keywords: ['flow', 'audit', 'submit', 'report', 'logs', 'date', 'time', 'uhid', 'ipid']
+    },
+    {
+      id: 'uhid-ipid',
+      title: 'UHID vs IPID',
+      icon: '🆔',
+      content: [
+        { type: 'definition', value: [
+          { term: 'UHID', desc: 'Unique Hospital ID - Permanent patient identifier (e.g., UHID000001)' },
+          { term: 'IPID', desc: 'In-Patient ID - Unique per admission (e.g., IPID000001)' }
+        ]},
+        { type: 'text', value: 'A patient can have multiple IPIDs if admitted multiple times. For the same admission (IPID), you can submit multiple audit checklists on different dates or at different times; each is identified by UHID + IPID + Department + Date + Time.' }
+      ],
+      keywords: ['uhid', 'ipid', 'patient', 'id', 'identifier', 'admission', 'audit', 'date', 'time']
+    },
+    {
+      id: 'rules',
+      title: 'Important Rules',
+      icon: '⚠️',
+      content: [
+        { type: 'rules', value: [
+          'One submission per UHID + IPID + Department + Date + Time (you can audit the same admission multiple times per day by using a different Audit Date or Time)',
+          'Submissions are locked after submit (cannot edit)',
+          'Remarks required when selecting NO',
+          'Only Chiefs can add corrective/preventive actions',
+          'Chiefs cannot edit original checklist responses'
+        ]}
+      ],
+      keywords: ['rule', 'important', 'locked', 'edit', 'duplicate', 'remarks', 'date', 'time']
+    },
+    {
+      id: 'troubleshooting',
+      title: 'Troubleshooting',
+      icon: '🔧',
+      content: [
+        { type: 'faq', value: [
+          { q: 'Duplicate - Cannot Submit', a: 'A submission already exists for this UHID + IPID + Department + Date + Time. Change the Audit Date or Audit Time to submit another audit for the same admission.' },
+          { q: 'Form not visible in navigation', a: 'Ask admin to assign the form to you.' },
+          { q: 'Cannot edit submitted checklist', a: 'Submissions are locked. Contact admin if needed.' },
+          { q: 'Report or Logs: which audit do I open?', a: 'List is grouped by Date + Time + IPID. Pick the row with the date and time of the audit you want to view.' },
+          { q: 'Page shows error', a: 'Refresh the page. Check internet connection. Contact admin if persists.' }
+        ]}
+      ],
+      keywords: ['error', 'problem', 'duplicate', 'cannot', 'not working', 'help', 'troubleshoot', 'date', 'time']
+    }
+  ]
 
-      {/* Getting Started */}
-      <section id="getting-started" className="bg-white rounded-lg shadow-md p-6 border border-slate-200">
-        <h2 className="text-2xl font-bold text-slate-800 mb-4 flex items-center gap-2">
-          <span>🚀</span> 1. Getting Started
-        </h2>
-        <div className="space-y-4 text-slate-700">
-          <p>
-            Welcome to the Hospital Audit System! This system helps you manage and track audit checklists 
-            for patient admissions across different departments in the hospital.
-          </p>
-          <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded">
-            <p className="font-semibold text-blue-800 mb-2">What you can do:</p>
-            <ul className="list-disc list-inside space-y-1 text-blue-700">
-              <li>Fill out audit checklist forms for patient admissions</li>
-              <li>View patient reports and audit submissions</li>
-              <li>Check department logs and submission history</li>
-              <li>Track compliance and audit status</li>
-            </ul>
-          </div>
-        </div>
-      </section>
+  // Filter sections based on search
+  const filteredSections = useMemo(() => {
+    if (!searchQuery.trim()) return sections
+    
+    const query = searchQuery.toLowerCase()
+    return sections.filter(section => {
+      // Check title
+      if (section.title.toLowerCase().includes(query)) return true
+      // Check keywords
+      if (section.keywords.some(kw => kw.includes(query))) return true
+      // Check content
+      const contentStr = JSON.stringify(section.content).toLowerCase()
+      if (contentStr.includes(query)) return true
+      return false
+    })
+  }, [searchQuery])
 
-      {/* Login */}
-      <section id="login" className="bg-white rounded-lg shadow-md p-6 border border-slate-200">
-        <h2 className="text-2xl font-bold text-slate-800 mb-4 flex items-center gap-2">
-          <span>🔐</span> 2. Login
-        </h2>
-        <div className="space-y-4 text-slate-700">
-          <p>To access the system, you need to log in with your credentials:</p>
-          <ol className="list-decimal list-inside space-y-3 ml-2">
-            <li>
-              <strong>Navigate to the login page</strong> - If you're not logged in, you'll be automatically redirected to the login page.
-            </li>
-            <li>
-              <strong>Enter your credentials:</strong>
-              <ul className="list-disc list-inside ml-6 mt-2 space-y-1">
-                <li><strong>Email:</strong> Your registered email address</li>
-                <li><strong>Password:</strong> Your account password</li>
-              </ul>
-            </li>
-            <li>
-              <strong>Click "Login"</strong> to access the system.
-            </li>
+  // Render content based on type
+  const renderContent = (item) => {
+    switch (item.type) {
+      case 'text':
+        return <p className="text-slate-700">{item.value}</p>
+      
+      case 'steps':
+        return (
+          <ol className="space-y-2">
+            {item.value.map((step, i) => (
+              <li key={i} className="flex gap-3 items-start">
+                <span className="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">{i + 1}</span>
+                <span className="text-slate-700">{step}</span>
+              </li>
+            ))}
           </ol>
-          <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded">
-            <p className="font-semibold text-amber-800">⚠️ Important:</p>
-            <p className="text-amber-700">If you forget your password or have login issues, please contact your system administrator.</p>
+        )
+      
+      case 'list':
+        return (
+          <ul className="space-y-1 ml-4">
+            {item.value.map((li, i) => (
+              <li key={i} className="text-slate-700 flex gap-2">
+                <span className="text-blue-500">•</span>
+                {li}
+              </li>
+            ))}
+          </ul>
+        )
+      
+      case 'warning':
+        return (
+          <div className="bg-amber-50 border-l-4 border-amber-500 p-3 rounded-r">
+            <p className="text-amber-800 text-sm"><strong>⚠️ Warning:</strong> {item.value}</p>
           </div>
-        </div>
-      </section>
-
-      {/* Navigation */}
-      <section id="navigation" className="bg-white rounded-lg shadow-md p-6 border border-slate-200">
-        <h2 className="text-2xl font-bold text-slate-800 mb-4 flex items-center gap-2">
-          <span>🧭</span> 3. Navigation
-        </h2>
-        <div className="space-y-4 text-slate-700">
-          <p>The main navigation bar is located at the top of the screen. Here's what each menu item does:</p>
-          
+        )
+      
+      case 'tip':
+        return (
+          <div className="bg-green-50 border-l-4 border-green-500 p-3 rounded-r">
+            <p className="text-green-800 text-sm"><strong>💡 Tip:</strong> {item.value}</p>
+          </div>
+        )
+      
+      case 'roles':
+        return (
+          <div className="grid gap-3">
+            {item.value.map((r, i) => (
+              <div key={i} className={`p-3 rounded-lg border ${
+                r.color === 'blue' ? 'bg-blue-50 border-blue-200' :
+                r.color === 'green' ? 'bg-green-50 border-green-200' :
+                'bg-purple-50 border-purple-200'
+              }`}>
+                <span className={`font-bold ${
+                  r.color === 'blue' ? 'text-blue-800' :
+                  r.color === 'green' ? 'text-green-800' :
+                  'text-purple-800'
+                }`}>{r.role}:</span>
+                <span className={`ml-2 ${
+                  r.color === 'blue' ? 'text-blue-700' :
+                  r.color === 'green' ? 'text-green-700' :
+                  'text-purple-700'
+                }`}>{r.desc}</span>
+              </div>
+            ))}
+          </div>
+        )
+      
+      case 'table':
+        return (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm border border-slate-200 rounded">
+              <thead className="bg-slate-100">
+                <tr>
+                  {item.value.headers.map((h, i) => (
+                    <th key={i} className="text-left px-3 py-2 font-semibold text-slate-700 border-b">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {item.value.rows.map((row, i) => (
+                  <tr key={i} className="border-b border-slate-100">
+                    {row.map((cell, j) => (
+                      <td key={j} className="px-3 py-2 text-slate-600">{cell}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+      
+      case 'definition':
+        return (
+          <div className="space-y-2">
+            {item.value.map((d, i) => (
+              <div key={i} className="bg-slate-50 p-3 rounded border border-slate-200">
+                <span className="font-bold text-slate-800">{d.term}:</span>
+                <span className="text-slate-600 ml-2">{d.desc}</span>
+              </div>
+            ))}
+          </div>
+        )
+      
+      case 'rules':
+        return (
+          <div className="space-y-2">
+            {item.value.map((rule, i) => (
+              <div key={i} className="flex gap-2 items-start">
+                <span className="text-red-500">❗</span>
+                <span className="text-slate-700">{rule}</span>
+              </div>
+            ))}
+          </div>
+        )
+      
+      case 'faq':
+        return (
           <div className="space-y-3">
-            <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
-              <h3 className="font-bold text-slate-800 mb-2 flex items-center gap-2">
-                <span>📝</span> Form Links
-              </h3>
-              <p>These are the audit checklist forms assigned to your department. Click on any form to fill it out for a patient admission.</p>
-            </div>
-
-            <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
-              <h3 className="font-bold text-slate-800 mb-2 flex items-center gap-2">
-                <span>📋</span> Patient Report
-              </h3>
-              <p>View comprehensive audit reports for any patient by entering their UHID (Unique Hospital ID).</p>
-            </div>
-
-            <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
-              <h3 className="font-bold text-slate-800 mb-2 flex items-center gap-2">
-                <span>📊</span> Department Logs
-              </h3>
-              <p>View all audit submissions for your department, filter by UHID, and preview submission details.</p>
-            </div>
-
-            <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
-              <h3 className="font-bold text-slate-800 mb-2 flex items-center gap-2">
-                <span>👤</span> User Profile
-              </h3>
-              <p>Your name and role are displayed in the top right corner. Click "Logout" to securely exit the system.</p>
-            </div>
+            {item.value.map((f, i) => (
+              <div key={i} className="bg-slate-50 p-3 rounded border border-slate-200">
+                <p className="font-semibold text-slate-800">Q: {f.q}</p>
+                <p className="text-slate-600 mt-1">A: {f.a}</p>
+              </div>
+            ))}
           </div>
-        </div>
-      </section>
+        )
+      
+      default:
+        return null
+    }
+  }
 
-      {/* Filling Forms */}
-      <section id="filling-forms" className="bg-white rounded-lg shadow-md p-6 border border-slate-200">
-        <h2 className="text-2xl font-bold text-slate-800 mb-4 flex items-center gap-2">
-          <span>✍️</span> 4. Filling Audit Forms
-        </h2>
-        <div className="space-y-4 text-slate-700">
-          <p>To fill out an audit checklist form for a patient admission:</p>
-          
-          <ol className="list-decimal list-inside space-y-3 ml-2">
-            <li>
-              <strong>Select a form</strong> from the navigation menu (e.g., "General Medicine - Audit Checklist").
-            </li>
-            <li>
-              <strong>Enter Patient Information:</strong>
-              <ul className="list-disc list-inside ml-6 mt-2 space-y-1">
-                <li><strong>UHID:</strong> The patient's Unique Hospital ID (e.g., UHID000001)</li>
-                <li><strong>IPID:</strong> The In-Patient ID for this specific admission (e.g., IPID000001)</li>
-                <li><strong>Ward:</strong> The ward where the patient is admitted</li>
-                <li><strong>Unit No:</strong> The unit number</li>
-              </ul>
-            </li>
-            <li>
-              <strong>Fill out the checklist items:</strong>
-              <ul className="list-disc list-inside ml-6 mt-2 space-y-1">
-                <li><strong>Yes/No Questions:</strong> Select "Yes" or "No" for each question</li>
-                <li><strong>Multi-Select Questions:</strong> Select one or more options from the dropdown</li>
-                <li><strong>Text Box Questions:</strong> Enter detailed text about the patient's condition or observations</li>
-              </ul>
-            </li>
-            <li>
-              <strong>Add Remarks (if applicable):</strong> For Yes/No and Multi-Select questions, you can add remarks in the "Remarks" field.
-            </li>
-            <li>
-              <strong>Assign Responsibility (if applicable):</strong> Specify who is responsible for each item.
-            </li>
-            <li>
-              <strong>Review your entries</strong> before submitting.
-            </li>
-            <li>
-              <strong>Click "Submit"</strong> to save your audit submission.
-            </li>
-          </ol>
-
-          <div className="bg-green-50 border-l-4 border-green-500 p-4 rounded">
-            <p className="font-semibold text-green-800 mb-2">✅ Important Notes:</p>
-            <ul className="list-disc list-inside space-y-1 text-green-700">
-              <li>All mandatory fields must be filled before submission</li>
-              <li>You can only submit <strong>one audit form per UHID, IPID, and Department combination</strong></li>
-              <li>If a duplicate submission is detected, the form will be disabled and you'll see an error message</li>
-              <li>Text box questions don't require Remarks or Responsibility fields</li>
-            </ul>
-          </div>
-
-          <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded">
-            <p className="font-semibold text-red-800 mb-2">❌ Error Handling:</p>
-            <ul className="list-disc list-inside space-y-1 text-red-700">
-              <li>If you see "Duplicate - Cannot Submit", it means a submission already exists for this UHID, IPID, and Department</li>
-              <li>If fields turn red, check that all required information is entered correctly</li>
-              <li>Network errors will be displayed at the top of the form</li>
-            </ul>
-          </div>
-        </div>
-      </section>
-
-      {/* Viewing Reports */}
-      <section id="viewing-reports" className="bg-white rounded-lg shadow-md p-6 border border-slate-200">
-        <h2 className="text-2xl font-bold text-slate-800 mb-4 flex items-center gap-2">
-          <span>📋</span> 5. Viewing Patient Reports
-        </h2>
-        <div className="space-y-4 text-slate-700">
-          <p>To generate and view a patient audit report:</p>
-          
-          <ol className="list-decimal list-inside space-y-3 ml-2">
-            <li>
-              <strong>Click "Patient Report"</strong> in the navigation menu.
-            </li>
-            <li>
-              <strong>Enter the UHID</strong> of the patient in the search field (e.g., UHID000001).
-            </li>
-            <li>
-              <strong>Click "Search"</strong> to find all admissions for that patient.
-            </li>
-            <li>
-              <strong>Select an IPID</strong> from the list of admissions displayed.
-            </li>
-            <li>
-              <strong>View the report</strong> which includes:
-              <ul className="list-disc list-inside ml-6 mt-2 space-y-1">
-                <li>Patient information (UHID, IPID, Patient Name, Department Name)</li>
-                <li>All audit checklist items organized by department</li>
-                <li>Responses, remarks, and responsibilities</li>
-                <li>Submission dates and user information</li>
-              </ul>
-            </li>
-            <li>
-              <strong>Optional: Add Consultant Name</strong> before printing or exporting.
-            </li>
-            <li>
-              <strong>Print or Export PDF:</strong>
-              <ul className="list-disc list-inside ml-6 mt-2 space-y-1">
-                <li>Click "Print Report" to print the report</li>
-                <li>Click "Export as PDF" to download a PDF version</li>
-              </ul>
-            </li>
-          </ol>
-
-          <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded">
-            <p className="font-semibold text-blue-800 mb-2">💡 Tips:</p>
-            <ul className="list-disc list-inside space-y-1 text-blue-700">
-              <li>Reports are organized by department, making it easy to see which departments have completed their audits</li>
-              <li>You can see all submissions for a patient across multiple departments</li>
-              <li>The report includes both active and discharged admissions</li>
-            </ul>
-          </div>
-        </div>
-      </section>
-
-      {/* Department Logs */}
-      <section id="department-logs" className="bg-white rounded-lg shadow-md p-6 border border-slate-200">
-        <h2 className="text-2xl font-bold text-slate-800 mb-4 flex items-center gap-2">
-          <span>📊</span> 6. Department Logs
-        </h2>
-        <div className="space-y-4 text-slate-700">
-          <p>Department Logs allow you to view all audit submissions for your department:</p>
-          
-          <ol className="list-decimal list-inside space-y-3 ml-2">
-            <li>
-              <strong>Click "Department Logs"</strong> in the navigation menu.
-            </li>
-            <li>
-              <strong>View all submissions</strong> - You'll see a table listing all audit submissions for your department.
-            </li>
-            <li>
-              <strong>Filter by UHID (optional):</strong>
-              <ul className="list-disc list-inside ml-6 mt-2 space-y-1">
-                <li>Enter a UHID in the search field</li>
-                <li>Click "Search" to filter submissions for that patient</li>
-                <li>Click "Clear" to reset the filter</li>
-              </ul>
-            </li>
-            <li>
-              <strong>Preview a submission:</strong>
-              <ul className="list-disc list-inside ml-6 mt-2 space-y-1">
-                <li>Click the "Preview" button next to any submission</li>
-                <li>A modal will open showing all checklist items for that submission</li>
-                <li>You can see responses, remarks, and responsibilities</li>
-                <li>Click "Close" or outside the modal to return to the list</li>
-              </ul>
-            </li>
-            <li>
-              <strong>View submission details:</strong>
-              <ul className="list-disc list-inside ml-6 mt-2 space-y-1">
-                <li>UHID and IPID</li>
-                <li>Submission date and time</li>
-                <li>Submitted by (user name)</li>
-                <li>All checklist items with their responses</li>
-              </ul>
-            </li>
-          </ol>
-
-          <div className="bg-purple-50 border-l-4 border-purple-500 p-4 rounded">
-            <p className="font-semibold text-purple-800 mb-2">📈 Use Cases:</p>
-            <ul className="list-disc list-inside space-y-1 text-purple-700">
-              <li>Track which patients have completed audits</li>
-              <li>Review submission history for quality assurance</li>
-              <li>Find specific submissions quickly using UHID filter</li>
-              <li>Verify compliance and completion status</li>
-            </ul>
-          </div>
-        </div>
-      </section>
-
-      {/* FAQ */}
-      <section id="faq" className="bg-white rounded-lg shadow-md p-6 border border-slate-200">
-        <h2 className="text-2xl font-bold text-slate-800 mb-4 flex items-center gap-2">
-          <span>❓</span> 7. Frequently Asked Questions
-        </h2>
-        <div className="space-y-6 text-slate-700">
-          
-          <div className="border-l-4 border-blue-500 pl-4">
-            <h3 className="font-bold text-slate-800 mb-2">Q: Can I edit a submission after submitting it?</h3>
-            <p className="text-slate-600">A: No, once a submission is made for a specific UHID, IPID, and Department combination, it cannot be edited. This ensures data integrity and audit trail accuracy.</p>
-          </div>
-
-          <div className="border-l-4 border-blue-500 pl-4">
-            <h3 className="font-bold text-slate-800 mb-2">Q: What if I make a mistake in my submission?</h3>
-            <p className="text-slate-600">A: If you need to correct a submission, please contact your system administrator who can help resolve the issue.</p>
-          </div>
-
-          <div className="border-l-4 border-blue-500 pl-4">
-            <h3 className="font-bold text-slate-800 mb-2">Q: Why can't I see certain forms in my navigation menu?</h3>
-            <p className="text-slate-600">A: Forms are assigned to specific departments. You'll only see forms that are assigned to your department. Some common forms (like ANAE and NUS) are visible to all users.</p>
-          </div>
-
-          <div className="border-l-4 border-blue-500 pl-4">
-            <h3 className="font-bold text-slate-800 mb-2">Q: What's the difference between UHID and IPID?</h3>
-            <p className="text-slate-600">A: UHID (Unique Hospital ID) is a permanent identifier for a patient. IPID (In-Patient ID) is a unique identifier for each admission. A patient can have multiple IPIDs if they are admitted multiple times.</p>
-          </div>
-
-          <div className="border-l-4 border-blue-500 pl-4">
-            <h3 className="font-bold text-slate-800 mb-2">Q: Can I submit multiple forms for the same patient?</h3>
-            <p className="text-slate-600">A: Yes, you can submit different forms (from different departments) for the same patient. However, you can only submit one form per department for each UHID-IPID combination.</p>
-          </div>
-
-          <div className="border-l-4 border-blue-500 pl-4">
-            <h3 className="font-bold text-slate-800 mb-2">Q: How do I print a report?</h3>
-            <p className="text-slate-600">A: After generating a patient report, click the "Print Report" button. The report will be formatted for printing. You can also use your browser's print function (Ctrl+P or Cmd+P).</p>
-          </div>
-
-          <div className="border-l-4 border-blue-500 pl-4">
-            <h3 className="font-bold text-slate-800 mb-2">Q: What should I do if the system shows an error?</h3>
-            <p className="text-slate-600">A: First, check your internet connection. If the error persists, note the error message and contact your system administrator with the details.</p>
-          </div>
-
-        </div>
-      </section>
-
-      {/* Support Section */}
-      <div className="bg-gradient-to-r from-slate-50 to-blue-50 rounded-lg shadow-md p-6 border border-slate-200">
-        <h2 className="text-xl font-bold text-slate-800 mb-3 flex items-center gap-2">
-          <span>💬</span> Need More Help?
-        </h2>
-        <p className="text-slate-700 mb-4">
-          If you have additional questions or need technical support, please contact your system administrator or the IT department.
-        </p>
-        <div className="bg-white p-4 rounded border border-slate-200">
-          <p className="text-sm text-slate-600">
-            <strong>System Version:</strong> Hospital Audit System v1.0<br />
-            <strong>Last Updated:</strong> {new Date().toLocaleDateString('en-GB', { 
-              day: 'numeric', 
-              month: 'long', 
-              year: 'numeric' 
-            })}
-          </p>
-        </div>
+  return (
+    <div className="max-w-4xl mx-auto space-y-4">
+      {/* Header */}
+      <div className="bg-white border border-slate-200 rounded-xl shadow-sm px-5 py-4 sm:py-5">
+        <h1 className="text-2xl sm:text-3xl font-semibold text-slate-900">User Manual</h1>
+        <p className="mt-1 text-sm text-slate-600">Hospital Audit System - Quick Reference Guide</p>
       </div>
 
-      {/* Back to Top */}
-      <div className="text-center py-4">
-        <a 
-          href="#getting-started" 
-          className="text-blue-600 hover:text-blue-700 font-medium inline-flex items-center gap-2"
-        >
-          <span>⬆️</span> Back to Top
-        </a>
+      {/* Search Bar */}
+      <div className="bg-white rounded-xl shadow-sm p-4 border border-slate-200 sticky top-0 z-10">
+        <div className="relative">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search manual... (e.g., submit, uhid, chief, report)"
+            className="w-full pl-10 pr-10 py-3 border border-slate-300 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all text-slate-700"
+          />
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xl"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+        {searchQuery && (
+          <p className="text-sm text-slate-500 mt-2">
+            Found {filteredSections.length} result{filteredSections.length !== 1 ? 's' : ''} for "{searchQuery}"
+          </p>
+        )}
+      </div>
+
+      {/* Quick Links (only when not searching) */}
+      {!searchQuery && (
+        <div className="bg-white rounded-xl shadow-sm p-4 border border-slate-200">
+          <h2 className="font-bold text-slate-700 mb-3">Quick Links</h2>
+          <div className="flex flex-wrap gap-2">
+            {sections.slice(0, 8).map(section => (
+              <a
+                key={section.id}
+                href={`#${section.id}`}
+                className="px-3 py-1.5 bg-slate-100 hover:bg-indigo-50 rounded text-sm text-slate-700 hover:text-indigo-700 transition-colors"
+              >
+                {section.icon} {section.title}
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Sections */}
+      {filteredSections.length === 0 ? (
+        <div className="bg-white rounded-xl shadow-sm p-8 border border-slate-200 text-center">
+          <p className="text-slate-500 text-lg">No results found for "{searchQuery}"</p>
+          <p className="text-slate-400 text-sm mt-2">Try different keywords</p>
+        </div>
+      ) : (
+        filteredSections.map(section => (
+          <div
+            key={section.id}
+            id={section.id}
+            className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden"
+          >
+            <div className="bg-slate-50 px-4 py-3 border-b border-slate-200">
+              <h2 className="font-semibold text-slate-900">
+                {section.title}
+              </h2>
+            </div>
+            <div className="p-4 space-y-4">
+              {section.content.map((item, i) => (
+                <div key={i}>{renderContent(item)}</div>
+              ))}
+            </div>
+          </div>
+        ))
+      )}
+
+      {/* Footer */}
+      <div className="bg-slate-50 rounded-lg p-4 border border-slate-200 text-center text-sm text-slate-500">
+        Hospital Audit System • Medical Records Department • Last Updated: {new Date().toLocaleDateString('en-GB')}
       </div>
     </div>
   )

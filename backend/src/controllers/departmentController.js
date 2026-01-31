@@ -1,5 +1,6 @@
 const Department = require('../models/Department');
 const AuditSubmission = require('../models/AuditSubmission');
+const User = require('../models/User');
 
 exports.createDepartment = async (req, res) => {
   try {
@@ -50,6 +51,20 @@ exports.listDepartments = async (_req, res) => {
     res.json(depts);
   } catch (err) {
     console.error('listDepartments error', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Get all users with their department information
+exports.getDepartmentUsers = async (_req, res) => {
+  try {
+    const users = await User.find({ isActive: true })
+      .populate('department', 'name code')
+      .select('name email role department')
+      .sort({ name: 1 });
+    res.json(users);
+  } catch (err) {
+    console.error('getDepartmentUsers error', err);
     res.status(500).json({ message: 'Server error' });
   }
 };

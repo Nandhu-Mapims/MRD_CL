@@ -27,7 +27,7 @@ export function DepartmentSelect() {
   }, [user, navigate])
 
   // If regular user without department assignment, show message
-  if (user?.role === 'user' && !user?.department) {
+  if ((user?.role === 'auditor' || user?.role === 'chief') && !user?.department) {
     return (
       <div className="bg-white rounded-lg shadow-md p-8 text-center">
         <div className="text-4xl mb-4">⚠️</div>
@@ -48,7 +48,7 @@ export function DepartmentSelect() {
   }
 
   // For regular users, show message that forms are in the menu
-  if (user?.role === 'user' && user?.department) {
+  if ((user?.role === 'auditor' || user?.role === 'chief') && user?.department) {
     return (
       <div className="bg-white rounded-lg shadow-md p-8 text-center">
         <div className="text-4xl mb-4">📝</div>

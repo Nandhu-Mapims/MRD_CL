@@ -10,7 +10,7 @@ router.delete('/:id', auth('admin'), checklistController.deleteChecklistItem);
 router.post('/reorder', auth('admin'), checklistController.reorderChecklistItems);
 
 // User: get checklist for a department (includes ALL + dept-specific)
-router.get('/department/:departmentId', auth(['admin', 'user']), checklistController.getChecklistForDepartment);
+router.get('/department/:departmentId', auth(['admin', 'auditor', 'chief']), checklistController.getChecklistForDepartment);
 
 module.exports = router;
 

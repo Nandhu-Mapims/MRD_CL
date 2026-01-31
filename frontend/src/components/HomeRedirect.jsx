@@ -9,9 +9,14 @@ export function HomeRedirect() {
     return <Navigate to="/admin/dashboard" replace />
   }
 
-  // Redirect regular users to department logs
-  if (user?.role === 'user') {
-    return <Navigate to="/admin/department-logs" replace />
+  // Redirect auditors to their dashboard
+  if (user?.role === 'auditor') {
+    return <Navigate to="/auditor/dashboard" replace />
+  }
+
+  // Redirect chiefs to their dashboard
+  if (user?.role === 'chief') {
+    return <Navigate to="/chief/dashboard" replace />
   }
 
   return <DepartmentSelect />

@@ -7,8 +7,14 @@ import { FormBuilderWithSections } from './pages/Admin/FormBuilderWithSections'
 import { SimpleFormBuilder } from './pages/Admin/SimpleFormBuilder'
 import { FormTemplateManagement } from './pages/Admin/FormTemplateManagement'
 import { UserManagement } from './pages/Admin/UserManagement'
+import { FormUserAssignment } from './pages/Admin/FormUserAssignment'
+import { ChiefDashboard } from './pages/Chief/ChiefDashboard'
+import { ChiefAnalytics } from './pages/Chief/ChiefAnalytics'
+import { ChiefDoctorPerformance } from './pages/Chief/ChiefDoctorPerformance'
+import { AuditorDashboard } from './pages/Auditor/AuditorDashboard'
+import { AuditorAnalytics } from './pages/Auditor/AuditorAnalytics'
 import { Dashboard } from './pages/Admin/Dashboard'
-import { EnhancedAnalytics } from './pages/Admin/EnhancedAnalytics'
+import { Analytics } from './pages/Admin/Analytics'
 import { PatientReport } from './pages/Admin/PatientReport'
 import { DepartmentLogs } from './pages/Admin/DepartmentLogs'
 import { Form } from './pages/User/Form'
@@ -40,6 +46,54 @@ function App() {
             }
           />
           <Route
+            path="/admin/assign-forms"
+            element={
+              <ProtectedRoute roles={['admin']}>
+                <FormUserAssignment />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/chief/dashboard"
+            element={
+              <ProtectedRoute roles={['admin', 'chief']}>
+                <ChiefDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/chief/analytics"
+            element={
+              <ProtectedRoute roles={['admin', 'chief']}>
+                <ChiefAnalytics />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/chief/doctor-performance"
+            element={
+              <ProtectedRoute roles={['admin', 'chief']}>
+                <ChiefDoctorPerformance />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/auditor/dashboard"
+            element={
+              <ProtectedRoute roles={['admin', 'auditor']}>
+                <AuditorDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/auditor/analytics"
+            element={
+              <ProtectedRoute roles={['admin', 'auditor']}>
+                <AuditorAnalytics />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/admin/forms"
             element={
               <ProtectedRoute roles={['admin']}>
@@ -67,14 +121,14 @@ function App() {
             path="/admin/analytics"
             element={
               <ProtectedRoute roles={['admin']}>
-                <EnhancedAnalytics />
+                <Analytics />
               </ProtectedRoute>
             }
           />
           <Route
             path="/admin/patient-report"
             element={
-              <ProtectedRoute roles={['admin', 'user']}>
+              <ProtectedRoute roles={['admin', 'auditor', 'chief']}>
                 <PatientReport />
               </ProtectedRoute>
             }
@@ -82,7 +136,7 @@ function App() {
           <Route
             path="/admin/department-logs"
             element={
-              <ProtectedRoute roles={['admin', 'user']}>
+              <ProtectedRoute roles={['admin', 'auditor', 'chief']}>
                 <DepartmentLogs />
               </ProtectedRoute>
             }
@@ -91,7 +145,7 @@ function App() {
           <Route
             path="/form/:formTemplateId"
             element={
-              <ProtectedRoute roles={['admin', 'user']}>
+              <ProtectedRoute roles={['admin', 'auditor', 'chief']}>
                 <Form />
               </ProtectedRoute>
             }
@@ -99,7 +153,7 @@ function App() {
           <Route
             path="/user-manual"
             element={
-              <ProtectedRoute roles={['admin', 'user']}>
+              <ProtectedRoute roles={['admin', 'auditor', 'chief']}>
                 <UserManual />
               </ProtectedRoute>
             }
@@ -107,7 +161,7 @@ function App() {
           <Route
             path="/"
             element={
-              <ProtectedRoute roles={['admin', 'user']}>
+              <ProtectedRoute roles={['admin', 'auditor', 'chief']}>
                 <HomeRedirect />
               </ProtectedRoute>
             }

@@ -4,7 +4,8 @@ const authController = require('../controllers/authController');
 const auth = require('../middleware/auth');
 
 // Public routes
-router.post('/register-admin', authController.registerAdmin);
+// SECURITY: register-admin removed - admin user is auto-created on server startup
+// router.post('/register-admin', authController.registerAdmin); // REMOVED FOR SECURITY
 router.post('/login', authController.login);
 
 // Admin-only routes

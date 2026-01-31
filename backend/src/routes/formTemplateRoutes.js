@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const FormTemplate = require('../models/FormTemplate');
+const formTemplateController = require('../controllers/formTemplateController');
 const auth = require('../middleware/auth');
 
 // Admin: create form template
@@ -23,7 +24,7 @@ router.post('/', auth('admin'), async (req, res) => {
 });
 
 // Admin: list/update/delete templates
-router.get('/', auth(['admin', 'user']), async (_req, res) => {
+router.get('/', auth(['admin', 'auditor', 'chief']), async (_req, res) => {
   try {
     const forms = await FormTemplate.find().populate('departments');
     res.json(forms);
@@ -33,8 +34,11 @@ router.get('/', auth(['admin', 'user']), async (_req, res) => {
   }
 });
 
+// Get accessible forms for current user (must be before /:id)
+router.get('/accessible/list', auth(['admin', 'auditor', 'chief']), formTemplateController.getAccessibleForms);
+
 // Get single form template by ID
-router.get('/:id', auth(['admin', 'user']), async (req, res) => {
+router.get('/:id', auth(['admin', 'auditor', 'chief']), async (req, res) => {
   try {
     const { id } = req.params;
     const form = await FormTemplate.findById(id).populate('departments');
@@ -117,6 +121,9 @@ router.delete('/:id', auth('admin'), async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 });
+
+// Assign users to a form
+router.put('/:id/assign-users', auth('admin'), formTemplateController.assignUsersToForm);
 
 module.exports = router;
 

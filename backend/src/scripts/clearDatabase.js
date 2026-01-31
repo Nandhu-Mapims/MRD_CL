@@ -5,6 +5,8 @@ const Department = require('../models/Department');
 const FormTemplate = require('../models/FormTemplate');
 const ChecklistItem = require('../models/ChecklistItem');
 const AuditSubmission = require('../models/AuditSubmission');
+const Admission = require('../models/Admission');
+const ChiefDoctor = require('../models/ChiefDoctor');
 const User = require('../models/User');
 const Patient = require('../models/Patient');
 
@@ -22,6 +24,8 @@ const RUN = async () => {
       formTemplates: await FormTemplate.countDocuments(),
       checklistItems: await ChecklistItem.countDocuments(),
       auditSubmissions: await AuditSubmission.countDocuments(),
+      admissions: await Admission.countDocuments(),
+      chiefDoctors: await ChiefDoctor.countDocuments(),
       patients: await Patient.countDocuments(),
       users: await User.countDocuments(),
     };
@@ -31,15 +35,19 @@ const RUN = async () => {
     console.log(`   - Form Templates: ${counts.formTemplates}`);
     console.log(`   - Checklist Items: ${counts.checklistItems}`);
     console.log(`   - Audit Submissions: ${counts.auditSubmissions}`);
+    console.log(`   - Admissions: ${counts.admissions}`);
+    console.log(`   - Chief Doctors: ${counts.chiefDoctors}`);
     console.log(`   - Patients: ${counts.patients}`);
     console.log(`   - Users: ${counts.users}\n`);
 
     console.log('⚠️  WARNING: This will delete ALL data including:');
     console.log('   - All audit submissions');
     console.log('   - All patients');
+    console.log('   - All admissions');
     console.log('   - All checklist items');
     console.log('   - All form templates');
     console.log('   - All departments');
+    console.log('   - All chief doctor records');
     console.log('   - ALL users (including admins)\n');
 
     // Delete in order (respecting foreign key relationships)
@@ -51,6 +59,9 @@ const RUN = async () => {
     const deletedPatients = await Patient.deleteMany({});
     console.log(`✅ Deleted ${deletedPatients.deletedCount} patient(s)`);
 
+    const deletedAdmissions = await Admission.deleteMany({});
+    console.log(`✅ Deleted ${deletedAdmissions.deletedCount} admission(s)`);
+
     const deletedChecklistItems = await ChecklistItem.deleteMany({});
     console.log(`✅ Deleted ${deletedChecklistItems.deletedCount} checklist item(s)`);
 
@@ -59,6 +70,9 @@ const RUN = async () => {
 
     const deletedDepartments = await Department.deleteMany({});
     console.log(`✅ Deleted ${deletedDepartments.deletedCount} department(s)`);
+
+    const deletedChiefDoctors = await ChiefDoctor.deleteMany({});
+    console.log(`✅ Deleted ${deletedChiefDoctors.deletedCount} chief doctor record(s)`);
 
     // Delete ALL users (including admins)
     const deletedUsers = await User.deleteMany({});

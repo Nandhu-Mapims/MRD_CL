@@ -17,6 +17,8 @@ export function Form() {
   const [patientName, setPatientName] = useState('')
   const [ward, setWard] = useState('')
   const [unitNo, setUnitNo] = useState('')
+  const [unitChief, setUnitChief] = useState('')
+  const [chiefDoctors, setChiefDoctors] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(null)
   const [showSuccessModal, setShowSuccessModal] = useState(false)
@@ -25,6 +27,13 @@ export function Form() {
   const [duplicateExists, setDuplicateExists] = useState(false)
   const [checkingDuplicate, setCheckingDuplicate] = useState(false)
   const [duplicateMessage, setDuplicateMessage] = useState('')
+  const getDefaultAuditDate = () => new Date().toISOString().slice(0, 10)
+  const getDefaultAuditTime = () => {
+    const d = new Date()
+    return d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0')
+  }
+  const [auditDate, setAuditDate] = useState(getDefaultAuditDate())
+  const [auditTime, setAuditTime] = useState(getDefaultAuditTime())
 
   // UHID is entered manually from OP card - no database lookup needed
   // Patient record will be created automatically when form is submitted
@@ -43,10 +52,48 @@ export function Form() {
       try {
         console.log('Loading form template:', formTemplateId)
         
-        // Load form template first
-        const form = await apiClient.get(`/form-templates/${formTemplateId}`)
+        // Load form template and chief doctors
+        const [form, chiefs] = await Promise.all([
+          apiClient.get(`/form-templates/${formTemplateId}`),
+          apiClient.get('/chief-doctors?isActive=true')
+        ])
         console.log('Form template loaded:', form)
         setFormTemplate(form)
+        setChiefDoctors(chiefs || [])
+        
+        // Check if form is assigned to chief's department
+        if (user?.role === 'chief' && form) {
+          // Get user's department
+          let userDeptId = null
+          if (user?.department) {
+            userDeptId = typeof user.department === 'object' 
+              ? (user.department.id || user.department._id) 
+              : user.department
+          }
+          
+          // Check if form is assigned to chief's department
+          if (userDeptId && form.departments) {
+            const formDeptIds = form.departments.map(d => 
+              typeof d === 'object' ? (d._id?.toString() || d.id?.toString()) : d.toString()
+            )
+            const userDeptIdStr = userDeptId.toString()
+            
+            if (!formDeptIds.includes(userDeptIdStr)) {
+              // Form is not assigned to chief's department
+              const depts = await apiClient.get('/departments')
+              const userDept = depts.find(d => d._id?.toString() === userDeptIdStr)
+              const formDepts = depts.filter(d => formDeptIds.includes(d._id?.toString()))
+              
+              setLoadError(
+                `This form is not assigned to your department (${userDept?.name || 'Unknown'}). ` +
+                `It is currently assigned to: ${formDepts.map(d => d.name).join(', ') || 'No departments'}. ` +
+                `Please contact your administrator to assign this form to your department, or select a form from the navigation menu that is available to you.`
+              )
+              setLoading(false)
+              return
+            }
+          }
+        }
 
         // Get user's department - handle both object and string formats
         let userDeptId = null
@@ -66,7 +113,7 @@ export function Form() {
           console.log('Admin using form department:', userDeptId)
         }
 
-        if (!userDeptId && user?.role === 'user') {
+        if (!userDeptId && (user?.role === 'auditor' || user?.role === 'chief')) {
           setLoadError('No department assigned. Please contact your administrator.')
           setLoading(false)
           return
@@ -112,7 +159,6 @@ export function Form() {
                   yesNoNa: '',
                   responseValue: '',
                   remarks: '',
-                  responsibility: '',
                 }
               })
             } else {
@@ -121,7 +167,19 @@ export function Form() {
               console.warn('[DEBUG] 1. Form template is not assigned to this department')
               console.warn('[DEBUG] 2. No items have been created for this form')
               console.warn('[DEBUG] 3. All items are inactive')
-              setMessage('Warning: No checklist items found. The form may not be assigned to your department, or no items have been created yet.')
+              
+              // For chiefs, show a more helpful error message
+              if (user?.role === 'chief') {
+                setLoadError(
+                  `This form has no checklist items available for your department (${department?.name || 'Unknown'}). ` +
+                  `This could mean the form is not properly assigned to your department, or no checklist items have been created yet. ` +
+                  `Please contact your administrator for assistance.`
+                )
+                setLoading(false)
+                return
+              } else {
+                setMessage('Warning: No checklist items found. The form may not be assigned to your department, or no items have been created yet.')
+              }
             }
             setAnswers(init)
           } catch (checklistErr) {
@@ -132,7 +190,19 @@ export function Form() {
               status: checklistErr.response?.status,
               statusText: checklistErr.response?.statusText
             })
-            // Still show form even if items fail to load
+            // For chiefs, show error instead of empty form
+            if (user?.role === 'chief') {
+              const errorMsg = checklistErr.response?.data?.message || checklistErr.message || 'Unknown error'
+              setLoadError(
+                `Unable to load checklist items for this form. ${errorMsg}. ` +
+                `This form may not be assigned to your department (${department?.name || 'Unknown'}). ` +
+                `Please contact your administrator to assign this form to your department.`
+              )
+              setLoading(false)
+              return
+            }
+            
+            // For auditors, still show form but with warning
             setItems([])
             setAnswers({})
             const errorMsg = checklistErr.response?.data?.message || checklistErr.message || 'Unknown error'
@@ -198,7 +268,7 @@ export function Form() {
       setCheckingDuplicate(true)
       try {
         const response = await apiClient.get(
-          `/audits/check-duplicate?uhid=${encodeURIComponent(uhid.trim().toUpperCase())}&ipid=${encodeURIComponent(ipid.trim().toUpperCase())}&departmentId=${encodeURIComponent(userDeptId)}`
+          `/audits/check-duplicate?uhid=${encodeURIComponent(uhid.trim().toUpperCase())}&ipid=${encodeURIComponent(ipid.trim().toUpperCase())}&departmentId=${encodeURIComponent(userDeptId)}&auditDate=${encodeURIComponent(auditDate)}&auditTime=${encodeURIComponent(auditTime)}`
         )
         
         if (response.exists) {
@@ -234,7 +304,7 @@ export function Form() {
     }, 500) // Wait 500ms after user stops typing
 
     return () => clearTimeout(timeoutId)
-  }, [uhid, ipid, user, loading])
+  }, [uhid, ipid, user, loading, auditDate, auditTime])
 
   // Reset form to new mode
   const resetToNewForm = () => {
@@ -243,16 +313,18 @@ export function Form() {
     setPatientName('')
     setWard('')
     setUnitNo('')
+    setUnitChief('')
     setMessage('')
     setDuplicateExists(false)
     setDuplicateMessage('')
+    setAuditDate(getDefaultAuditDate())
+    setAuditTime(getDefaultAuditTime())
     const init = {}
     items.forEach((it) => {
             init[it._id] = {
               yesNoNa: '',
               responseValue: '',
               remarks: '',
-              responsibility: '',
             }
     })
     setAnswers(init)
@@ -356,6 +428,9 @@ export function Form() {
         patientName: patientName.trim(),
         ward: ward.trim(),
         unitNo: unitNo.trim(),
+        unitChief: unitChief.trim(),
+        auditDate,
+        auditTime,
         items: items.map((it) => ({
           checklistItemId: it._id,
           ...answers[it._id],
@@ -373,7 +448,7 @@ export function Form() {
     } catch (err) {
       const errorMsg = err.response?.data?.message || 'Failed to submit form'
       if (errorMsg.includes('No Duplicate IPID') || errorMsg.includes('already been submitted')) {
-        setMessage('No Duplicate IPID: A checklist has already been submitted for this UHID, IPID, and Department combination. Only one submission is allowed per department for the same admission.')
+        setMessage('Duplicate: A checklist has already been submitted for this UHID, IPID, Department, Date and Time. Use a different date/time for another audit.')
       } else if (errorMsg.includes('UHID already exists') || errorMsg.includes('duplicate')) {
         setMessage('This UHID already exists in the system. Please verify the UHID or contact admin.')
       } else {
@@ -388,7 +463,7 @@ export function Form() {
   if (loading) {
     return (
       <div className="max-w-7xl mx-auto space-y-3">
-        <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-4 text-center">
+        <div className="bg-white/95 backdrop-blur-md rounded-xl shadow-lg border border-indigo-200/50 p-4 text-center">
           <div className="text-slate-600">Loading form...</div>
         </div>
       </div>
@@ -398,9 +473,59 @@ export function Form() {
   // Show error state
   if (loadError) {
     return (
-      <div className="max-w-7xl mx-auto space-y-3">
-        <div className="bg-white rounded-lg shadow-sm border border-blue-200 p-4 text-center">
-          <div className="text-blue-600 font-semibold">{loadError}</div>
+      <div className="max-w-7xl mx-auto space-y-6 px-4 py-6">
+        <div className="bg-white/95 backdrop-blur-md border border-indigo-200/50 rounded-2xl shadow-xl px-5 py-4 sm:py-5">
+          <h1 className="text-2xl font-semibold text-slate-900 mb-2">Form Access Restricted</h1>
+          <p className="text-sm text-slate-600">Unable to access this form</p>
+        </div>
+        
+        <div className="bg-white rounded-xl shadow-sm border border-amber-200 p-6">
+          <div className="flex items-start gap-4">
+            <div className="text-4xl">📋</div>
+            <div className="flex-1">
+              <h3 className="text-lg font-bold text-slate-800 mb-2">Access Denied</h3>
+              <p className="text-slate-700 mb-4 leading-relaxed">{loadError}</p>
+              
+              {user?.role === 'chief' && (
+                <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4 mt-4">
+                  <p className="text-sm font-semibold text-slate-900 mb-2">What you can do:</p>
+                  <ul className="text-sm text-slate-700 space-y-1 list-disc list-inside">
+                    <li>Check the navigation menu for forms assigned to your department</li>
+                    <li>Contact your administrator to assign this form to your department</li>
+                    <li>Use the "Department Logs" page to view submissions from your department</li>
+                  </ul>
+                </div>
+              )}
+              
+              {formTemplate && (
+                <div className="mt-4 pt-4 border-t border-slate-200">
+                  <p className="text-sm text-slate-600">
+                    <span className="font-semibold">Form:</span> {formTemplate.name}
+                  </p>
+                  {formTemplate.description && (
+                    <p className="text-sm text-slate-600 mt-1">
+                      <span className="font-semibold">Description:</span> {formTemplate.description}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+        
+        <div className="flex gap-4">
+          <a
+            href="/chief/dashboard"
+            className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-medium rounded-lg shadow-sm transition-colors"
+          >
+            ← Back to Dashboard
+          </a>
+          <a
+            href="/admin/department-logs"
+            className="px-6 py-3 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-medium rounded-lg transition-colors"
+          >
+            View Department Logs
+          </a>
         </div>
       </div>
     )
@@ -410,7 +535,7 @@ export function Form() {
   if (!formTemplate) {
     return (
       <div className="max-w-7xl mx-auto space-y-3">
-        <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-4 text-center">
+        <div className="bg-white/95 backdrop-blur-md rounded-xl shadow-lg border border-indigo-200/50 p-4 text-center">
           <div className="text-blue-600">Form not found. Please select a valid form from the menu.</div>
         </div>
       </div>
@@ -448,14 +573,11 @@ export function Form() {
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Patient Information Section */}
-        <div className="bg-white rounded-lg shadow-md border border-blue-200 overflow-hidden">
-          <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-2.5">
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-              </svg>
-              Patient Information <span className="text-red-300">*</span>
-              <span className="text-xs font-normal text-blue-100 ml-2">(All fields are mandatory)</span>
+        <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-indigo-200/50 overflow-hidden">
+          <div className="bg-slate-50 border-b border-slate-200 px-4 py-3">
+            <h3 className="text-sm font-semibold text-slate-900">
+              Patient Information <span className="text-red-500">*</span>
+              <span className="text-xs font-normal text-slate-600 ml-2">(All fields are mandatory)</span>
             </h3>
           </div>
           <div className="p-4">
@@ -470,7 +592,7 @@ export function Form() {
                   value={uhid}
                   onChange={(e) => setUhid(e.target.value.toUpperCase())}
                   placeholder="Enter UHID from OP Card"
-                  className={`w-full border-2 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all ${
+                  className={`w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all ${
                     duplicateExists ? 'border-red-500 bg-red-50' : 'border-slate-300 hover:border-slate-400'
                   }`}
                   required
@@ -487,15 +609,15 @@ export function Form() {
                   value={ipid}
                   onChange={(e) => setIpid(e.target.value.toUpperCase())}
                   placeholder="Enter IPID from Admission Slip"
-                  className={`w-full border-2 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all ${
+                  className={`w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all ${
                     duplicateExists ? 'border-red-500 bg-red-50' : 'border-slate-300 hover:border-slate-400'
                   }`}
                   required
                   disabled={duplicateExists}
                 />
                 {checkingDuplicate && (
-                  <div className="text-xs text-blue-600 mt-1.5 flex items-center gap-2">
-                    <span className="inline-block animate-spin rounded-full h-3 w-3 border-2 border-blue-600 border-t-transparent"></span>
+                  <div className="text-xs text-indigo-600 mt-1.5 flex items-center gap-2">
+                    <span className="inline-block animate-spin rounded-full h-3 w-3 border-2 border-indigo-600 border-t-transparent"></span>
                     Checking for existing submission...
                   </div>
                 )}
@@ -519,7 +641,7 @@ export function Form() {
                   type="text"
                   value={patientName}
                   onChange={(e) => setPatientName(e.target.value)}
-                  className={`w-full border-2 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all ${
+                  className={`w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all ${
                     duplicateExists ? 'border-red-500 bg-red-50' : 'border-slate-300 hover:border-slate-400'
                   }`}
                   placeholder="Enter Patient Name"
@@ -535,7 +657,7 @@ export function Form() {
                   type="text"
                   value={ward}
                   onChange={(e) => setWard(e.target.value)}
-                  className={`w-full border-2 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all ${
+                  className={`w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all ${
                     duplicateExists ? 'border-red-500 bg-red-50' : 'border-slate-300 hover:border-slate-400'
                   }`}
                   placeholder="Enter Ward"
@@ -551,7 +673,7 @@ export function Form() {
                   type="text"
                   value={unitNo}
                   onChange={(e) => setUnitNo(e.target.value)}
-                  className={`w-full border-2 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all ${
+                  className={`w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all ${
                     duplicateExists ? 'border-red-500 bg-red-50' : 'border-slate-300 hover:border-slate-400'
                   }`}
                   placeholder="Enter Unit No"
@@ -559,13 +681,62 @@ export function Form() {
                   disabled={duplicateExists}
                 />
               </div>
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-slate-700">
+                  Audit Date <span className="text-red-500">*</span>
+                  <span className="ml-1 text-[10px] font-normal text-slate-500">(Unique per day)</span>
+                </label>
+                <input
+                  type="date"
+                  value={auditDate}
+                  onChange={(e) => setAuditDate(e.target.value)}
+                  className="w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all border-slate-300"
+                  required
+                  disabled={duplicateExists}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-slate-700">
+                  Audit Time <span className="text-red-500">*</span>
+                  <span className="ml-1 text-[10px] font-normal text-slate-500">(Unique per entry)</span>
+                </label>
+                <input
+                  type="time"
+                  value={auditTime}
+                  onChange={(e) => setAuditTime(e.target.value)}
+                  className="w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all border-slate-300"
+                  required
+                  disabled={duplicateExists}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-slate-700">
+                  Unit Chief <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={unitChief}
+                  onChange={(e) => setUnitChief(e.target.value)}
+                  className={`w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all ${
+                    duplicateExists ? 'border-red-500 bg-red-50' : 'border-slate-300 hover:border-slate-400'
+                  }`}
+                  required
+                  disabled={duplicateExists}
+                >
+                  <option value="">Select Unit Chief</option>
+                  {chiefDoctors.map((chief) => (
+                    <option key={chief._id} value={chief.name}>
+                      {chief.name} {chief.designation && `- ${chief.designation}`}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
         </div>
 
         {/* Checklist Sections */}
         {Object.keys(itemsBySection).length === 0 ? (
-          <div className="bg-white rounded-lg shadow-md border border-slate-200 p-6 text-center">
+          <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-indigo-200/50 p-6 text-center">
             <div className="text-slate-400 mb-2">
               <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -577,13 +748,10 @@ export function Form() {
           Object.keys(itemsBySection)
             .sort()
             .map((sectionName) => (
-              <div key={sectionName} className="bg-white rounded-lg shadow-md border border-slate-200 overflow-hidden">
+              <div key={sectionName} className="bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-indigo-200/50 overflow-hidden">
                 {/* Section Header */}
-                <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-3">
-                  <h3 className="font-bold text-sm flex items-center gap-2">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                    </svg>
+                <div className="bg-slate-50 border-b border-slate-200 px-4 py-3">
+                  <h3 className="font-semibold text-sm text-slate-900">
                     {sectionName}
                   </h3>
                 </div>
@@ -596,7 +764,6 @@ export function Form() {
                         <th className="text-left px-2 sm:px-4 py-2 sm:py-3 font-bold text-[10px] sm:text-xs text-slate-700 uppercase tracking-wide w-[35%]">Checklist Item</th>
                         <th className="text-center px-2 sm:px-4 py-2 sm:py-3 font-bold text-[10px] sm:text-xs text-slate-700 uppercase tracking-wide w-[15%]">Response</th>
                         <th className="text-left px-2 sm:px-4 py-2 sm:py-3 font-bold text-[10px] sm:text-xs text-slate-700 uppercase tracking-wide w-[25%]">Remarks</th>
-                        <th className="text-left px-2 sm:px-4 py-2 sm:py-3 font-bold text-[10px] sm:text-xs text-slate-700 uppercase tracking-wide w-[25%]">Responsibility</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -686,21 +853,12 @@ export function Form() {
                                         className="border-2 border-blue-300 rounded-md w-full px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-blue-50 transition-all"
                                         value={answers[it._id]?.remarks || ''}
                                         onChange={(e) => updateAnswer(it._id, 'remarks', e.target.value)}
-                                        placeholder="Remarks required*"
+                                        placeholder="Remarks required when NO"
                                         required
                                       />
                                     ) : (
                                       <span className="text-xs text-slate-400 italic">N/A</span>
                                     )}
-                                  </td>
-                                  <td className="px-4 py-3 align-top">
-                                    <input
-                                      type="text"
-                                      className="border-2 border-slate-300 rounded-md w-full px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-                                      value={answers[it._id]?.responsibility || ''}
-                                      onChange={(e) => updateAnswer(it._id, 'responsibility', e.target.value)}
-                                      placeholder="Enter responsible person"
-                                    />
                                   </td>
                                 </>
                               )}
@@ -716,18 +874,18 @@ export function Form() {
 
         {/* Submit Button */}
         {Object.keys(itemsBySection).length > 0 && (
-          <div className="bg-white rounded-lg shadow-md border border-slate-200 p-4 flex justify-end gap-3">
+          <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-indigo-200/50 p-4 flex justify-end gap-3">
             <button
               type="button"
               onClick={resetToNewForm}
-              className="px-6 py-2.5 border-2 border-slate-300 text-slate-700 font-semibold rounded-md hover:bg-slate-50 transition-all text-sm"
+              className="px-6 py-2.5 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-medium rounded-lg transition-all text-sm"
             >
               Reset Form
             </button>
             <button
               type="submit"
               disabled={submitting || duplicateExists || checkingDuplicate}
-              className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold px-8 py-2.5 rounded-md transition-all disabled:opacity-60 disabled:cursor-not-allowed shadow-lg hover:shadow-xl text-sm flex items-center gap-2"
+              className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-semibold px-8 py-2.5 rounded-lg transition-all disabled:opacity-60 disabled:cursor-not-allowed shadow-sm text-sm flex items-center gap-2"
             >
               {submitting ? (
                 <>
@@ -775,7 +933,7 @@ export function Form() {
                   setSubmittedUHID('')
                   setSubmittedPatientName('')
                 }}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2 rounded-lg transition-colors"
+                className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-semibold px-6 py-2 rounded-lg transition-colors shadow-sm"
               >
                 OK
               </button>

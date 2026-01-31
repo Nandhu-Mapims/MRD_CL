@@ -10,7 +10,7 @@ export function UserManagement() {
     name: '',
     email: '',
     password: '',
-    role: 'user',
+    role: 'auditor',
     departmentId: '',
     isActive: true,
   })
@@ -56,7 +56,7 @@ export function UserManagement() {
         name: '',
         email: '',
         password: '',
-        role: 'user',
+        role: 'auditor',
         departmentId: '',
         isActive: true,
       })
@@ -73,7 +73,7 @@ export function UserManagement() {
       name: user.name,
       email: user.email,
       password: '',
-      role: user.role,
+      role: user.role || 'auditor',
       departmentId: user.department?._id || user.department?.id || '',
       isActive: user.isActive !== undefined ? user.isActive : true,
     })
@@ -106,19 +106,19 @@ export function UserManagement() {
               name: '',
               email: '',
               password: '',
-              role: 'user',
+              role: 'auditor',
               departmentId: '',
               isActive: true,
             })
           }}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg shadow-md transition-colors text-xs sm:text-sm font-medium"
+          className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg shadow-sm transition-colors text-xs sm:text-sm font-medium"
         >
-          + Create New User
+          Create New User
         </button>
       </div>
 
       {showForm && (
-        <div className="bg-white rounded-lg shadow-lg p-6 border border-slate-200">
+        <div className="bg-white rounded-xl shadow-sm p-6 border border-slate-200">
           <h3 className="text-lg font-semibold text-slate-800 mb-4">
             {editingUser ? 'Edit User' : 'Create New User'}
           </h3>
@@ -132,7 +132,7 @@ export function UserManagement() {
                 required
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 placeholder="John Doe"
               />
             </div>
@@ -146,7 +146,7 @@ export function UserManagement() {
                 required
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 placeholder="user@hospital.com"
               />
             </div>
@@ -160,8 +160,11 @@ export function UserManagement() {
                 required={!editingUser}
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 placeholder="••••••••"
+                autoComplete="new-password"
+                data-lpignore="true"
+                data-1p-ignore="true"
               />
             </div>
 
@@ -180,23 +183,24 @@ export function UserManagement() {
                     departmentId: newRole === 'admin' ? '' : formData.departmentId,
                   })
                 }}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               >
-                <option value="user">User</option>
+                <option value="auditor">Auditor</option>
+                <option value="chief">Chief</option>
                 <option value="admin">Admin</option>
               </select>
             </div>
 
-            {formData.role === 'user' && (
+            {(formData.role === 'auditor' || formData.role === 'chief') && (
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Department * (Required for users)
+                  Department * (Required for auditors and chiefs — e.g. MRD, clinical dept)
                 </label>
                 <select
-                  required={formData.role === 'user'}
+                  required={formData.role === 'auditor' || formData.role === 'chief'}
                   value={formData.departmentId}
                   onChange={(e) => setFormData({ ...formData, departmentId: e.target.value })}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 >
                   <option value="">Select Department</option>
                   {departments.map((dept) => (
@@ -224,7 +228,7 @@ export function UserManagement() {
             <div className="flex gap-3 pt-4">
               <button
                 type="submit"
-                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg shadow-md transition-colors"
+                className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white px-6 py-2 rounded-lg shadow-sm transition-colors text-sm font-medium"
               >
                 {editingUser ? 'Update' : 'Create'} User
               </button>
@@ -234,7 +238,7 @@ export function UserManagement() {
                   setShowForm(false)
                   setEditingUser(null)
                 }}
-                className="bg-slate-200 hover:bg-slate-300 text-slate-700 px-6 py-2 rounded-lg transition-colors"
+                className="border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 px-6 py-2 rounded-lg transition-colors text-sm font-medium"
               >
                 Cancel
               </button>
@@ -244,18 +248,18 @@ export function UserManagement() {
       )}
 
       {/* Desktop Table View */}
-      <div className="hidden md:block bg-white rounded-lg shadow-md overflow-hidden">
+      <div className="hidden md:block bg-white rounded-xl shadow-sm overflow-hidden border border-slate-200">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gradient-to-r from-blue-700 via-blue-600 to-blue-500 text-white shadow-md">
+            <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
-                <th className="text-left px-4 lg:px-6 py-3 lg:py-4 font-semibold text-xs lg:text-sm">Name</th>
-                <th className="text-left px-4 lg:px-6 py-3 lg:py-4 font-semibold text-xs lg:text-sm">Email</th>
-                <th className="text-left px-4 lg:px-6 py-3 lg:py-4 font-semibold text-xs lg:text-sm">Role</th>
-                <th className="text-left px-4 lg:px-6 py-3 lg:py-4 font-semibold text-xs lg:text-sm">Department</th>
-                <th className="text-left px-4 lg:px-6 py-3 lg:py-4 font-semibold text-xs lg:text-sm">Status</th>
-                <th className="text-left px-4 lg:px-6 py-3 lg:py-4 font-semibold text-xs lg:text-sm">Created</th>
-                <th className="text-center px-4 lg:px-6 py-3 lg:py-4 font-semibold text-xs lg:text-sm">Actions</th>
+                <th className="text-left px-4 lg:px-6 py-3 lg:py-4 font-semibold text-xs lg:text-sm text-slate-700 uppercase tracking-wide">Name</th>
+                <th className="text-left px-4 lg:px-6 py-3 lg:py-4 font-semibold text-xs lg:text-sm text-slate-700 uppercase tracking-wide">Email</th>
+                <th className="text-left px-4 lg:px-6 py-3 lg:py-4 font-semibold text-xs lg:text-sm text-slate-700 uppercase tracking-wide">Role</th>
+                <th className="text-left px-4 lg:px-6 py-3 lg:py-4 font-semibold text-xs lg:text-sm text-slate-700 uppercase tracking-wide">Department</th>
+                <th className="text-left px-4 lg:px-6 py-3 lg:py-4 font-semibold text-xs lg:text-sm text-slate-700 uppercase tracking-wide">Status</th>
+                <th className="text-left px-4 lg:px-6 py-3 lg:py-4 font-semibold text-xs lg:text-sm text-slate-700 uppercase tracking-wide">Created</th>
+                <th className="text-center px-4 lg:px-6 py-3 lg:py-4 font-semibold text-xs lg:text-sm text-slate-700 uppercase tracking-wide">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
@@ -278,7 +282,7 @@ export function UserManagement() {
                             : 'bg-blue-100 text-blue-700'
                         }`}
                       >
-                        {user.role === 'admin' ? 'Admin' : 'User'}
+                        {user.role === 'admin' ? 'Admin' : user.role === 'chief' ? 'Chief/HOD' : 'Auditor'}
                       </span>
                     </td>
                     <td className="px-4 lg:px-6 py-3 lg:py-4 text-xs lg:text-sm text-slate-600">
@@ -306,7 +310,7 @@ export function UserManagement() {
                       <div className="flex items-center justify-center gap-2">
                         <button
                           onClick={() => handleEdit(user)}
-                          className="text-blue-600 hover:text-blue-700 text-xs lg:text-sm font-medium px-2 lg:px-3 py-1 rounded hover:bg-blue-50 transition-colors"
+                          className="text-indigo-700 hover:text-indigo-800 text-xs lg:text-sm font-medium px-2 lg:px-3 py-1 rounded hover:bg-indigo-50 transition-colors"
                         >
                           Edit
                         </button>
@@ -381,7 +385,7 @@ export function UserManagement() {
               <div className="flex gap-2 mt-3 pt-3 border-t border-slate-200">
                 <button
                   onClick={() => handleEdit(user)}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-3 py-2 rounded-lg transition-colors"
+                  className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white text-xs font-medium px-3 py-2 rounded-lg transition-colors"
                 >
                   Edit
                 </button>

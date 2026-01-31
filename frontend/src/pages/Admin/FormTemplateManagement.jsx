@@ -130,14 +130,14 @@ export function FormTemplateManagement() {
               isActive: true,
             })
           }}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg shadow-md transition-colors text-xs sm:text-sm font-medium"
+          className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg shadow-sm transition-colors text-xs sm:text-sm font-medium"
         >
-          + Create New Form
+          Create New Form
         </button>
       </div>
 
       {showForm && (
-        <div className="bg-white rounded-lg shadow-lg p-6 border border-slate-200">
+        <div className="bg-white rounded-xl shadow-sm p-6 border border-slate-200">
           <h3 className="text-lg font-semibold text-slate-800 mb-4">
             {editingForm ? 'Edit Form Template' : 'Create New Form Template'}
           </h3>
@@ -149,7 +149,7 @@ export function FormTemplateManagement() {
                 required
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 placeholder="e.g., MAPIMS - Case Sheet Audit Checklist"
               />
             </div>
@@ -159,7 +159,7 @@ export function FormTemplateManagement() {
               <textarea
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 rows="3"
                 placeholder="Brief description of this form template"
               />
@@ -198,7 +198,7 @@ export function FormTemplateManagement() {
                             })
                           }
                         }}
-                        className="w-5 h-5 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
+                        className="w-5 h-5 text-indigo-700 border-slate-300 rounded focus:ring-indigo-500"
                       />
                       <div className="flex-1">
                         <span className="font-medium text-slate-800">{dept.name}</span>
@@ -235,7 +235,7 @@ export function FormTemplateManagement() {
               <button
                 type="submit"
                 disabled={formData.departmentIds.length === 0}
-                className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 disabled:cursor-not-allowed text-white px-6 py-2 rounded-lg shadow-md transition-colors"
+                className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:bg-slate-400 disabled:cursor-not-allowed text-white px-6 py-2 rounded-lg shadow-sm transition-colors font-medium"
               >
                 {editingForm ? 'Update' : 'Create'} Form
               </button>
@@ -245,7 +245,7 @@ export function FormTemplateManagement() {
                   setShowForm(false)
                   setEditingForm(null)
                 }}
-                className="bg-slate-200 hover:bg-slate-300 text-slate-700 px-6 py-2 rounded-lg transition-colors"
+                className="border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 px-6 py-2 rounded-lg transition-colors font-medium"
               >
                 Cancel
               </button>
@@ -255,15 +255,15 @@ export function FormTemplateManagement() {
       )}
 
       {!showForm && (
-        <div className="bg-white rounded-lg shadow-md overflow-hidden">
+        <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-slate-200">
           <table className="w-full">
-          <thead className="bg-gradient-to-r from-blue-700 via-blue-600 to-blue-500 text-white shadow-md">
+          <thead className="bg-slate-50 border-b border-slate-200">
             <tr>
-              <th className="text-left px-6 py-4 font-semibold">Form Name</th>
-              <th className="text-left px-6 py-4 font-semibold">Description</th>
-              <th className="text-left px-6 py-4 font-semibold">Assigned Departments</th>
-              <th className="text-left px-6 py-4 font-semibold">Status</th>
-              <th className="text-center px-6 py-4 font-semibold">Actions</th>
+              <th className="text-left px-6 py-4 font-semibold text-sm text-slate-700 uppercase tracking-wide">Form Name</th>
+              <th className="text-left px-6 py-4 font-semibold text-sm text-slate-700 uppercase tracking-wide">Description</th>
+              <th className="text-left px-6 py-4 font-semibold text-sm text-slate-700 uppercase tracking-wide">Assigned Departments</th>
+              <th className="text-left px-6 py-4 font-semibold text-sm text-slate-700 uppercase tracking-wide">Status</th>
+              <th className="text-center px-6 py-4 font-semibold text-sm text-slate-700 uppercase tracking-wide">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
@@ -284,14 +284,14 @@ export function FormTemplateManagement() {
                     </td>
                     <td className="px-6 py-4">
                       {assignedDepts.length === 0 ? (
-                        <span className="text-sm text-blue-600 font-medium">⚠️ Not Assigned</span>
+                        <span className="text-sm text-amber-600 font-medium">Not Assigned</span>
                       ) : (
                         <div className="space-y-2">
                           <div className="flex flex-wrap gap-2">
                             {assignedDepts.map((dept) => (
                               <span
                                 key={dept._id}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 border border-blue-200 text-blue-700 rounded-full text-xs font-medium shadow-sm"
+                                className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-full text-xs font-medium"
                               >
                                 {dept.name} ({dept.code})
                               </span>
@@ -307,7 +307,7 @@ export function FormTemplateManagement() {
                       <span
                         className={`px-3 py-1 rounded-full text-xs font-medium ${
                           form.isActive
-                            ? 'bg-blue-100 text-blue-700'
+                            ? 'bg-emerald-50 text-emerald-700'
                             : 'bg-slate-100 text-slate-600'
                         }`}
                       >
@@ -318,13 +318,13 @@ export function FormTemplateManagement() {
                       <div className="flex items-center justify-center gap-2">
                         <button
                           onClick={() => handleEdit(form)}
-                          className="text-blue-600 hover:text-blue-700 text-sm font-medium px-3 py-1 rounded hover:bg-blue-50 transition-colors"
+                          className="text-indigo-700 hover:text-indigo-800 text-sm font-medium px-3 py-1 rounded hover:bg-indigo-50 transition-colors"
                         >
                           Edit
                         </button>
                         <button
                           onClick={() => handleDelete(form._id)}
-                          className="text-blue-600 hover:text-blue-700 text-sm font-medium px-3 py-1 rounded hover:bg-blue-50 transition-colors"
+                          className="text-red-600 hover:text-red-700 text-sm font-medium px-3 py-1 rounded hover:bg-red-50 transition-colors"
                         >
                           Delete
                         </button>

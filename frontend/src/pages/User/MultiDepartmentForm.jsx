@@ -8,6 +8,8 @@ export function MultiDepartmentForm() {
   const [patientName, setPatientName] = useState('')
   const [ward, setWard] = useState('')
   const [unitNo, setUnitNo] = useState('')
+  const [unitChief, setUnitChief] = useState('')
+  const [chiefDoctors, setChiefDoctors] = useState([])
   const [checklists, setChecklists] = useState([])
   const [answers, setAnswers] = useState({})
   const [loading, setLoading] = useState(false)
@@ -17,6 +19,19 @@ export function MultiDepartmentForm() {
 
   // UHID is entered manually from OP card - no database lookup needed
   // Patient record will be created automatically when form is submitted
+
+  // Load chief doctors on mount
+  useEffect(() => {
+    const loadChiefDoctors = async () => {
+      try {
+        const chiefs = await apiClient.get('/chief-doctors?isActive=true')
+        setChiefDoctors(chiefs || [])
+      } catch (err) {
+        console.error('Error loading chief doctors:', err)
+      }
+    }
+    loadChiefDoctors()
+  }, [])
 
   const loadChecklists = async () => {
     if (!uhid.trim()) {
@@ -45,14 +60,12 @@ export function MultiDepartmentForm() {
               yesNoNa: submission.yesNoNa || '',
               responseValue: submission.responseValue || submission.yesNoNa || '',
               remarks: submission.remarks || '',
-              responsibility: submission.responsibility || '',
             }
           } else {
             initialAnswers[key] = {
               yesNoNa: '',
               responseValue: '',
               remarks: '',
-              responsibility: '',
             }
           }
         })
@@ -91,6 +104,11 @@ export function MultiDepartmentForm() {
       setMessage('Please enter Unit No')
       return
     }
+    
+    if (!unitChief.trim()) {
+      setMessage('Please select Unit Chief')
+      return
+    }
 
     // Validate that remarks are provided when NO is selected
     for (const { item } of checklist.items) {
@@ -112,6 +130,7 @@ export function MultiDepartmentForm() {
         patientName: patientName.trim(),
         ward: ward.trim(),
         unitNo: unitNo.trim(),
+        unitChief: unitChief.trim(),
         items: checklist.items.map(({ item }) => {
           const key = `${checklist.department._id}_${checklist.form._id}_${item._id}`
           return {
@@ -159,14 +178,14 @@ export function MultiDepartmentForm() {
   return (
     <div className="space-y-6 p-4 sm:p-6">
       {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl shadow-xl p-6">
-        <h2 className="text-2xl font-bold mb-2">Multi-Department Checklist</h2>
-        <p className="text-blue-100">View and submit checklists for all departments</p>
+      <div className="bg-white/95 backdrop-blur-md border border-indigo-200/50 rounded-2xl shadow-xl px-5 py-4 sm:py-5">
+        <h1 className="text-2xl sm:text-3xl font-semibold text-slate-900">Multi-Department Checklist</h1>
+        <p className="mt-1 text-sm text-slate-600">View and submit checklists for all departments</p>
       </div>
 
       {/* UHID Search */}
-      <div className="bg-white rounded-lg shadow-md p-6 border border-slate-200">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="bg-white rounded-xl shadow-sm p-6 border border-slate-200">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">
               UHID * <span className="text-xs text-slate-500 font-normal">(Enter from OP Card)</span>
@@ -175,7 +194,7 @@ export function MultiDepartmentForm() {
               type="text"
               value={uhid}
               onChange={(e) => setUhid(e.target.value.toUpperCase())}
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               placeholder="Enter UHID from OP Card"
             />
           </div>
@@ -185,7 +204,7 @@ export function MultiDepartmentForm() {
               type="text"
               value={patientName}
               onChange={(e) => setPatientName(e.target.value)}
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               placeholder="Enter patient name"
             />
           </div>
@@ -197,7 +216,7 @@ export function MultiDepartmentForm() {
               type="text"
               value={ward}
               onChange={(e) => setWard(e.target.value)}
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               placeholder="Enter Ward"
               required
             />
@@ -210,27 +229,45 @@ export function MultiDepartmentForm() {
               type="text"
               value={unitNo}
               onChange={(e) => setUnitNo(e.target.value)}
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               placeholder="Enter Unit No"
               required
             />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">
+              Unit Chief <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={unitChief}
+              onChange={(e) => setUnitChief(e.target.value)}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              required
+            >
+              <option value="">Select Unit Chief</option>
+              {chiefDoctors.map((chief) => (
+                <option key={chief._id} value={chief.name}>
+                  {chief.name} {chief.designation && `- ${chief.designation}`}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
         <div className="mt-4">
           <button
             onClick={loadChecklists}
             disabled={loading || !uhid.trim()}
-            className="w-full md:w-auto bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 text-white px-6 py-2 rounded-lg font-medium transition-colors"
+            className="w-full md:w-auto bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:bg-slate-400 text-white px-6 py-2 rounded-lg font-medium transition-colors shadow-sm"
           >
             {loading ? 'Loading...' : 'Load Checklists'}
           </button>
         </div>
         {userDepartment && (
-          <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-            <p className="text-sm text-blue-800">
+          <div className="mt-4 p-3 bg-indigo-50 rounded-lg border border-indigo-200">
+            <p className="text-sm text-slate-800">
               <strong>Your Department:</strong> {userDepartment.name} ({userDepartment.code})
             </p>
-            <p className="text-xs text-blue-600 mt-1">
+            <p className="text-xs text-slate-600 mt-1">
               You can edit your department's checklist and common checklists (ANAE, NUS) until submission.
               Other departments' checklists are view-only.
             </p>
@@ -261,49 +298,53 @@ export function MultiDepartmentForm() {
             return (
               <div
                 key={idx}
-                className={`bg-white rounded-lg shadow-lg border-2 ${
+                className={`bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-indigo-200/50 ${
                   editable
-                    ? 'border-blue-300'
+                    ? 'border-indigo-200'
                     : checklist.isLocked
-                    ? 'border-red-300'
-                    : 'border-slate-300'
+                    ? 'border-red-200'
+                    : 'border-slate-200'
                 }`}
               >
                 {/* Checklist Header */}
                 <div
-                  className={`p-4 rounded-t-lg ${
+                  className={`p-4 rounded-t-xl border-b ${
                     editable
-                      ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white'
+                      ? 'bg-indigo-50 border-indigo-200'
                       : checklist.isLocked
-                      ? 'bg-gradient-to-r from-red-600 to-red-700 text-white'
-                      : 'bg-gradient-to-r from-slate-600 to-slate-700 text-white'
+                      ? 'bg-red-50 border-red-200'
+                      : 'bg-slate-50 border-slate-200'
                   }`}
                 >
                   <div className="flex items-center justify-between">
                     <div>
-                      <h3 className="text-lg font-bold">
+                      <h3 className={`text-lg font-semibold ${
+                        editable ? 'text-indigo-900' : checklist.isLocked ? 'text-red-900' : 'text-slate-900'
+                      }`}>
                         {checklist.department.name} ({checklist.department.code})
                       </h3>
-                      <p className="text-sm opacity-90">{checklist.form.name}</p>
+                      <p className={`text-sm ${
+                        editable ? 'text-indigo-700' : checklist.isLocked ? 'text-red-700' : 'text-slate-600'
+                      }`}>{checklist.form.name}</p>
                     </div>
                     <div className="text-right">
                       {checklist.isLocked && (
-                        <span className="inline-flex items-center px-3 py-1 bg-red-500 rounded-full text-xs font-semibold">
-                          🔒 Locked
+                        <span className="inline-flex items-center px-3 py-1 bg-red-100 text-red-700 rounded-full text-xs font-semibold border border-red-200">
+                          Locked
                         </span>
                       )}
                       {editable && !checklist.isLocked && (
-                        <span className="inline-flex items-center px-3 py-1 bg-green-500 rounded-full text-xs font-semibold">
-                          ✏️ Editable
+                        <span className="inline-flex items-center px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-xs font-semibold border border-indigo-200">
+                          Editable
                         </span>
                       )}
                       {!editable && !checklist.isLocked && (
-                        <span className="inline-flex items-center px-3 py-1 bg-yellow-500 rounded-full text-xs font-semibold">
-                          👁️ View Only
+                        <span className="inline-flex items-center px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-xs font-semibold border border-amber-200">
+                          View Only
                         </span>
                       )}
                       {checklist.isCommon && (
-                        <span className="inline-flex items-center px-3 py-1 bg-purple-500 rounded-full text-xs font-semibold ml-2">
+                        <span className="inline-flex items-center px-3 py-1 bg-slate-100 text-slate-700 rounded-full text-xs font-semibold border border-slate-200 ml-2">
                           Common
                         </span>
                       )}
@@ -390,22 +431,6 @@ export function MultiDepartmentForm() {
                                       />
                                     </div>
 
-                                    {/* Responsibility */}
-                                    <div>
-                                      <label className="block text-xs font-medium text-slate-600 mb-1">
-                                        Responsibility
-                                      </label>
-                                      <input
-                                        type="text"
-                                        value={answer.responsibility || ''}
-                                        onChange={(e) =>
-                                          !isReadOnly &&
-                                          updateAnswer(key, 'responsibility', e.target.value)
-                                        }
-                                        disabled={isReadOnly}
-                                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100"
-                                      />
-                                    </div>
                                   </div>
                                 </div>
                               </div>
@@ -421,7 +446,7 @@ export function MultiDepartmentForm() {
                       <button
                         onClick={(e) => handleSubmit(e, checklist)}
                         disabled={submitting}
-                        className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 text-white px-6 py-3 rounded-lg font-semibold transition-colors"
+                        className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:bg-slate-400 text-white px-6 py-3 rounded-lg font-semibold transition-colors shadow-sm"
                       >
                         {submitting ? 'Submitting...' : `Submit ${checklist.department.name} Checklist`}
                       </button>

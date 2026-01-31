@@ -2,21 +2,73 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret';
+// Security: Require JWT_SECRET - no default fallback
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  console.error('❌ CRITICAL: JWT_SECRET environment variable is not set!');
+  process.exit(1);
+}
 const JWT_EXPIRES_IN = '8h';
+
+// Password strength validation
+const validatePassword = (password) => {
+  if (!password || password.length < 8) {
+    return { valid: false, message: 'Password must be at least 8 characters long' };
+  }
+  if (!/[A-Z]/.test(password)) {
+    return { valid: false, message: 'Password must contain at least one uppercase letter' };
+  }
+  if (!/[a-z]/.test(password)) {
+    return { valid: false, message: 'Password must contain at least one lowercase letter' };
+  }
+  if (!/[0-9]/.test(password)) {
+    return { valid: false, message: 'Password must contain at least one number' };
+  }
+  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
+    return { valid: false, message: 'Password must contain at least one special character' };
+  }
+  return { valid: true };
+};
+
+// Email validation
+const validateEmail = (email) => {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
+};
 
 exports.registerAdmin = async (req, res) => {
   try {
     const { name, email, password } = req.body;
-    const existing = await User.findOne({ email });
+    
+    // Input validation
+    if (!name || !email || !password) {
+      return res.status(400).json({ message: 'Name, email, and password are required' });
+    }
+    
+    if (!validateEmail(email)) {
+      return res.status(400).json({ message: 'Invalid email format' });
+    }
+    
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.valid) {
+      return res.status(400).json({ message: passwordValidation.message });
+    }
+    
+    const existing = await User.findOne({ email: email.toLowerCase().trim() });
     if (existing) {
       return res.status(400).json({ message: 'Email already registered' });
     }
     const passwordHash = await bcrypt.hash(password, 10);
-    const user = await User.create({ name, email, passwordHash, role: 'admin' });
+    const user = await User.create({ 
+      name: name.trim(), 
+      email: email.toLowerCase().trim(), 
+      passwordHash, 
+      role: 'admin' 
+    });
     res.status(201).json({ id: user._id, email: user.email });
   } catch (err) {
     console.error('registerAdmin error', err);
+    // Security: Don't leak error details to client
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -24,14 +76,33 @@ exports.registerAdmin = async (req, res) => {
 exports.registerUser = async (req, res) => {
   try {
     const { name, email, password, role = 'user', departmentId } = req.body;
-    const existing = await User.findOne({ email });
+    
+    // Input validation
+    if (!name || !email || !password) {
+      return res.status(400).json({ message: 'Name, email, and password are required' });
+    }
+    
+    if (!validateEmail(email)) {
+      return res.status(400).json({ message: 'Invalid email format' });
+    }
+    
+    if (role && !['admin', 'auditor', 'chief'].includes(role)) {
+      return res.status(400).json({ message: 'Invalid role. Must be admin, auditor, or chief' });
+    }
+    
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.valid) {
+      return res.status(400).json({ message: passwordValidation.message });
+    }
+    
+    const existing = await User.findOne({ email: email.toLowerCase().trim() });
     if (existing) {
       return res.status(400).json({ message: 'Email already registered' });
     }
     const passwordHash = await bcrypt.hash(password, 10);
     const user = await User.create({
-      name,
-      email,
+      name: name.trim(),
+      email: email.toLowerCase().trim(),
       passwordHash,
       role,
       department: role === 'user' ? departmentId : undefined,
@@ -46,6 +117,7 @@ exports.registerUser = async (req, res) => {
     });
   } catch (err) {
     console.error('registerUser error', err);
+    // Security: Don't leak error details to client
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -53,7 +125,17 @@ exports.registerUser = async (req, res) => {
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
-    const user = await User.findOne({ email, isActive: true }).populate('department');
+    
+    // Input validation
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Email and password are required' });
+    }
+    
+    if (!validateEmail(email)) {
+      return res.status(400).json({ message: 'Invalid email format' });
+    }
+    
+    const user = await User.findOne({ email: email.toLowerCase().trim(), isActive: true }).populate('department');
     if (!user) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
@@ -82,6 +164,7 @@ exports.login = async (req, res) => {
     });
   } catch (err) {
     console.error('login error', err);
+    // Security: Generic error message to prevent user enumeration
     res.status(500).json({ message: 'Server error' });
   }
 };

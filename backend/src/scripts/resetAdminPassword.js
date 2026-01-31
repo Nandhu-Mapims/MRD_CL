@@ -11,7 +11,7 @@ const RUN = async () => {
     await connectDB();
 
     const adminEmail = 'admin@hospital.com';
-    const adminPassword = 'Admin@123';
+    const adminPassword = 'TataTiago@2026';
 
     const admin = await User.findOne({ email: adminEmail });
     

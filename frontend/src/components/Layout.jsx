@@ -3,78 +3,293 @@ import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { apiClient } from '../api/client'
 
+function NotificationBell() {
+  const [open, setOpen] = useState(false)
+  const [notifications, setNotifications] = useState([])
+  const [unreadCount, setUnreadCount] = useState(0)
+  const [loading, setLoading] = useState(false)
+  const bellRef = useRef(null)
+  const dropdownRef = useRef(null)
+
+  const loadNotifications = async () => {
+    setLoading(true)
+    try {
+      const data = await apiClient.get('/notifications?limit=10')
+      setNotifications(data.notifications || [])
+      setUnreadCount(data.unreadCount || 0)
+    } catch (err) {
+      console.error('Error loading notifications:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (open) {
+      loadNotifications()
+    }
+  }, [open])
+
+  useEffect(() => {
+    if (open) {
+      const interval = setInterval(() => {
+        loadNotifications()
+      }, 30000)
+      return () => clearInterval(interval)
+    }
+  }, [open])
+
+  useEffect(() => {
+    const handler = (event) => {
+      if (
+        dropdownRef.current &&
+        bellRef.current &&
+        !dropdownRef.current.contains(event.target) &&
+        !bellRef.current.contains(event.target)
+      ) {
+        setOpen(false)
+      }
+    }
+    if (open) {
+      document.addEventListener('mousedown', handler)
+      return () => document.removeEventListener('mousedown', handler)
+    }
+  }, [open])
+
+  const markOneAsRead = async (id) => {
+    try {
+      await apiClient.post(`/notifications/${id}/read`, {})
+      setNotifications((prev) =>
+        prev.map((n) => (n._id === id ? { ...n, isRead: true } : n))
+      )
+      setUnreadCount((prev) => Math.max(0, prev - 1))
+    } catch (err) {
+      console.error('Error marking notification as read:', err)
+    }
+  }
+
+  const markAllAsRead = async () => {
+    try {
+      await apiClient.post('/notifications/read-all', {})
+      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })))
+      setUnreadCount(0)
+    } catch (err) {
+      console.error('Error marking all notifications as read:', err)
+    }
+  }
+
+  return (
+    <div className="relative">
+      <button
+        ref={bellRef}
+        onClick={() => setOpen((prev) => !prev)}
+        className={`relative p-2 rounded-full transition-all ${
+          unreadCount > 0
+            ? 'bg-red-50 hover:bg-red-100 text-red-600 ring-2 ring-red-300'
+            : 'hover:bg-slate-100 text-slate-700'
+        }`}
+        aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
+        title={unreadCount > 0 ? `${unreadCount} unread notification${unreadCount > 1 ? 's' : ''}` : 'No new notifications'}
+      >
+        <span className="text-xl">🔔</span>
+        {unreadCount > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5 animate-pulse">
+            {unreadCount > 9 ? '9+' : unreadCount}
+          </span>
+        )}
+      </button>
+      {open && (
+        <div
+          ref={dropdownRef}
+          className="absolute right-0 mt-2 w-80 max-w-xs bg-white rounded-lg shadow-lg border border-slate-200 z-50"
+        >
+          <div className="px-4 py-2 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+            <div className="flex items-center gap-2">
+              <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide">
+                Notifications
+              </div>
+              {unreadCount > 0 && (
+                <span className="px-2 py-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full">
+                  {unreadCount} NEW
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={loadNotifications}
+                disabled={loading}
+                className="text-[11px] text-indigo-700 hover:text-indigo-800 font-medium disabled:opacity-50"
+                title="Refresh notifications"
+              >
+                ↻
+              </button>
+              {unreadCount > 0 && (
+                <button
+                  onClick={markAllAsRead}
+                  className="text-[11px] text-indigo-700 hover:text-indigo-800 font-medium"
+                >
+                  Mark all read
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="max-h-80 overflow-y-auto">
+            {loading ? (
+              <div className="px-4 py-6 text-center text-slate-500 text-sm">
+                <div className="inline-block animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-blue-600 mb-2"></div>
+                <div>Loading notifications...</div>
+              </div>
+            ) : notifications.length === 0 ? (
+              <div className="px-4 py-6 text-center text-slate-500 text-sm">
+                <div className="text-2xl mb-2">🔕</div>
+                <div>No notifications yet.</div>
+                <div className="text-xs text-slate-400 mt-1">You'll be notified when chiefs add actions to your submissions.</div>
+              </div>
+            ) : (
+              notifications.map((n) => (
+                <button
+                  key={n._id}
+                  onClick={() => markOneAsRead(n._id)}
+                  className={`w-full text-left px-4 py-3 border-b border-slate-100 text-sm transition-all ${
+                    n.isRead 
+                      ? 'bg-white hover:bg-slate-50' 
+                      : 'bg-indigo-50 hover:bg-indigo-100 border-l-4 border-l-indigo-600'
+                  }`}
+                >
+                  <div className="flex items-start justify-between mb-1">
+                    <div className="font-semibold text-slate-800 flex-1">
+                      {!n.isRead && <span className="inline-block w-2 h-2 bg-indigo-600 rounded-full mr-2"></span>}
+                      {n.title}
+                    </div>
+                    {n.type === 'action' && (
+                      <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 text-[10px] font-semibold rounded">
+                        ACTION
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-slate-600 text-xs leading-snug mb-2">
+                    {n.message}
+                  </div>
+                  <div className="text-[10px] text-slate-400">
+                    {n.createdAt
+                      ? new Date(n.createdAt).toLocaleString('en-GB', {
+                          day: '2-digit',
+                          month: 'short',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })
+                      : ''}
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Sidebar Menu Item Component
+function SidebarMenuItem({ to, icon, label, isActive, accentColor = 'indigo' }) {
+  return (
+    <Link
+      to={to}
+      className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
+        isActive 
+          ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-500/50' 
+          : 'text-slate-700 hover:bg-indigo-50 hover:text-indigo-700'
+      }`}
+    >
+      <span className="text-base w-5 text-center">{icon}</span>
+      <span>{label}</span>
+    </Link>
+  )
+}
+
+// Collapsible Sidebar Section
+function SidebarSection({ icon, label, isOpen, onToggle, isActive, children }) {
+  return (
+    <div>
+      <button
+        onClick={onToggle}
+        className={`w-full flex items-center justify-between px-4 py-3 rounded-lg text-sm font-medium transition-all ${
+          isActive
+            ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-500/50'
+            : 'text-slate-700 hover:bg-indigo-50 hover:text-indigo-700'
+        }`}
+      >
+        <div className="flex items-center gap-3">
+          <span className="text-base w-5 text-center">{icon}</span>
+          <span>{label}</span>
+        </div>
+        <svg
+          className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {isOpen && (
+        <div className="ml-4 mt-1 space-y-1 border-l-2 border-slate-200 pl-4">
+          {children}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Sub Menu Item for collapsible sections
+function SubMenuItem({ to, icon, label, isActive }) {
+  return (
+    <Link
+      to={to}
+      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+        isActive
+          ? 'bg-indigo-50 text-indigo-700 border-l-2 border-indigo-600'
+          : 'text-slate-600 hover:bg-indigo-50 hover:text-indigo-700'
+      }`}
+    >
+      <span className="text-base w-5 text-center">{icon}</span>
+      <span>{label}</span>
+    </Link>
+  )
+}
+
 export function Layout({ children }) {
   const { user, logout } = useAuth()
   const location = useLocation()
   const isAdmin = user?.role === 'admin'
+  const [sidebarOpen, setSidebarOpen] = useState(true)
   const [configMenuOpen, setConfigMenuOpen] = useState(false)
   const [createFormsMenuOpen, setCreateFormsMenuOpen] = useState(false)
-  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 })
-  const [createFormsDropdownPosition, setCreateFormsDropdownPosition] = useState({ top: 0, left: 0 })
+  const [formsMenuOpen, setFormsMenuOpen] = useState(false)
   const [userForms, setUserForms] = useState([])
-  const configMenuRef = useRef(null)
-  const configButtonRef = useRef(null)
-  const createFormsMenuRef = useRef(null)
-  const createFormsButtonRef = useRef(null)
 
   const isActive = (path) => location.pathname === path
   
   const isConfigActive = () => {
-    return isActive('/admin/departments') || isActive('/admin/users')
+    return isActive('/admin/departments') || isActive('/admin/users') || isActive('/admin/assign-forms')
   }
 
   const isCreateFormsActive = () => {
     return isActive('/admin/forms') || isActive('/admin/checklists')
   }
 
+  const isFormsActive = () => {
+    return userForms.some(form => location.pathname === `/form/${form._id}`)
+  }
+
   // Load user's available forms
   useEffect(() => {
     const loadUserForms = async () => {
-      if (user?.role === 'user') {
+      if (user?.role === 'auditor' || user?.role === 'chief') {
         try {
-          const [allForms, departments] = await Promise.all([
-            apiClient.get('/form-templates'),
-            apiClient.get('/departments')
-          ])
-          
-          // Get user department ID - handle both object and string formats
-          let userDeptId = null
-          if (user?.department) {
-            userDeptId = typeof user.department === 'object' 
-              ? (user.department.id || user.department._id) 
-              : user.department
-          }
-          
-          // Get ANAE and NUS department IDs - these forms are common for all users
-          const anaDept = departments.find(d => d.code === 'ANAE')
-          const nusDept = departments.find(d => d.code === 'NUS')
-          const anaDeptId = anaDept?._id?.toString()
-          const nusDeptId = nusDept?._id?.toString()
-          
-          const filtered = allForms.filter(form => {
-            if (!form.isActive) return false
-            
-            // Check if form is assigned to ANAE or NUS departments - these are common for ALL users
-            const isAnaeForm = form.departments?.some(d => {
-              const deptId = typeof d === 'object' ? (d._id || d.id) : d
-              return deptId?.toString() === anaDeptId
-            })
-            const isNusForm = form.departments?.some(d => {
-              const deptId = typeof d === 'object' ? (d._id || d.id) : d
-              return deptId?.toString() === nusDeptId
-            })
-            
-            // Show ANAE and NUS forms to all users (common forms)
-            if (isAnaeForm || isNusForm) return true
-            
-            // For other forms: only show if assigned to user's department
-            if (!userDeptId) return false
-            return form.departments?.some(d => {
-              const deptId = typeof d === 'object' ? (d._id || d.id) : d
-              return deptId?.toString() === userDeptId?.toString()
-            })
-          })
-          setUserForms(filtered)
+          const accessibleForms = await apiClient.get('/form-templates/accessible/list')
+          setUserForms(accessibleForms)
         } catch (err) {
           console.error('Error loading user forms:', err)
           setUserForms([])
@@ -84,336 +299,402 @@ export function Layout({ children }) {
     loadUserForms()
   }, [user])
 
-  // Calculate dropdown position when opening
+  // Auto-expand sections based on current route
   useEffect(() => {
-    if (configMenuOpen && configButtonRef.current) {
-      const rect = configButtonRef.current.getBoundingClientRect()
-      setDropdownPosition({
-        top: rect.bottom + window.scrollY + 4,
-        left: rect.left + window.scrollX
-      })
-    }
-  }, [configMenuOpen])
-
-  useEffect(() => {
-    if (createFormsMenuOpen && createFormsButtonRef.current) {
-      const rect = createFormsButtonRef.current.getBoundingClientRect()
-      setCreateFormsDropdownPosition({
-        top: rect.bottom + window.scrollY + 4,
-        left: rect.left + window.scrollX
-      })
-    }
-  }, [createFormsMenuOpen])
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (
-        configMenuRef.current &&
-        configButtonRef.current &&
-        !configMenuRef.current.contains(event.target) &&
-        !configButtonRef.current.contains(event.target)
-      ) {
-        setConfigMenuOpen(false)
-      }
-      if (
-        createFormsMenuRef.current &&
-        createFormsButtonRef.current &&
-        !createFormsMenuRef.current.contains(event.target) &&
-        !createFormsButtonRef.current.contains(event.target)
-      ) {
-        setCreateFormsMenuOpen(false)
-      }
-    }
-
-    if (configMenuOpen || createFormsMenuOpen) {
-      document.addEventListener('mousedown', handleClickOutside)
-      return () => {
-        document.removeEventListener('mousedown', handleClickOutside)
-      }
-    }
-  }, [configMenuOpen, createFormsMenuOpen])
-
-  // Close dropdown when route changes
-  useEffect(() => {
-    setConfigMenuOpen(false)
-    setCreateFormsMenuOpen(false)
+    if (isConfigActive()) setConfigMenuOpen(true)
+    if (isCreateFormsActive()) setCreateFormsMenuOpen(true)
+    if (isFormsActive()) setFormsMenuOpen(true)
   }, [location.pathname])
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-white via-blue-50 to-blue-100">
-      {/* New Header Design */}
-      <header className="bg-white shadow-lg border-b-4 border-blue-600 relative z-50 overflow-visible">
-        <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 overflow-visible">
-          {/* Top Bar */}
-          <div className="flex items-center justify-between py-2 sm:py-3 md:py-4 border-b border-blue-100">
-            <Link to="/" className="flex items-center gap-2 sm:gap-3 group">
-              <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg flex items-center justify-center shadow-md group-hover:shadow-lg transition-shadow">
-                <span className="text-lg sm:text-xl md:text-2xl">🏥</span>
+    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50">
+      {/* Top Header */}
+      <header className="fixed top-0 left-0 right-0 bg-white/95 backdrop-blur-md shadow-lg border-b border-indigo-200/50 z-50 h-16">
+        <div className="h-full px-4 lg:px-6 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            {/* Mobile menu toggle */}
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="p-2 rounded-lg hover:bg-slate-100 transition-colors lg:hidden"
+            >
+              <svg className="w-6 h-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+            
+            <Link to="/" className="flex items-center gap-3 group">
+              <div className="w-10 h-10 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/50 group-hover:shadow-xl group-hover:shadow-indigo-500/60 transition-all">
+                <span className="text-sm font-semibold text-white">MRD</span>
               </div>
-              <div>
-                <h1 className="text-sm sm:text-base md:text-lg lg:text-xl font-bold text-slate-800 group-hover:text-blue-600 transition-colors">
+              <div className="hidden sm:block">
+                <h1 className="text-lg font-semibold text-slate-900">
                   Hospital Audit System
                 </h1>
-                <p className="text-[10px] sm:text-xs text-slate-500 hidden sm:block">Medical Records Department</p>
+                <p className="text-xs text-slate-500">
+                  Medical Records Department
+                </p>
               </div>
             </Link>
-            {user && (
-              <div className="flex items-center gap-2 sm:gap-3 md:gap-4">
-                <div className="text-right hidden md:block pr-2 md:pr-4 border-r border-blue-100">
-                  <div className="text-xs sm:text-sm font-semibold text-slate-800">{user.name}</div>
-                  <div className="text-[10px] sm:text-xs text-blue-600 capitalize font-medium">{user.role}</div>
-                </div>
-                <button
-                  onClick={logout}
-                  className="px-3 py-1.5 sm:px-4 sm:py-2 md:px-5 md:py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-medium transition-all shadow-md hover:shadow-lg transform hover:scale-105"
-                >
-                  <span className="hidden sm:inline">Logout</span>
-                  <span className="sm:hidden">Out</span>
-                </button>
-              </div>
-            )}
           </div>
 
-          {/* Navigation Bar */}
           {user && (
-            <nav className="flex items-center gap-1 py-2 sm:py-2.5 md:py-3 overflow-x-auto overflow-y-visible scrollbar-hide relative">
-              {isAdmin ? (
-                <>
-                  <Link
-                    to="/admin/dashboard"
-                    className={`px-3 py-1.5 sm:px-4 sm:py-2 md:px-5 md:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
-                      isActive('/admin/dashboard')
-                        ? 'bg-blue-600 text-white shadow-md'
-                        : 'text-slate-700 hover:bg-blue-50 hover:text-blue-600'
-                    }`}
-                  >
-                    <span className="hidden sm:inline">📊 Dashboard</span>
-                    <span className="sm:hidden">📊</span>
-                  </Link>
-                  <Link
-                    to="/admin/analytics"
-                    className={`px-3 py-1.5 sm:px-4 sm:py-2 md:px-5 md:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
-                      isActive('/admin/analytics')
-                        ? 'bg-blue-600 text-white shadow-md'
-                        : 'text-slate-700 hover:bg-blue-50 hover:text-blue-600'
-                    }`}
-                  >
-                    <span className="hidden sm:inline">✅ Analytics</span>
-                    <span className="sm:hidden">✅</span>
-                  </Link>
-                  <Link
-                    to="/admin/patient-report"
-                    className={`px-3 py-1.5 sm:px-4 sm:py-2 md:px-5 md:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
-                      isActive('/admin/patient-report')
-                        ? 'bg-blue-600 text-white shadow-md'
-                        : 'text-slate-700 hover:bg-blue-50 hover:text-blue-600'
-                    }`}
-                  >
-                    <span className="hidden sm:inline">📋 Patient Report</span>
-                    <span className="sm:hidden">📋</span>
-                  </Link>
-                  <Link
-                    to="/admin/department-logs"
-                    className={`px-3 py-1.5 sm:px-4 sm:py-2 md:px-5 md:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
-                      isActive('/admin/department-logs')
-                        ? 'bg-blue-600 text-white shadow-md'
-                        : 'text-slate-700 hover:bg-blue-50 hover:text-blue-600'
-                    }`}
-                  >
-                    <span className="hidden sm:inline">📊 Department Logs</span>
-                    <span className="sm:hidden">📊</span>
-                  </Link>
-                  <div className="relative">
-                    <button
-                      ref={createFormsButtonRef}
-                      onClick={() => setCreateFormsMenuOpen(!createFormsMenuOpen)}
-                      className={`px-3 py-1.5 sm:px-4 sm:py-2 md:px-5 md:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap flex items-center gap-1 ${
-                        isCreateFormsActive()
-                          ? 'bg-blue-600 text-white shadow-md'
-                          : 'text-slate-700 hover:bg-blue-50 hover:text-blue-600'
-                      }`}
-                    >
-                      <span className="hidden sm:inline">📝 Create Forms</span>
-                      <span className="sm:hidden">📝</span>
-                      <svg
-                        className={`w-3 h-3 transition-transform ${createFormsMenuOpen ? 'rotate-180' : ''}`}
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </button>
-                    {createFormsMenuOpen && (
-                      <div
-                        ref={createFormsMenuRef}
-                        className="fixed bg-white rounded-lg shadow-xl border-2 border-blue-100 min-w-[180px] z-[9999]"
-                        style={{
-                          top: `${createFormsDropdownPosition.top}px`,
-                          left: `${createFormsDropdownPosition.left}px`
-                        }}
-                      >
-                        <Link
-                          to="/admin/forms"
-                          className={`block px-4 py-2.5 text-xs sm:text-sm font-medium transition-all first:rounded-t-lg ${
-                            isActive('/admin/forms')
-                              ? 'bg-blue-600 text-white'
-                              : 'text-slate-700 hover:bg-blue-50 hover:text-blue-600'
-                          }`}
-                          onClick={() => setCreateFormsMenuOpen(false)}
-                        >
-                          <span className="flex items-center gap-2">
-                            <span>📋</span>
-                            <span>Forms</span>
-                          </span>
-                        </Link>
-                        <Link
-                          to="/admin/checklists"
-                          className={`block px-4 py-2.5 text-xs sm:text-sm font-medium transition-all border-t border-blue-100 last:rounded-b-lg ${
-                            isActive('/admin/checklists')
-                              ? 'bg-blue-600 text-white'
-                              : 'text-slate-700 hover:bg-blue-50 hover:text-blue-600'
-                          }`}
-                          onClick={() => setCreateFormsMenuOpen(false)}
-                        >
-                          <span className="flex items-center gap-2">
-                            <span>✏️</span>
-                            <span>Form Builder</span>
-                          </span>
-                        </Link>
-                      </div>
-                    )}
-                  </div>
-                  <div className="relative">
-                    <button
-                      ref={configButtonRef}
-                      onClick={() => setConfigMenuOpen(!configMenuOpen)}
-                      className={`px-3 py-1.5 sm:px-4 sm:py-2 md:px-5 md:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap flex items-center gap-1 ${
-                        isConfigActive()
-                          ? 'bg-blue-600 text-white shadow-md'
-                          : 'text-slate-700 hover:bg-blue-50 hover:text-blue-600'
-                      }`}
-                    >
-                      <span className="hidden sm:inline">⚙️ Configure</span>
-                      <span className="sm:hidden">⚙️</span>
-                      <svg
-                        className={`w-3 h-3 transition-transform ${configMenuOpen ? 'rotate-180' : ''}`}
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </button>
-                    {configMenuOpen && (
-                      <div
-                        ref={configMenuRef}
-                        className="fixed bg-white rounded-lg shadow-xl border-2 border-blue-100 min-w-[180px] z-[9999]"
-                        style={{
-                          top: `${dropdownPosition.top}px`,
-                          left: `${dropdownPosition.left}px`
-                        }}
-                      >
-                        <Link
-                          to="/admin/departments"
-                          className={`block px-4 py-2.5 text-xs sm:text-sm font-medium transition-all first:rounded-t-lg ${
-                            isActive('/admin/departments')
-                              ? 'bg-blue-600 text-white'
-                              : 'text-slate-700 hover:bg-blue-50 hover:text-blue-600'
-                          }`}
-                          onClick={() => setConfigMenuOpen(false)}
-                        >
-                          <span className="flex items-center gap-2">
-                            <span>🏢</span>
-                            <span>Departments</span>
-                          </span>
-                        </Link>
-                        <Link
-                          to="/admin/users"
-                          className={`block px-4 py-2.5 text-xs sm:text-sm font-medium transition-all border-t border-blue-100 last:rounded-b-lg ${
-                            isActive('/admin/users')
-                              ? 'bg-blue-600 text-white'
-                              : 'text-slate-700 hover:bg-blue-50 hover:text-blue-600'
-                          }`}
-                          onClick={() => setConfigMenuOpen(false)}
-                        >
-                          <span className="flex items-center gap-2">
-                            <span>👥</span>
-                            <span>Users</span>
-                          </span>
-                        </Link>
-                      </div>
-                    )}
-                  </div>
-                  <Link
-                    to="/user-manual"
-                    className={`px-3 py-1.5 sm:px-4 sm:py-2 md:px-5 md:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
-                      isActive('/user-manual')
-                        ? 'bg-blue-600 text-white shadow-md'
-                        : 'text-slate-700 hover:bg-blue-50 hover:text-blue-600'
-                    }`}
-                  >
-                    <span className="hidden sm:inline">📖 User Manual</span>
-                    <span className="sm:hidden">📖</span>
-                  </Link>
-                </>
-              ) : (
-                <>
-                  {userForms.map((form) => (
-                    <Link
-                      key={form._id}
-                      to={`/form/${form._id}`}
-                      className={`px-3 py-1.5 sm:px-4 sm:py-2 md:px-5 md:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
-                        location.pathname === `/form/${form._id}`
-                          ? 'bg-blue-600 text-white shadow-md'
-                          : 'text-slate-700 hover:bg-blue-50 hover:text-blue-600'
-                      }`}
-                    >
-                      <span className="hidden sm:inline">📝 {form.name}</span>
-                      <span className="sm:hidden">📝</span>
-                    </Link>
-                  ))}
-                  <Link
-                    to="/admin/patient-report"
-                    className={`px-3 py-1.5 sm:px-4 sm:py-2 md:px-5 md:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
-                      isActive('/admin/patient-report')
-                        ? 'bg-blue-600 text-white shadow-md'
-                        : 'text-slate-700 hover:bg-blue-50 hover:text-blue-600'
-                    }`}
-                  >
-                    <span className="hidden sm:inline">📋 Patient Report</span>
-                    <span className="sm:hidden">📋</span>
-                  </Link>
-                  <Link
-                    to="/admin/department-logs"
-                    className={`px-3 py-1.5 sm:px-4 sm:py-2 md:px-5 md:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
-                      isActive('/admin/department-logs')
-                        ? 'bg-blue-600 text-white shadow-md'
-                        : 'text-slate-700 hover:bg-blue-50 hover:text-blue-600'
-                    }`}
-                  >
-                    <span className="hidden sm:inline">📊 Department Logs</span>
-                    <span className="sm:hidden">📊</span>
-                  </Link>
-                  <Link
-                    to="/user-manual"
-                    className={`px-3 py-1.5 sm:px-4 sm:py-2 md:px-5 md:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
-                      isActive('/user-manual')
-                        ? 'bg-blue-600 text-white shadow-md'
-                        : 'text-slate-700 hover:bg-blue-50 hover:text-blue-600'
-                    }`}
-                  >
-                    <span className="hidden sm:inline">📖 User Manual</span>
-                    <span className="sm:hidden">📖</span>
-                  </Link>
-                </>
+            <div className="flex items-center gap-3">
+              {/* Notifications for auditors and chiefs */}
+              {(user.role === 'auditor' || user.role === 'chief') && (
+                <NotificationBell />
               )}
-            </nav>
+              
+              <div className="hidden md:flex items-center gap-3 pr-3 border-r border-slate-200">
+                <div className="text-right">
+                  <div className="text-sm font-semibold text-slate-800">{user.name}</div>
+                  <div className="flex items-center justify-end gap-2 mt-0.5">
+                    <span
+                      className="text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-sm"
+                    >
+                      {user.role === 'admin'
+                        ? 'ADMIN'
+                        : user.role === 'chief'
+                        ? 'CHIEF/HOD'
+                        : 'AUDITOR'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              
+              <button
+                onClick={logout}
+                className="px-4 py-2 rounded-lg bg-gradient-to-r from-indigo-50 to-purple-50 hover:from-indigo-100 hover:to-purple-100 text-indigo-700 text-sm font-medium transition-all border border-indigo-200 shadow-sm hover:shadow-md"
+              >
+                Logout
+              </button>
+            </div>
           )}
         </div>
       </header>
-      <main className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 py-4 sm:py-6 md:py-8">{children}</main>
+
+      <div className="flex pt-16">
+        {/* Sidebar - shown for everyone (including login) */}
+        <>
+          {/* Backdrop for mobile */}
+          {sidebarOpen && (
+            <div 
+              className="fixed inset-0 bg-black/20 z-30 lg:hidden"
+              onClick={() => setSidebarOpen(false)}
+            />
+          )}
+          
+          <aside className={`fixed left-0 top-16 bottom-0 w-72 bg-white/95 backdrop-blur-md shadow-xl border-r border-indigo-200/50 z-40 transform transition-transform duration-300 ease-in-out ${
+            sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          } lg:translate-x-0`}>
+            <div className="flex flex-col h-full">
+              {/* Content when user is logged in */}
+              {user ? (
+                <>
+                  {/* User Info (Mobile) */}
+                  <div className="md:hidden p-4 border-b border-indigo-200 bg-gradient-to-r from-indigo-50 via-purple-50 to-pink-50">
+                    <div className="text-sm font-semibold text-slate-800">{user.name}</div>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span
+                        className="text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-sm"
+                      >
+                        {user.role === 'admin'
+                          ? 'ADMIN'
+                          : user.role === 'chief'
+                          ? 'CHIEF/HOD'
+                          : 'AUDITOR'}
+                      </span>
+                      {user.department && (
+                        <span className="text-[10px] text-slate-500">
+                          {user.department.name || user.department}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Navigation */}
+                  <nav className="flex-1 overflow-y-auto p-4 space-y-2">
+                    {isAdmin ? (
+                      <>
+                        {/* Admin Navigation */}
+                        <div className="mb-4">
+                          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 mb-2">
+                            Main menu
+                          </div>
+                          <SidebarMenuItem
+                            to="/admin/dashboard"
+                            icon="📊"
+                            label="Dashboard"
+                            isActive={isActive('/admin/dashboard')}
+                          />
+                          <SidebarMenuItem
+                            to="/admin/analytics"
+                            icon="✅"
+                            label="Analytics"
+                            isActive={isActive('/admin/analytics')}
+                          />
+                          <SidebarMenuItem
+                            to="/admin/patient-report"
+                            icon="📋"
+                            label="Patient Report"
+                            isActive={isActive('/admin/patient-report')}
+                          />
+                          <SidebarMenuItem
+                            to="/admin/department-logs"
+                            icon="📈"
+                            label="Department Logs"
+                            isActive={isActive('/admin/department-logs')}
+                          />
+                        </div>
+
+                        <div className="mb-4">
+                          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 mb-2">
+                            Form management
+                          </div>
+                          <SidebarSection
+                            icon="📝"
+                            label="Create Forms"
+                            isOpen={createFormsMenuOpen}
+                            onToggle={() => setCreateFormsMenuOpen(!createFormsMenuOpen)}
+                            isActive={isCreateFormsActive() && !createFormsMenuOpen}
+                          >
+                            <SubMenuItem
+                              to="/admin/forms"
+                              icon="📋"
+                              label="Forms"
+                              isActive={isActive('/admin/forms')}
+                            />
+                            <SubMenuItem
+                              to="/admin/checklists"
+                              icon="✏️"
+                              label="Form Builder"
+                              isActive={isActive('/admin/checklists')}
+                            />
+                          </SidebarSection>
+                        </div>
+
+                        <div className="mb-4">
+                          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 mb-2">
+                            Configuration
+                          </div>
+                          <SidebarSection
+                            icon="⚙️"
+                            label="Configure"
+                            isOpen={configMenuOpen}
+                            onToggle={() => setConfigMenuOpen(!configMenuOpen)}
+                            isActive={isConfigActive() && !configMenuOpen}
+                          >
+                            <SubMenuItem
+                              to="/admin/departments"
+                              icon="🏢"
+                              label="Departments"
+                              isActive={isActive('/admin/departments')}
+                            />
+                            <SubMenuItem
+                              to="/admin/users"
+                              icon="👥"
+                              label="Users"
+                              isActive={isActive('/admin/users')}
+                            />
+                            <SubMenuItem
+                              to="/admin/assign-forms"
+                              icon="📋"
+                              label="Assign Forms"
+                              isActive={isActive('/admin/assign-forms')}
+                            />
+                          </SidebarSection>
+                        </div>
+
+                        <div className="mb-4">
+                          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 mb-2">
+                            Help
+                          </div>
+                          <SidebarMenuItem
+                            to="/user-manual"
+                            icon="📖"
+                            label="User Manual"
+                            isActive={isActive('/user-manual')}
+                          />
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        {/* Auditor Navigation */}
+                        {user.role === 'auditor' && (
+                          <div className="mb-4">
+                          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 mb-2">
+                            My dashboard
+                          </div>
+                            <SidebarMenuItem
+                              to="/auditor/dashboard"
+                              icon="👨‍⚕️"
+                              label="My Dashboard"
+                              isActive={isActive('/auditor/dashboard')}
+                              accentColor="green"
+                            />
+                            <SidebarMenuItem
+                              to="/auditor/analytics"
+                              icon="📊"
+                              label="My Analytics"
+                              isActive={isActive('/auditor/analytics')}
+                              accentColor="green"
+                            />
+                          </div>
+                        )}
+
+                        {/* Chief/HOD Navigation */}
+                        {user.role === 'chief' && (
+                          <div className="mb-4">
+                          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 mb-2">
+                            Chief dashboard
+                          </div>
+                            <SidebarMenuItem
+                              to="/chief/dashboard"
+                              icon="👔"
+                              label="Chief Dashboard"
+                              isActive={isActive('/chief/dashboard')}
+                              accentColor="purple"
+                            />
+                            <SidebarMenuItem
+                              to="/chief/analytics"
+                              icon="📊"
+                              label="Analytics"
+                              isActive={isActive('/chief/analytics')}
+                              accentColor="purple"
+                            />
+                            <SidebarMenuItem
+                              to="/chief/doctor-performance"
+                              icon="🏆"
+                              label="Auditor Performance"
+                              isActive={isActive('/chief/doctor-performance')}
+                              accentColor="purple"
+                            />
+                          </div>
+                        )}
+
+                        {/* Forms Section */}
+                        {userForms.length > 0 && (
+                          <div className="mb-4">
+                            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 mb-2">
+                              Submit forms
+                            </div>
+                            {userForms.length <= 3 ? (
+                              userForms.map((form) => (
+                                <SidebarMenuItem
+                                  key={form._id}
+                                  to={`/form/${form._id}`}
+                                  icon="📝"
+                                  label={form.name}
+                                  isActive={location.pathname === `/form/${form._id}`}
+                                />
+                              ))
+                            ) : (
+                              <SidebarSection
+                                icon="📝"
+                                label="Available Forms"
+                                isOpen={formsMenuOpen}
+                                onToggle={() => setFormsMenuOpen(!formsMenuOpen)}
+                                isActive={isFormsActive() && !formsMenuOpen}
+                              >
+                                {userForms.map((form) => (
+                                  <SubMenuItem
+                                    key={form._id}
+                                    to={`/form/${form._id}`}
+                                    icon="📄"
+                                    label={form.name}
+                                    isActive={location.pathname === `/form/${form._id}`}
+                                  />
+                                ))}
+                              </SidebarSection>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Reports Section */}
+                        <div className="mb-4">
+                            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 mb-2">
+                              Reports
+                            </div>
+                          <SidebarMenuItem
+                            to="/admin/patient-report"
+                            icon="📋"
+                            label="Patient Report"
+                            isActive={isActive('/admin/patient-report')}
+                          />
+                          <SidebarMenuItem
+                            to="/admin/department-logs"
+                            icon="📈"
+                            label={user.role === 'chief' ? 'Department Logs (HOD)' : 'Department Logs'}
+                            isActive={isActive('/admin/department-logs')}
+                          />
+                        </div>
+
+                        {/* Help Section */}
+                        <div className="mb-4">
+                          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 mb-2">
+                            Help
+                          </div>
+                          <SidebarMenuItem
+                            to="/user-manual"
+                            icon="📖"
+                            label="User Manual"
+                            isActive={isActive('/user-manual')}
+                          />
+                        </div>
+                      </>
+                    )}
+                  </nav>
+                </>
+              ) : (
+                /* Content when user is NOT logged in (login page) */
+                <div className="flex-1 p-6 flex flex-col justify-between">
+                  <div>
+                    <div className="mb-6">
+                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/50 mb-3">
+                        <span className="text-lg font-semibold text-white">MRD</span>
+                      </div>
+                      <h2 className="text-xl font-semibold text-slate-900">
+                        Hospital Audit System
+                      </h2>
+                      <p className="text-sm text-slate-500 mt-1">
+                        Secure login for Admin, Chief/HOD and Auditors.
+                      </p>
+                    </div>
+
+                    <div className="space-y-3 text-sm text-slate-600">
+                      <div className="font-semibold text-slate-700">
+                        Quick steps:
+                      </div>
+                      <ul className="space-y-1 list-disc list-inside">
+                        <li>Enter your hospital username and password.</li>
+                        <li>Role-based dashboard will open after login.</li>
+                        <li>Use the sidebar to navigate forms and reports.</li>
+                      </ul>
+                    </div>
+                  </div>
+
+                  <div className="mt-8 text-xs text-slate-400">
+                    Need help? Contact your MRD Admin.
+                  </div>
+                </div>
+              )}
+
+              {/* Footer */}
+              <div className="p-4 border-t border-indigo-200 bg-gradient-to-r from-indigo-50/50 to-purple-50/50">
+                <div className="text-xs text-indigo-600 text-center font-medium">
+                  Hospital Audit System v1.0
+                </div>
+              </div>
+            </div>
+          </aside>
+        </>
+
+        {/* Main Content */}
+        <main className={`flex-1 transition-all duration-300 ${user ? 'lg:ml-72' : ''}`}>
+          <div className="p-4 sm:p-6 md:p-8 max-w-[100rem] w-full mx-auto min-h-[calc(100vh-4rem)]">
+            {children}
+          </div>
+        </main>
+      </div>
     </div>
   )
 }
