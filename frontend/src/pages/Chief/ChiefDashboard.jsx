@@ -14,9 +14,6 @@ export function ChiefDashboard() {
   
   // Corrective/Preventive state - one per submission
   const [actions, setActions] = useState({})
-  // Bulk section: single corrective/preventive applied to all NO responses
-  const [bulkCorrective, setBulkCorrective] = useState('')
-  const [bulkPreventive, setBulkPreventive] = useState('')
 
   useEffect(() => {
     loadPatients()
@@ -65,8 +62,6 @@ export function ChiefDashboard() {
         })
       })
       setActions(initialActions)
-      setBulkCorrective('')
-      setBulkPreventive('')
     } catch (err) {
       console.error('Error loading submissions:', err)
       setError(err.response?.data?.message || 'Failed to load submissions')
@@ -106,55 +101,6 @@ export function ChiefDashboard() {
     }
   }
 
-  const bulkSaveActions = async () => {
-    if (!selectedPatient) return
-    // Prefer bulk section fields; else use first NO row that has data
-    let corrective = (bulkCorrective || '').trim()
-    let preventive = (bulkPreventive || '').trim()
-    if (!corrective && !preventive) {
-      const noSubmissions = []
-      submissions?.departments?.forEach((dept) => {
-        dept.submissions?.forEach((sub) => {
-          const isNo = (sub.responseValue || sub.yesNoNa || '').toString().toUpperCase() === 'NO'
-          if (isNo) noSubmissions.push(sub)
-        })
-      })
-      if (noSubmissions.length === 0) {
-        alert('No NO-response submissions for this patient. Bulk update applies only to NO responses.')
-        return
-      }
-      const withData = noSubmissions.find(
-        (s) => (actions[s._id]?.corrective || '').trim() || (actions[s._id]?.preventive || '').trim()
-      )
-      const source = withData || noSubmissions[0]
-      const bulkData = source ? (actions[source._id] || {}) : {}
-      corrective = (bulkData.corrective || '').trim()
-      preventive = (bulkData.preventive || '').trim()
-      if (!corrective && !preventive) {
-        alert('Enter corrective and/or preventive action in the bulk fields below or in at least one NO-response row, then click Bulk Save.')
-        return
-      }
-    }
-    if (!confirm('Apply these corrective/preventive actions to ALL NO-response submissions for this patient?')) return
-
-    setSavingActions((prev) => ({ ...prev, bulk: true }))
-    try {
-      await apiClient.post('/chief/submissions/bulk-corrective-preventive', {
-        ipid: selectedPatient.ipid,
-        chiefName: user.name,
-        corrective: corrective || '',
-        preventive: preventive || '',
-      })
-      alert('Bulk update completed successfully')
-      loadPatientSubmissions(selectedPatient.ipid)
-    } catch (err) {
-      console.error('Error bulk saving:', err)
-      alert('Error: ' + (err.response?.data?.message || err.message))
-    } finally {
-      setSavingActions((prev) => ({ ...prev, bulk: false }))
-    }
-  }
-
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -189,7 +135,7 @@ export function ChiefDashboard() {
         <h1 className="text-2xl sm:text-3xl font-semibold text-slate-900 mb-2">Corrective & Preventive Actions</h1>
         <p className="text-sm text-slate-600">Patient: {submissions.patient?.patientName} (IPID: {selectedPatient.ipid})</p>
         <div className="mt-3 bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
-          <span className="font-semibold text-slate-900">Important:</span> <span className="text-slate-700">Submitted checklist data (YES/NO responses, remarks) is <strong>read-only</strong>. You can only add/edit <strong>Corrective Actions</strong> and <strong>Preventive Actions</strong> in the fields below.</span>
+          <span className="font-semibold text-slate-900">Important:</span> <span className="text-slate-700">Submitted checklist data (YES/NO responses, remarks) is <strong>read-only</strong>. You can only add/edit <strong>Corrective Actions</strong> and <strong>Preventive Actions</strong> per row below, then click <strong>Save</strong> for each item.</span>
         </div>
       </div>
 
@@ -351,54 +297,6 @@ export function ChiefDashboard() {
             ))}
           </div>
         )}
-
-        {/* Bulk Actions */}
-        <div className="bg-indigo-50 rounded-lg border border-indigo-200 p-4">
-          <h4 className="font-semibold text-slate-900 mb-2">
-            Bulk Update (NO responses only)
-          </h4>
-          <p className="text-sm text-slate-700 mb-3">
-            Enter corrective and preventive actions below (or in any NO-response row above), then click <strong>Bulk Save</strong> to apply to all NO-response submissions for this patient.
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-            <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">Corrective Action (applies to all NO)</label>
-              <textarea
-                value={bulkCorrective}
-                onChange={(e) => setBulkCorrective(e.target.value)}
-                className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                rows="3"
-                placeholder="Enter corrective action for all NO items"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">Preventive Action (applies to all NO)</label>
-              <textarea
-                value={bulkPreventive}
-                onChange={(e) => setBulkPreventive(e.target.value)}
-                className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                rows="3"
-                placeholder="Enter preventive action for all NO items"
-              />
-            </div>
-          </div>
-          <div className="bg-white/95 backdrop-blur-md rounded-xl p-3 mb-3 border border-slate-200">
-            <p className="text-xs text-slate-800 font-medium mb-1">How it works:</p>
-            <ol className="text-xs text-slate-600 list-decimal list-inside space-y-1">
-              <li>Fill the bulk fields above and/or any NO-response row</li>
-              <li>Click &quot;Bulk Save&quot; below</li>
-              <li>Same actions are applied to all NO-response submissions for this patient</li>
-              <li>Auditors are notified automatically</li>
-            </ol>
-          </div>
-          <button
-            onClick={bulkSaveActions}
-            disabled={savingActions.bulk}
-            className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:bg-slate-400 text-white px-6 py-2.5 rounded-lg font-semibold transition-all shadow-sm"
-          >
-            {savingActions.bulk ? 'Saving...' : 'Bulk Save All Submissions'}
-          </button>
-        </div>
       </div>
     )
   }

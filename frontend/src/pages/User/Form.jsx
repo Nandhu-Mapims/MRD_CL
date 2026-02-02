@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useEffect, useState, useCallback } from 'react'
+import { useParams, Link } from 'react-router-dom'
 import { apiClient } from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
+
+const DRAFT_KEY_PREFIX = 'form_draft_'
 
 export function Form() {
   const { formTemplateId } = useParams()
@@ -27,14 +29,99 @@ export function Form() {
   const [duplicateExists, setDuplicateExists] = useState(false)
   const [checkingDuplicate, setCheckingDuplicate] = useState(false)
   const [duplicateMessage, setDuplicateMessage] = useState('')
-  const getDefaultAuditDate = () => new Date().toISOString().slice(0, 10)
-  const getDefaultAuditTime = () => {
-    const d = new Date()
-    return d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0')
-  }
-  const [auditDate, setAuditDate] = useState(getDefaultAuditDate())
-  const [auditTime, setAuditTime] = useState(getDefaultAuditTime())
+  const [showRestoreDraftModal, setShowRestoreDraftModal] = useState(false)
+  const [draftToRestore, setDraftToRestore] = useState(null)
+  const [lastDraftSavedAt, setLastDraftSavedAt] = useState(null)
 
+  // Draft helpers
+  const getDraftKey = useCallback(() => {
+    const uid = user?.id || user?._id || 'anon'
+    return `${DRAFT_KEY_PREFIX}${formTemplateId}_${uid}`
+  }, [formTemplateId, user])
+
+  const saveDraft = useCallback(() => {
+    const key = getDraftKey()
+    const draft = {
+      uhid,
+      ipid,
+      patientName,
+      ward,
+      unitNo,
+      unitChief,
+      answers,
+      formTemplateId,
+      formName: formTemplate?.name,
+      savedAt: new Date().toISOString(),
+    }
+    try {
+      localStorage.setItem(key, JSON.stringify(draft))
+      setLastDraftSavedAt(new Date().toISOString())
+    } catch (e) {
+      console.warn('Failed to save draft:', e)
+    }
+  }, [getDraftKey, uhid, ipid, patientName, ward, unitNo, unitChief, answers, formTemplateId, formTemplate?.name])
+
+  const clearDraft = useCallback(() => {
+    try {
+      localStorage.removeItem(getDraftKey())
+    } catch (e) {
+      console.warn('Failed to clear draft:', e)
+    }
+  }, [getDraftKey])
+
+  const loadDraft = useCallback(() => {
+    try {
+      const raw = localStorage.getItem(getDraftKey())
+      return raw ? JSON.parse(raw) : null
+    } catch {
+      return null
+    }
+  }, [getDraftKey])
+
+  // Unsaved changes: any user input in patient info or checklist (every field included for draft)
+  const hasUnsavedChanges =
+    uhid.trim() ||
+    ipid.trim() ||
+    patientName.trim() ||
+    ward.trim() ||
+    unitNo.trim() ||
+    unitChief.trim() ||
+    Object.values(answers).some(
+      (a) =>
+        (a?.yesNoNa && String(a.yesNoNa).trim()) ||
+        (a?.responseValue && String(a.responseValue).trim()) ||
+        (a?.remarks && String(a.remarks).trim())
+    )
+
+  // Auto-save draft (debounced) for every form/field change so local draft is always up to date
+  useEffect(() => {
+    if (!formTemplateId || !getDraftKey() || showRestoreDraftModal) return
+    if (!hasUnsavedChanges || items.length === 0) return
+
+    const timeoutId = setTimeout(() => {
+      saveDraft()
+    }, 800)
+
+    return () => clearTimeout(timeoutId)
+  }, [formTemplateId, hasUnsavedChanges, items.length, showRestoreDraftModal, uhid, ipid, patientName, ward, unitNo, unitChief, answers, getDraftKey, saveDraft])
+
+  // Clear "Draft saved" indicator after 2.5s
+  useEffect(() => {
+    if (!lastDraftSavedAt) return
+    const t = setTimeout(() => setLastDraftSavedAt(null), 2500)
+    return () => clearTimeout(t)
+  }, [lastDraftSavedAt])
+
+  // beforeunload for refresh/close (in-app navigation is not blocked; use data router + useBlocker if needed)
+  useEffect(() => {
+    const handler = (e) => {
+      if (hasUnsavedChanges) e.preventDefault()
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [hasUnsavedChanges])
+
+  // Audit date/time are set on the backend only (auto-fetched on submit)
   // UHID is entered manually from OP card - no database lookup needed
   // Patient record will be created automatically when form is submitted
 
@@ -162,26 +249,43 @@ export function Form() {
                 }
               })
             } else {
-              // No items found - check if form is assigned to department
-              console.warn('[DEBUG] No checklist items found. This could mean:')
-              console.warn('[DEBUG] 1. Form template is not assigned to this department')
-              console.warn('[DEBUG] 2. No items have been created for this form')
-              console.warn('[DEBUG] 3. All items are inactive')
-              
-              // For chiefs, show a more helpful error message
+              // No items found: form has no checklist items yet (admin adds them in Form Builder)
               if (user?.role === 'chief') {
                 setLoadError(
-                  `This form has no checklist items available for your department (${department?.name || 'Unknown'}). ` +
-                  `This could mean the form is not properly assigned to your department, or no checklist items have been created yet. ` +
-                  `Please contact your administrator for assistance.`
+                  `No checklist items for this form. Add items in Form Builder (Admin) or contact your administrator.`
                 )
                 setLoading(false)
                 return
               } else {
-                setMessage('Warning: No checklist items found. The form may not be assigned to your department, or no items have been created yet.')
+                setMessage('No checklist items for this form. Add items in Form Builder (Admin) or contact your administrator.')
               }
             }
             setAnswers(init)
+
+            // Auto-restore draft so every field value persists after refresh or navigating away
+            try {
+              const key = `${DRAFT_KEY_PREFIX}${formTemplateId}_${user?.id || user?._id || 'anon'}`
+              const raw = localStorage.getItem(key)
+              if (raw) {
+                const draft = JSON.parse(raw)
+                if (draft.formTemplateId === formTemplateId) {
+                  setUhid(draft.uhid || '')
+                  setIpid(draft.ipid || '')
+                  setPatientName(draft.patientName || '')
+                  setWard(draft.ward || '')
+                  setUnitNo(draft.unitNo || '')
+                  setUnitChief(draft.unitChief || '')
+                  const merged = {}
+                  ;(checklist || []).forEach((it) => {
+                    const draftAns = draft.answers?.[it._id]
+                    merged[it._id] = draftAns
+                      ? { yesNoNa: draftAns.yesNoNa || '', responseValue: draftAns.responseValue || '', remarks: draftAns.remarks || '' }
+                      : { yesNoNa: '', responseValue: '', remarks: '' }
+                  })
+                  setAnswers(merged)
+                }
+              }
+            } catch {}
           } catch (checklistErr) {
             console.error('[DEBUG] Error loading checklist items:', checklistErr)
             console.error('[DEBUG] Error details:', {
@@ -194,19 +298,16 @@ export function Form() {
             if (user?.role === 'chief') {
               const errorMsg = checklistErr.response?.data?.message || checklistErr.message || 'Unknown error'
               setLoadError(
-                `Unable to load checklist items for this form. ${errorMsg}. ` +
-                `This form may not be assigned to your department (${department?.name || 'Unknown'}). ` +
-                `Please contact your administrator to assign this form to your department.`
+                `Unable to load checklist items for this form. ${errorMsg}. Please contact your administrator.`
               )
               setLoading(false)
               return
             }
             
-            // For auditors, still show form but with warning
             setItems([])
             setAnswers({})
             const errorMsg = checklistErr.response?.data?.message || checklistErr.message || 'Unknown error'
-            setMessage(`Warning: Could not load checklist items: ${errorMsg}. Please check if the form is assigned to your department.`)
+            setMessage(`Could not load checklist items: ${errorMsg}. Please contact your administrator.`)
           }
         } else {
           // No department, but still show form (admin case)
@@ -268,7 +369,7 @@ export function Form() {
       setCheckingDuplicate(true)
       try {
         const response = await apiClient.get(
-          `/audits/check-duplicate?uhid=${encodeURIComponent(uhid.trim().toUpperCase())}&ipid=${encodeURIComponent(ipid.trim().toUpperCase())}&departmentId=${encodeURIComponent(userDeptId)}&auditDate=${encodeURIComponent(auditDate)}&auditTime=${encodeURIComponent(auditTime)}`
+          `/audits/check-duplicate?uhid=${encodeURIComponent(uhid.trim().toUpperCase())}&ipid=${encodeURIComponent(ipid.trim().toUpperCase())}&departmentId=${encodeURIComponent(userDeptId)}`
         )
         
         if (response.exists) {
@@ -304,7 +405,7 @@ export function Form() {
     }, 500) // Wait 500ms after user stops typing
 
     return () => clearTimeout(timeoutId)
-  }, [uhid, ipid, user, loading, auditDate, auditTime])
+  }, [uhid, ipid, user, loading])
 
   // Reset form to new mode
   const resetToNewForm = () => {
@@ -317,17 +418,52 @@ export function Form() {
     setMessage('')
     setDuplicateExists(false)
     setDuplicateMessage('')
-    setAuditDate(getDefaultAuditDate())
-    setAuditTime(getDefaultAuditTime())
+    clearDraft()
     const init = {}
     items.forEach((it) => {
-            init[it._id] = {
-              yesNoNa: '',
-              responseValue: '',
-              remarks: '',
-            }
+      init[it._id] = {
+        yesNoNa: '',
+        responseValue: '',
+        remarks: '',
+      }
     })
     setAnswers(init)
+  }
+
+  const handleSaveDraftAndLeave = () => {
+    saveDraft()
+  }
+
+  const handleDiscardAndLeave = () => {
+    resetToNewForm()
+    clearDraft()
+  }
+
+  const handleRestoreDraft = () => {
+    if (!draftToRestore) return
+    setUhid(draftToRestore.uhid || '')
+    setIpid(draftToRestore.ipid || '')
+    setPatientName(draftToRestore.patientName || '')
+    setWard(draftToRestore.ward || '')
+    setUnitNo(draftToRestore.unitNo || '')
+    setUnitChief(draftToRestore.unitChief || '')
+    // Merge draft answers with current items (form structure may have changed)
+    const merged = {}
+    items.forEach((it) => {
+      const draftAns = draftToRestore.answers?.[it._id]
+      merged[it._id] = draftAns
+        ? { yesNoNa: draftAns.yesNoNa || '', responseValue: draftAns.responseValue || '', remarks: draftAns.remarks || '' }
+        : { yesNoNa: '', responseValue: '', remarks: '' }
+    })
+    setAnswers(merged)
+    setDraftToRestore(null)
+    setShowRestoreDraftModal(false)
+  }
+
+  const handleDiscardDraft = () => {
+    clearDraft()
+    setDraftToRestore(null)
+    setShowRestoreDraftModal(false)
   }
 
   // Group items by section
@@ -429,8 +565,6 @@ export function Form() {
         ward: ward.trim(),
         unitNo: unitNo.trim(),
         unitChief: unitChief.trim(),
-        auditDate,
-        auditTime,
         items: items.map((it) => ({
           checklistItemId: it._id,
           ...answers[it._id],
@@ -439,6 +573,7 @@ export function Form() {
       
       // Create new submission
       await apiClient.post('/audits', payload)
+      clearDraft()
       // Show success popup
       setSubmittedUHID(uhid.trim())
       setSubmittedPatientName(patientName.trim())
@@ -448,7 +583,7 @@ export function Form() {
     } catch (err) {
       const errorMsg = err.response?.data?.message || 'Failed to submit form'
       if (errorMsg.includes('No Duplicate IPID') || errorMsg.includes('already been submitted')) {
-        setMessage('Duplicate: A checklist has already been submitted for this UHID, IPID, Department, Date and Time. Use a different date/time for another audit.')
+        setMessage('Duplicate: A checklist has already been submitted for this UHID, IPID, and Department. Only one submission per admission per department is allowed.')
       } else if (errorMsg.includes('UHID already exists') || errorMsg.includes('duplicate')) {
         setMessage('This UHID already exists in the system. Please verify the UHID or contact admin.')
       } else {
@@ -462,9 +597,11 @@ export function Form() {
   // Show loading state
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto space-y-3">
-        <div className="bg-white/95 backdrop-blur-md rounded-xl shadow-lg border border-indigo-200/50 p-4 text-center">
-          <div className="text-slate-600">Loading form...</div>
+      <div className="max-w-7xl mx-auto px-4 py-6">
+        <div className="bg-white rounded-2xl shadow-xl border-2 border-indigo-200 p-8 sm:p-12 text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-indigo-200 border-t-indigo-600 mb-4" />
+          <h2 className="text-xl font-semibold text-slate-800 mb-2">Loading form...</h2>
+          <p className="text-slate-600 text-sm">Please wait while we load the checklist.</p>
         </div>
       </div>
     )
@@ -514,18 +651,18 @@ export function Form() {
         </div>
         
         <div className="flex gap-4">
-          <a
-            href="/chief/dashboard"
+          <Link
+            to="/"
             className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-medium rounded-lg shadow-sm transition-colors"
           >
             ← Back to Dashboard
-          </a>
-          <a
-            href="/admin/department-logs"
+          </Link>
+          <Link
+            to="/admin/department-logs"
             className="px-6 py-3 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-medium rounded-lg transition-colors"
           >
             View Department Logs
-          </a>
+          </Link>
         </div>
       </div>
     )
@@ -534,9 +671,17 @@ export function Form() {
   // Show not found state
   if (!formTemplate) {
     return (
-      <div className="max-w-7xl mx-auto space-y-3">
-        <div className="bg-white/95 backdrop-blur-md rounded-xl shadow-lg border border-indigo-200/50 p-4 text-center">
-          <div className="text-blue-600">Form not found. Please select a valid form from the menu.</div>
+      <div className="max-w-7xl mx-auto px-4 py-6">
+        <div className="bg-white rounded-2xl shadow-xl border-2 border-amber-200 p-8 text-center">
+          <div className="text-4xl mb-3">📋</div>
+          <h2 className="text-xl font-semibold text-slate-800 mb-2">Form not found</h2>
+          <p className="text-slate-600 mb-4">Please select a valid form from the sidebar or dashboard.</p>
+          <Link
+            to="/"
+            className="inline-block px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg"
+          >
+            ← Back to Dashboard
+          </Link>
         </div>
       </div>
     )
@@ -544,6 +689,46 @@ export function Form() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-4 px-4 py-4">
+      {/* Page header - form name and back link */}
+      <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-indigo-200/50 px-5 py-4 sm:py-5">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <Link
+              to="/"
+              className="text-sm font-medium text-indigo-600 hover:text-indigo-800 mb-2 inline-block"
+            >
+              ← Back to Dashboard
+            </Link>
+            <h1 className="text-2xl sm:text-3xl font-semibold text-slate-900">{formTemplate.name}</h1>
+            {formTemplate.description && (
+              <p className="text-slate-600 text-sm mt-1">{formTemplate.description}</p>
+            )}
+          </div>
+          <div className="flex flex-col items-end gap-1.5">
+            <div className="flex items-center gap-2">
+              <div className="text-xs text-slate-500">Checklist items: {items.length}</div>
+              {hasUnsavedChanges && (
+                <button
+                  type="button"
+                  onClick={resetToNewForm}
+                  className="text-xs font-medium text-slate-600 hover:text-slate-900 hover:underline"
+                >
+                  Start fresh
+                </button>
+              )}
+            </div>
+            {lastDraftSavedAt && (
+              <div className="flex items-center gap-1.5 text-xs text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md border border-emerald-200">
+                <svg className="w-3.5 h-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+                Draft saved
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
       {message && (
         <div
           className={`px-4 py-3 rounded-lg shadow-sm border-2 flex items-start gap-3 ${
@@ -677,34 +862,6 @@ export function Form() {
                     duplicateExists ? 'border-red-500 bg-red-50' : 'border-slate-300 hover:border-slate-400'
                   }`}
                   placeholder="Enter Unit No"
-                  required
-                  disabled={duplicateExists}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <label className="block text-xs font-semibold text-slate-700">
-                  Audit Date <span className="text-red-500">*</span>
-                  <span className="ml-1 text-[10px] font-normal text-slate-500">(Unique per day)</span>
-                </label>
-                <input
-                  type="date"
-                  value={auditDate}
-                  onChange={(e) => setAuditDate(e.target.value)}
-                  className="w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all border-slate-300"
-                  required
-                  disabled={duplicateExists}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <label className="block text-xs font-semibold text-slate-700">
-                  Audit Time <span className="text-red-500">*</span>
-                  <span className="ml-1 text-[10px] font-normal text-slate-500">(Unique per entry)</span>
-                </label>
-                <input
-                  type="time"
-                  value={auditTime}
-                  onChange={(e) => setAuditTime(e.target.value)}
-                  className="w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all border-slate-300"
                   required
                   disabled={duplicateExists}
                 />

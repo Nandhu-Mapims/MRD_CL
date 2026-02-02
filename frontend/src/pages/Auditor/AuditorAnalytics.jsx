@@ -17,11 +17,20 @@ export function AuditorAnalytics() {
   const loadAnalytics = async () => {
     setLoading(true)
     try {
-      const submissions = await apiClient.get(`/audits?submittedBy=${user?._id || ''}`)
+      const userId = user?.id || user?._id || ''
+      const submissions = await apiClient.get(`/audits?submittedBy=${encodeURIComponent(userId)}`)
 
-      const yesCount = submissions.filter(s => s.responseValue === 'YES').length
-      const noCount = submissions.filter(s => s.responseValue === 'NO').length
-      const naCount = submissions.filter(s => s.responseValue === 'N/A' || !s.responseValue).length
+      const responseVal = (s) => (s.responseValue || s.yesNoNa || '').toString().toUpperCase()
+      const yesCount = submissions.filter(s => responseVal(s) === 'YES').length
+      const noCount = submissions.filter(s => responseVal(s) === 'NO').length
+      const naCount = submissions.filter(s => responseVal(s) === 'N/A' || !responseVal(s)).length
+
+      // Documentation thoroughness: when auditor marked NO, did they add remarks?
+      const noSubs = submissions.filter(s => responseVal(s) === 'NO')
+      const noWithRemarks = noSubs.filter(s => s.remarks && String(s.remarks).trim()).length
+      const thoroughnessRate = noSubs.length > 0 ? Math.round((noWithRemarks / noSubs.length) * 100) : 100
+
+      const uniquePatients = new Set(submissions.map(s => s.ipid).filter(Boolean)).size
 
       const byDepartment = {}
       submissions.forEach(s => {
@@ -57,7 +66,8 @@ export function AuditorAnalytics() {
         departmentDistribution: Object.values(byDepartment),
         dailyActivity: Object.values(byDate),
         totalSubmissions: submissions.length,
-        complianceRate: submissions.length > 0 ? ((yesCount / submissions.length) * 100).toFixed(1) : 0,
+        uniquePatients,
+        thoroughnessRate,
       })
     } catch (err) {
       console.error('Error loading analytics:', err)
@@ -78,10 +88,10 @@ export function AuditorAnalytics() {
     <div className="space-y-6">
       <div className="bg-white/95 backdrop-blur-md border border-indigo-200/50 rounded-2xl shadow-xl px-5 py-4 sm:py-5">
         <h1 className="text-2xl sm:text-3xl font-semibold text-slate-900">Auditor Analytics</h1>
-        <p className="mt-1 text-sm text-slate-600">Your personal performance metrics</p>
+        <p className="mt-1 text-sm text-slate-600">Your productivity and documentation metrics</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
           <div className="flex items-center justify-between">
             <div>
@@ -99,8 +109,23 @@ export function AuditorAnalytics() {
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-slate-600">Compliance Rate</p>
-              <p className="text-4xl font-bold text-emerald-600 mt-2">{stats?.complianceRate}%</p>
+              <p className="text-sm text-slate-600">Patients Audited</p>
+              <p className="text-4xl font-bold text-slate-900 mt-2">{stats?.uniquePatients || 0}</p>
+            </div>
+            <div className="bg-blue-50 p-4 rounded-full">
+              <svg className="w-8 h-8 text-blue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-slate-600">Documentation Thoroughness</p>
+              <p className="text-4xl font-bold text-emerald-600 mt-2">{stats?.thoroughnessRate ?? 0}%</p>
+              <p className="text-xs text-slate-500 mt-1">NOs with remarks</p>
             </div>
             <div className="bg-emerald-50 p-4 rounded-full">
               <svg className="w-8 h-8 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -113,7 +138,8 @@ export function AuditorAnalytics() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-          <h3 className="text-lg font-semibold text-slate-800 mb-4">Response Distribution</h3>
+          <h3 className="text-lg font-semibold text-slate-800 mb-4">Responses You Recorded</h3>
+          <p className="text-xs text-slate-500 mb-2">What you observed in your audits (department compliance)</p>
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
               <Pie

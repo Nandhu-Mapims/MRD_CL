@@ -24,7 +24,7 @@ export function ChiefDoctorPerformance() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [sortBy, setSortBy] = useState('submissions') // submissions, compliance, patients
+  const [sortBy, setSortBy] = useState('submissions') // submissions, thoroughness, patients
 
   useEffect(() => {
     loadPerformanceData()
@@ -55,8 +55,8 @@ export function ChiefDoctorPerformance() {
 
     const doctors = [...data.doctors]
     switch (sortBy) {
-      case 'compliance':
-        return doctors.sort((a, b) => b.complianceRate - a.complianceRate)
+      case 'thoroughness':
+        return doctors.sort((a, b) => b.thoroughnessRate - a.thoroughnessRate)
       case 'patients':
         return doctors.sort((a, b) => b.totalPatients - a.totalPatients)
       case 'submissions':
@@ -65,14 +65,14 @@ export function ChiefDoctorPerformance() {
     }
   }
 
-  const getComplianceColor = (rate) => {
+  const getThoroughnessColor = (rate) => {
     if (rate >= 90) return 'text-emerald-700 bg-emerald-50'
     if (rate >= 75) return 'text-indigo-700 bg-indigo-50'
     if (rate >= 60) return 'text-amber-700 bg-amber-50'
     return 'text-red-700 bg-red-50'
   }
 
-  const getComplianceRank = (rate) => {
+  const getThoroughnessRank = (rate) => {
     if (rate >= 90) return { label: 'Excellent', emoji: '⭐' }
     if (rate >= 75) return { label: 'Good', emoji: '✅' }
     if (rate >= 60) return { label: 'Average', emoji: '⚠️' }
@@ -99,15 +99,15 @@ export function ChiefDoctorPerformance() {
 
   // Calculate overall statistics
   const totalSubmissions = data?.doctors?.reduce((sum, d) => sum + d.totalSubmissions, 0) || 0
-  const avgComplianceRate = data?.doctors?.length > 0
-    ? (data.doctors.reduce((sum, d) => sum + d.complianceRate, 0) / data.doctors.length).toFixed(1)
+  const avgThoroughnessRate = data?.doctors?.length > 0
+    ? (data.doctors.reduce((sum, d) => sum + d.thoroughnessRate, 0) / data.doctors.length).toFixed(1)
     : 0
 
   // Prepare chart data
-  const complianceChartData = sortedDoctors.slice(0, 10).map((d) => ({
+  const thoroughnessChartData = sortedDoctors.slice(0, 10).map((d) => ({
     name: d.doctor.name.split(' ').slice(0, 2).join(' '), // Shorten name
-    compliance: d.complianceRate,
-    nonCompliance: 100 - d.complianceRate,
+    thoroughness: d.thoroughnessRate,
+    missing: 100 - d.thoroughnessRate,
   }))
 
   const submissionsChartData = sortedDoctors.slice(0, 10).map((d) => ({
@@ -115,12 +115,12 @@ export function ChiefDoctorPerformance() {
     submissions: d.totalSubmissions,
   }))
 
-  // Performance distribution
-  const performanceDistribution = [
-    { name: 'Excellent (≥90%)', value: data?.doctors?.filter(d => d.complianceRate >= 90).length || 0 },
-    { name: 'Good (75-89%)', value: data?.doctors?.filter(d => d.complianceRate >= 75 && d.complianceRate < 90).length || 0 },
-    { name: 'Average (60-74%)', value: data?.doctors?.filter(d => d.complianceRate >= 60 && d.complianceRate < 75).length || 0 },
-    { name: 'Needs Improvement (<60%)', value: data?.doctors?.filter(d => d.complianceRate < 60).length || 0 },
+  // Thoroughness distribution (when auditor marks NO, did they document with remarks?)
+  const thoroughnessDistribution = [
+    { name: 'Excellent (≥90%)', value: data?.doctors?.filter(d => d.thoroughnessRate >= 90).length || 0 },
+    { name: 'Good (75-89%)', value: data?.doctors?.filter(d => d.thoroughnessRate >= 75 && d.thoroughnessRate < 90).length || 0 },
+    { name: 'Average (60-74%)', value: data?.doctors?.filter(d => d.thoroughnessRate >= 60 && d.thoroughnessRate < 75).length || 0 },
+    { name: 'Needs Improvement (<60%)', value: data?.doctors?.filter(d => d.thoroughnessRate < 60).length || 0 },
   ].filter(item => item.value > 0)
 
   return (
@@ -128,7 +128,7 @@ export function ChiefDoctorPerformance() {
       {/* Header */}
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm px-5 py-4 sm:py-5">
         <h1 className="text-2xl sm:text-3xl font-semibold text-slate-900">Auditor Performance Analytics</h1>
-        <p className="mt-1 text-sm text-slate-600">Track auditor compliance and submission statistics</p>
+        <p className="mt-1 text-sm text-slate-600">Track auditor productivity and documentation thoroughness</p>
         <p className="text-xs text-slate-500 mt-1">Chief: {user?.name}</p>
       </div>
 
@@ -165,8 +165,8 @@ export function ChiefDoctorPerformance() {
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-slate-600">Avg Compliance</p>
-              <p className="text-3xl font-bold text-emerald-600 mt-2">{avgComplianceRate}%</p>
+              <p className="text-sm text-slate-600">Avg Documentation Thoroughness</p>
+              <p className="text-3xl font-bold text-emerald-600 mt-2">{avgThoroughnessRate}%</p>
             </div>
             <div className="bg-emerald-50 p-3 rounded-full">
               <svg className="w-6 h-6 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -179,9 +179,9 @@ export function ChiefDoctorPerformance() {
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-slate-600">Top Performer</p>
+              <p className="text-sm text-slate-600">Most Active Auditor</p>
               <p className="text-lg font-bold text-slate-900 mt-2">
-                {sortedDoctors[0]?.complianceRate.toFixed(1)}%
+                {sortedDoctors[0]?.totalSubmissions || 0} items
               </p>
               <p className="text-xs text-slate-500 truncate">{sortedDoctors[0]?.doctor.name}</p>
             </div>
@@ -196,13 +196,14 @@ export function ChiefDoctorPerformance() {
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Performance Distribution */}
+        {/* Documentation Thoroughness Distribution */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-          <h3 className="text-lg font-semibold text-slate-800 mb-4">Performance Distribution</h3>
+          <h3 className="text-lg font-semibold text-slate-800 mb-4">Documentation Thoroughness Distribution</h3>
+          <p className="text-xs text-slate-500 mb-2">% of NO responses that have remarks documented</p>
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
               <Pie
-                data={performanceDistribution}
+                data={thoroughnessDistribution}
                 cx="50%"
                 cy="50%"
                 labelLine={false}
@@ -211,7 +212,7 @@ export function ChiefDoctorPerformance() {
                 fill="#8884d8"
                 dataKey="value"
               >
-                {performanceDistribution.map((entry, index) => (
+                {thoroughnessDistribution.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>
@@ -220,16 +221,17 @@ export function ChiefDoctorPerformance() {
           </ResponsiveContainer>
         </div>
 
-        {/* Top 10 Compliance Rates */}
+        {/* Top 10 Documentation Thoroughness */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-          <h3 className="text-lg font-semibold text-slate-800 mb-4">Top 10 Compliance Rates</h3>
+          <h3 className="text-lg font-semibold text-slate-800 mb-4">Top 10 Documentation Thoroughness</h3>
+          <p className="text-xs text-slate-500 mb-2">When auditors mark NO, % with remarks documented</p>
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={complianceChartData} layout="vertical">
+            <BarChart data={thoroughnessChartData} layout="vertical">
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis type="number" domain={[0, 100]} />
               <YAxis dataKey="name" type="category" width={100} />
               <Tooltip />
-              <Bar dataKey="compliance" fill="#10b981" name="Compliance %" />
+              <Bar dataKey="thoroughness" fill="#10b981" name="Thoroughness %" />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -272,14 +274,14 @@ export function ChiefDoctorPerformance() {
                 Sort by Submissions
               </button>
               <button
-                onClick={() => setSortBy('compliance')}
+                onClick={() => setSortBy('thoroughness')}
                 className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-                  sortBy === 'compliance'
+                  sortBy === 'thoroughness'
                     ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white'
                     : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                 }`}
               >
-                Sort by Compliance
+                Sort by Thoroughness
               </button>
               <button
                 onClick={() => setSortBy('patients')}
@@ -303,10 +305,10 @@ export function ChiefDoctorPerformance() {
                 <th className="text-left p-3 font-semibold text-slate-700">Auditor Name</th>
                 <th className="text-left p-3 font-semibold text-slate-700">Email</th>
                 <th className="text-center p-3 font-semibold text-slate-700">Total Submissions</th>
-                <th className="text-center p-3 font-semibold text-slate-700">Compliant (YES)</th>
-                <th className="text-center p-3 font-semibold text-slate-700">Non-Compliant (NO)</th>
-                <th className="text-center p-3 font-semibold text-slate-700">Compliance Rate</th>
-                <th className="text-center p-3 font-semibold text-slate-700">Total Patients</th>
+                <th className="text-center p-3 font-semibold text-slate-700">NO Responses</th>
+                <th className="text-center p-3 font-semibold text-slate-700">NO w/ Remarks</th>
+                <th className="text-center p-3 font-semibold text-slate-700">Thoroughness</th>
+                <th className="text-center p-3 font-semibold text-slate-700">Patients</th>
                 <th className="text-left p-3 font-semibold text-slate-700">Departments</th>
                 <th className="text-center p-3 font-semibold text-slate-700">Performance</th>
                 <th className="text-left p-3 font-semibold text-slate-700">Last Activity</th>
@@ -321,7 +323,7 @@ export function ChiefDoctorPerformance() {
                 </tr>
               ) : (
                 sortedDoctors.map((doctor, index) => {
-                  const rank = getComplianceRank(doctor.complianceRate)
+                  const rank = getThoroughnessRank(doctor.thoroughnessRate)
                   return (
                     <tr key={doctor.doctor.id} className="border-b border-slate-100 hover:bg-slate-50">
                       <td className="p-3 text-slate-600">{index + 1}</td>
@@ -336,18 +338,18 @@ export function ChiefDoctorPerformance() {
                         </span>
                       </td>
                       <td className="p-3 text-center">
+                        <span className="inline-block px-2 py-1 rounded bg-amber-50 text-amber-800 font-semibold">
+                          {doctor.noResponses}
+                        </span>
+                      </td>
+                      <td className="p-3 text-center">
                         <span className="inline-block px-2 py-1 rounded bg-green-100 text-green-800 font-semibold">
-                          {doctor.compliantSubmissions}
+                          {doctor.noWithRemarks}
                         </span>
                       </td>
                       <td className="p-3 text-center">
-                        <span className="inline-block px-2 py-1 rounded bg-red-50 text-red-700 font-semibold">
-                          {doctor.nonCompliantSubmissions}
-                        </span>
-                      </td>
-                      <td className="p-3 text-center">
-                        <span className={`inline-block px-3 py-1 rounded-full font-bold ${getComplianceColor(doctor.complianceRate)}`}>
-                          {doctor.complianceRate}%
+                        <span className={`inline-block px-3 py-1 rounded-full font-bold ${getThoroughnessColor(doctor.thoroughnessRate)}`}>
+                          {doctor.thoroughnessRate}%
                         </span>
                       </td>
                       <td className="p-3 text-center">
@@ -381,22 +383,25 @@ export function ChiefDoctorPerformance() {
         <h4 className="font-semibold text-slate-900 mb-3">Performance Metrics Explained</h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
           <div>
-            <p className="text-slate-900 font-medium mb-1">Compliance Rate:</p>
+            <p className="text-slate-900 font-medium mb-1">Documentation Thoroughness:</p>
             <p className="text-slate-700">
-              Percentage of checklist items marked as "YES" (compliant) out of total submissions.
-              Higher is better.
+              When an auditor marks &quot;NO&quot; (non-compliance), did they document with remarks?
+              This reflects how well auditors identify and document issues. Higher is better.
             </p>
           </div>
           <div>
             <p className="text-slate-900 font-medium mb-1">Performance Ranking:</p>
             <ul className="text-slate-700 space-y-1">
-              <li>⭐ Excellent: ≥90% compliance</li>
-              <li>✅ Good: 75-89% compliance</li>
-              <li>⚠️ Average: 60-74% compliance</li>
-              <li>❌ Needs Improvement: &lt;60% compliance</li>
+              <li>⭐ Excellent: ≥90% of NOs documented with remarks</li>
+              <li>✅ Good: 75-89%</li>
+              <li>⚠️ Average: 60-74%</li>
+              <li>❌ Needs Improvement: &lt;60%</li>
             </ul>
           </div>
         </div>
+        <p className="text-xs text-slate-600 mt-3 italic">
+          Note: YES/NO responses reflect department compliance, not auditor performance. Auditors document what they observe.
+        </p>
       </div>
     </div>
   )

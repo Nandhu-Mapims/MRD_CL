@@ -60,8 +60,8 @@ exports.getDepartmentUsers = async (_req, res) => {
   try {
     const users = await User.find({ isActive: true })
       .populate('department', 'name code')
-      .select('name email role department')
-      .sort({ name: 1 });
+      .select('name email role designation department')
+      .sort({ designation: 1, name: 1 });
     res.json(users);
   } catch (err) {
     console.error('getDepartmentUsers error', err);

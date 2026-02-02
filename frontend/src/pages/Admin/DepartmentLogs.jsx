@@ -141,8 +141,8 @@ export function DepartmentLogs() {
                   uhid: normalizedUHID,
                   admissionDate: subWithIPID?.submittedAt || new Date(),
                   status: 'Admitted',
-                  ward: subWithIPID?.ward || subWithIPID?.patient?.ward || 'N/A',
-                  unitNo: subWithIPID?.unitNo || subWithIPID?.patient?.unitNo || 'N/A',
+                  ward: subWithIPID?.admission?.ward || subWithIPID?.ward || subWithIPID?.patient?.ward || 'N/A',
+                  unitNo: subWithIPID?.admission?.unitNo || subWithIPID?.unitNo || subWithIPID?.patient?.unitNo || 'N/A',
                   isVirtual: true
                 }
               })
@@ -861,8 +861,8 @@ export function DepartmentLogs() {
                                   <span className="text-sm font-medium text-indigo-700 bg-indigo-50 px-2 py-1 rounded">{timeStr}</span>
                                 </div>
                                 <div className="grid grid-cols-2 gap-2 text-sm text-slate-600">
-                                  <div><span className="font-medium">Ward:</span> {group.submissions?.[0]?.ward || group.submissions?.[0]?.patient?.ward || 'N/A'}</div>
-                                  <div><span className="font-medium">Unit:</span> {group.submissions?.[0]?.unitNo || group.submissions?.[0]?.patient?.unitNo || 'N/A'}</div>
+                                  <div><span className="font-medium">Ward:</span> {group.submissions?.[0]?.admission?.ward || group.submissions?.[0]?.ward || group.submissions?.[0]?.patient?.ward || 'N/A'}</div>
+                                  <div><span className="font-medium">Unit:</span> {group.submissions?.[0]?.admission?.unitNo || group.submissions?.[0]?.unitNo || group.submissions?.[0]?.patient?.unitNo || 'N/A'}</div>
                                 </div>
                               </div>
                               <div className="ml-4">

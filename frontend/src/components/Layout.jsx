@@ -308,26 +308,30 @@ export function Layout({ children }) {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50">
-      {/* Top Header */}
-      <header className="fixed top-0 left-0 right-0 bg-white/95 backdrop-blur-md shadow-lg border-b border-indigo-200/50 z-50 h-16">
-        <div className="h-full px-4 lg:px-6 flex items-center justify-between">
-          <div className="flex items-center gap-4">
+      {/* Top Header - height fits logo without clipping */}
+      <header className="fixed top-0 left-0 right-0 bg-white/95 backdrop-blur-md shadow-lg border-b border-indigo-200/50 z-50 min-h-[5rem] h-24">
+        <div className="h-full px-4 lg:px-6 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-4 min-w-0 flex-1">
             {/* Mobile menu toggle */}
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-2 rounded-lg hover:bg-slate-100 transition-colors lg:hidden"
+              className="flex-shrink-0 p-2 rounded-lg hover:bg-slate-100 transition-colors lg:hidden"
             >
               <svg className="w-6 h-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
             
-            <Link to="/" className="flex items-center gap-3 group">
-              <div className="w-10 h-10 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/50 group-hover:shadow-xl group-hover:shadow-indigo-500/60 transition-all">
-                <span className="text-sm font-semibold text-white">MRD</span>
-              </div>
-              <div className="hidden sm:block">
-                <h1 className="text-lg font-semibold text-slate-900">
+            <Link to="/" className="flex items-center gap-4 group flex-shrink-0 min-w-0">
+              <span className="flex items-center justify-center flex-shrink-0 w-[4.5rem] h-[4.5rem] sm:w-20 sm:h-20">
+                <img
+                  src="/Logo-Checklist.png"
+                  alt="Hospital Audit System"
+                  className="max-h-full max-w-full w-auto object-contain animate-logo-fade-in animate-logo-breathe animate-logo-glow group-hover:scale-105 transition-transform duration-300 origin-center"
+                />
+              </span>
+              <div className="hidden sm:block min-w-0">
+                <h1 className="text-base sm:text-lg font-semibold text-slate-900 truncate">
                   Hospital Audit System
                 </h1>
                 <p className="text-xs text-slate-500">
@@ -372,7 +376,7 @@ export function Layout({ children }) {
         </div>
       </header>
 
-      <div className="flex pt-16">
+      <div className="flex pt-24">
         {/* Sidebar - shown for everyone (including login) */}
         <>
           {/* Backdrop for mobile */}
@@ -383,7 +387,7 @@ export function Layout({ children }) {
             />
           )}
           
-          <aside className={`fixed left-0 top-16 bottom-0 w-72 bg-white/95 backdrop-blur-md shadow-xl border-r border-indigo-200/50 z-40 transform transition-transform duration-300 ease-in-out ${
+          <aside className={`fixed left-0 top-24 bottom-0 w-72 bg-white/95 backdrop-blur-md shadow-xl border-r border-indigo-200/50 z-40 transform transition-transform duration-300 ease-in-out ${
             sidebarOpen ? 'translate-x-0' : '-translate-x-full'
           } lg:translate-x-0`}>
             <div className="flex flex-col h-full">
@@ -655,9 +659,11 @@ export function Layout({ children }) {
                 <div className="flex-1 p-6 flex flex-col justify-between">
                   <div>
                     <div className="mb-6">
-                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/50 mb-3">
-                        <span className="text-lg font-semibold text-white">MRD</span>
-                      </div>
+                      <img
+                        src="/Logo-Checklist.png"
+                        alt="Hospital Audit System"
+                        className="h-28 sm:h-36 w-auto object-contain mb-3 animate-logo-fade-in animate-logo-breathe animate-logo-glow"
+                      />
                       <h2 className="text-xl font-semibold text-slate-900">
                         Hospital Audit System
                       </h2>
@@ -696,7 +702,7 @@ export function Layout({ children }) {
 
         {/* Main Content */}
         <main className={`flex-1 transition-all duration-300 ${user ? 'lg:ml-72' : ''}`}>
-          <div className="p-4 sm:p-6 md:p-8 max-w-[100rem] w-full mx-auto min-h-[calc(100vh-4rem)]">
+          <div className="p-4 sm:p-6 md:p-8 max-w-[100rem] w-full mx-auto min-h-[calc(100vh-6rem)]">
             {children}
           </div>
         </main>

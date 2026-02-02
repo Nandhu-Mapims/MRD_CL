@@ -7,7 +7,11 @@ exports.submitAudit = async (req, res) => {
   try {
     const { uhid, patientName, departmentId, formTemplateId, items, ward, unitNo, ipid, admissionDate, unitChief, auditDate: auditDateInput, auditTime: auditTimeInput } = req.body;
     // JWT payload uses 'sub' field for user ID, not '_id'
-    const userId = req.user?.sub || req.user?._id;
+    const userId = req.user?.sub || req.user?._id || req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ message: 'Authentication required. Please log in again.' });
+    }
 
     if (!uhid || !patientName || !departmentId || !items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ message: 'Missing required fields' });
@@ -118,26 +122,31 @@ exports.submitAudit = async (req, res) => {
     }
 
     // Create audit submissions with patient and admission reference - all locked by default
-    const docs = items.map((it) => ({
-      department: departmentId,
-      formTemplate: formTemplateId || undefined,
-      patient: patient._id,
-      admission: admission._id,
-      uhid: normalizedUHID,
-      ipid: normalizedIPID,
-      patientName: normalizedPatientName,
-      unitChief: unitChief?.trim() || undefined,
-      checklistItemId: it.checklistItemId,
-      yesNoNa: it.yesNoNa || undefined,
-      responseValue: it.responseValue || it.yesNoNa || '',
-      remarks: it.remarks || '',
-      responsibility: it.responsibility || '',
-      submittedBy: userId,
-      submittedAt: now,
-      auditDate,
-      auditTime,
-      isLocked: true,
-    }));
+    // yesNoNa schema only allows 'YES'|'NO'; store NA in responseValue only
+    const docs = items.map((it) => {
+      const rawVal = (it.responseValue || it.yesNoNa || '').toString().trim().toUpperCase();
+      const yesNoNaForSchema = rawVal === 'YES' || rawVal === 'NO' ? rawVal : undefined;
+      return {
+        department: departmentId,
+        formTemplate: formTemplateId || undefined,
+        patient: patient._id,
+        admission: admission._id,
+        uhid: normalizedUHID,
+        ipid: normalizedIPID,
+        patientName: normalizedPatientName,
+        unitChief: unitChief?.trim() || undefined,
+        checklistItemId: it.checklistItemId,
+        yesNoNa: yesNoNaForSchema,
+        responseValue: rawVal || it.responseValue || it.yesNoNa || '',
+        remarks: it.remarks || '',
+        responsibility: it.responsibility || '',
+        submittedBy: userId,
+        submittedAt: now,
+        auditDate,
+        auditTime,
+        isLocked: true,
+      };
+    });
 
     const created = await AuditSubmission.insertMany(docs);
     await AuditSubmission.populate(created, [
@@ -149,19 +158,28 @@ exports.submitAudit = async (req, res) => {
   } catch (err) {
     console.error('submitAudit error', err);
     if (err.code === 11000) {
-      return res.status(400).json({ message: 'UHID already exists. Please use a unique UHID.' });
+      const key = err.keyPattern && Object.keys(err.keyPattern)[0];
+      if (key === 'ipid') {
+        return res.status(400).json({ message: 'IPID already exists. Please use a different In-Patient ID.' });
+      }
+      return res.status(400).json({ message: 'Duplicate record (UHID or IPID may already exist). Please use unique values.' });
     }
-    res.status(500).json({ message: 'Server error', error: err.message });
+    if (err.name === 'ValidationError') {
+      const msg = Object.values(err.errors || {}).map((e) => e.message).join('; ') || err.message;
+      return res.status(400).json({ message: msg || 'Validation failed. Check your data.' });
+    }
+    res.status(500).json({ message: err.message || 'Server error', error: err.message });
   }
 };
 
 // User: fetch previous submissions for a department (or all)
 exports.getSubmissions = async (req, res) => {
   try {
-    const { departmentId, uhid, limit = 500 } = req.query;
+    const { departmentId, uhid, submittedBy, limit = 500 } = req.query;
     const filter = {};
     if (departmentId) filter.department = departmentId;
     if (uhid) filter.uhid = uhid.trim().toUpperCase();
+    if (submittedBy) filter.submittedBy = submittedBy;
 
     const submissions = await AuditSubmission.find(filter)
       .populate('department', 'name code')
@@ -548,33 +566,17 @@ exports.checkDuplicateSubmission = async (req, res) => {
       department: departmentId,
     };
 
-    if (auditDateQuery && auditTimeQuery) {
-      const auditDate = new Date(auditDateQuery.trim() + 'T00:00:00.000Z');
-      query.auditDate = auditDate;
-      query.auditTime = auditTimeQuery.trim();
-    }
-    // If no auditDate/auditTime, check for any submission (backward compat: old submissions without auditDate/auditTime)
-    else {
-      const anyExisting = await AuditSubmission.findOne({
-        uhid: normalizedUHID,
-        ipid: normalizedIPID,
-        department: departmentId,
-      })
-        .populate('submittedBy', 'name email')
-        .select('submittedAt submittedBy auditDate auditTime');
+    // Use server date/time when not provided (auto-fetch: same as submit will use)
+    const now = new Date();
+    const auditDate = auditDateQuery && auditTimeQuery
+      ? new Date(auditDateQuery.trim() + 'T00:00:00.000Z')
+      : new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+    const auditTime = (auditDateQuery && auditTimeQuery)
+      ? auditTimeQuery.trim()
+      : (now.getUTCHours().toString().padStart(2, '0') + ':' + now.getUTCMinutes().toString().padStart(2, '0'));
 
-      if (anyExisting) {
-        return res.json({
-          exists: true,
-          message: 'A checklist has already been submitted for this UHID, IPID, and Department. Use a different date/time for another audit.',
-          submittedAt: anyExisting.submittedAt,
-          submittedBy: anyExisting.submittedBy,
-          auditDate: anyExisting.auditDate,
-          auditTime: anyExisting.auditTime,
-        });
-      }
-      return res.json({ exists: false });
-    }
+    query.auditDate = auditDate;
+    query.auditTime = auditTime;
 
     const existingSubmission = await AuditSubmission.findOne(query)
       .populate('submittedBy', 'name email')
@@ -624,16 +626,22 @@ exports.getPatientChecklists = async (req, res) => {
       userDeptId = user?.department?._id?.toString();
     }
 
-    // Get or create patient
+    // Get or create patient (Patient model does not have ward/unitNo – those are on Admission)
     let patient = await Patient.findOne({ uhid: normalizedUHID });
     if (!patient) {
       patient = await Patient.create({
         uhid: normalizedUHID,
         patientName: 'Unknown',
-        ward: '',
-        unitNo: '',
       });
     }
+
+    // Ward and Unit No come from the patient's latest admission
+    const latestAdmission = await Admission.findOne({ uhid: normalizedUHID })
+      .sort({ admissionDate: -1 })
+      .select('ward unitNo')
+      .lean();
+    const ward = (latestAdmission?.ward && latestAdmission.ward.trim()) ? latestAdmission.ward.trim() : '';
+    const unitNo = (latestAdmission?.unitNo && latestAdmission.unitNo.trim()) ? latestAdmission.unitNo.trim() : '';
 
     // Get all departments
     const departments = await Department.find({ isActive: true });
@@ -740,8 +748,8 @@ exports.getPatientChecklists = async (req, res) => {
       patient: {
         uhid: patient.uhid,
         patientName: patient.patientName,
-        ward: patient.ward || '',
-        unitNo: patient.unitNo || '',
+        ward,
+        unitNo,
       },
       userDepartment: user?.department || null,
       checklists: departmentChecklists,

@@ -1,57 +1,57 @@
 import { useState, useEffect } from 'react'
 import { apiClient } from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
+} from 'recharts'
 
-const COLORS = ['#10b981', '#f59e0b', '#ef4444']
+const CHART_COLORS = {
+  primary: '#4f46e5',
+  primaryLight: '#818cf8',
+  success: '#059669',
+  successLight: '#34d399',
+  warning: '#d97706',
+  warningLight: '#fbbf24',
+  danger: '#dc2626',
+  dangerLight: '#f87171',
+  neutral: '#64748b',
+}
 
 export function ChiefAnalytics() {
   const { user } = useAuth()
-  const [stats, setStats] = useState(null)
+  const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     loadAnalytics()
-  }, [user])
+  }, [user?.name])
 
   const loadAnalytics = async () => {
-    if (!user?.name) return
-
+    if (!user?.name) {
+      setLoading(false)
+      return
+    }
     setLoading(true)
+    setError('')
     try {
-      // Get patients assigned to this chief
-      const patients = await apiClient.get(`/chief/patients?chiefName=${encodeURIComponent(user.name)}`)
-      
-      // Calculate stats
-      const totalPatients = patients.length
-      const completedPatients = patients.filter(p => p.submissionsWithActions > 0).length
-      const pendingPatients = totalPatients - completedPatients
-      const totalSubmissions = patients.reduce((sum, p) => sum + p.totalSubmissions, 0)
-      const submissionsWithActions = patients.reduce((sum, p) => sum + p.submissionsWithActions, 0)
-
-      // By department
-      const deptCounts = {}
-      patients.forEach(p => {
-        p.departments.forEach(dept => {
-          deptCounts[dept] = (deptCounts[dept] || 0) + 1
-        })
-      })
-
-      setStats({
-        totalPatients,
-        completedPatients,
-        pendingPatients,
-        totalSubmissions,
-        submissionsWithActions,
-        completionRate: totalSubmissions > 0 ? ((submissionsWithActions / totalSubmissions) * 100).toFixed(1) : 0,
-        patientStatus: [
-          { name: 'Completed', value: completedPatients },
-          { name: 'Pending', value: pendingPatients },
-        ],
-        departmentDistribution: Object.entries(deptCounts).map(([name, count]) => ({ name, count })),
-      })
+      const res = await apiClient.get(`/chief/my-analytics?chiefName=${encodeURIComponent(user.name)}`)
+      setData(res)
     } catch (err) {
-      console.error('Error loading analytics:', err)
+      console.error('Chief analytics load error', err)
+      setError(err.response?.data?.message || err.message || 'Failed to load analytics')
     } finally {
       setLoading(false)
     }
@@ -59,134 +59,231 @@ export function ChiefAnalytics() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-slate-600">Loading analytics...</div>
+      <div className="flex flex-col items-center justify-center min-h-[420px] gap-4">
+        <div className="w-10 h-10 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+        <p className="text-sm font-medium text-slate-600">Loading analytics…</p>
       </div>
     )
   }
 
+  if (error) {
+    return (
+      <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center">
+        <p className="text-red-700 font-medium">{error}</p>
+        <button
+          type="button"
+          onClick={loadAnalytics}
+          className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700"
+        >
+          Retry
+        </button>
+      </div>
+    )
+  }
+
+  const s = data?.summary || {}
+  const byDept = data?.byDepartment || []
+  const last7 = data?.last7Days || []
+  const complianceRate = Number(s.complianceRate) || 0
+  const actionRate = Number(s.actionCoverageRate) || 0
+
+  const responseMix = [
+    { name: 'YES', value: s.yesCount || 0, color: CHART_COLORS.success },
+    { name: 'NO', value: s.noCount || 0, color: CHART_COLORS.warning },
+  ].filter((d) => d.value > 0)
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Header */}
-      <div className="bg-white border border-slate-200 rounded-xl shadow-sm px-5 py-4 sm:py-5">
-        <h1 className="text-2xl sm:text-3xl font-semibold text-slate-900">Chief Analytics</h1>
-        <p className="mt-1 text-sm text-slate-600">Corrective & Preventive Actions Overview</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Analytics</h1>
+          <p className="mt-1 text-sm text-slate-500">Corrective & preventive actions – overview and trends</p>
+        </div>
+        {data?.generatedAt && (
+          <p className="text-xs text-slate-400">
+            Updated {new Date(data.generatedAt).toLocaleString()}
+          </p>
+        )}
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-slate-600">Total Patients</p>
-              <p className="text-3xl font-bold text-slate-900 mt-2">{stats?.totalPatients || 0}</p>
-            </div>
-            <div className="bg-slate-100 p-3 rounded-full">
-              <svg className="w-6 h-6 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-              </svg>
-            </div>
+      {/* KPI strip – clear numbers */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        <KpiCard
+          label="Checklist items"
+          value={s.totalSubmissions ?? 0}
+          sub="Total reviewed"
+          accent="indigo"
+        />
+        <KpiCard
+          label="Patients (IPIDs)"
+          value={s.totalPatients ?? 0}
+          sub="Unique admissions"
+          accent="slate"
+        />
+        <KpiCard
+          label="Compliance"
+          value={`${complianceRate}%`}
+          sub="YES responses"
+          accent="emerald"
+        />
+        <KpiCard
+          label="Actions added"
+          value={s.withActionsCount ?? 0}
+          sub="Corrective / preventive"
+          accent="violet"
+        />
+        <KpiCard
+          label="Action coverage"
+          value={`${actionRate}%`}
+          sub="NO items with actions"
+          accent="amber"
+        />
+      </div>
+
+      {/* Trend + mix */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Last 7 days trend */}
+        <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100">
+            <h2 className="text-base font-semibold text-slate-800">Activity – last 7 days</h2>
+            <p className="text-xs text-slate-500 mt-0.5">Submissions per day</p>
+          </div>
+          <div className="p-4 h-64">
+            {last7.some((d) => d.count > 0) ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={last7} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="activityGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={CHART_COLORS.primary} stopOpacity={0.3} />
+                      <stop offset="100%" stopColor={CHART_COLORS.primary} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis
+                    dataKey="date"
+                    tickFormatter={(v) => new Date(v).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                    tick={{ fontSize: 11 }}
+                  />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                  <Tooltip
+                    labelFormatter={(v) => new Date(v).toLocaleDateString()}
+                    formatter={(value) => [value, 'Submissions']}
+                  />
+                  <Area type="monotone" dataKey="count" stroke={CHART_COLORS.primary} fill="url(#activityGrad)" strokeWidth={2} />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-full text-slate-400 text-sm">No activity in the last 7 days</div>
+            )}
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-slate-600">Completed</p>
-              <p className="text-3xl font-bold text-emerald-600 mt-2">{stats?.completedPatients || 0}</p>
-            </div>
-            <div className="bg-emerald-50 p-3 rounded-full">
-              <svg className="w-6 h-6 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
+        {/* Response mix YES / NO */}
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100">
+            <h2 className="text-base font-semibold text-slate-800">Response mix</h2>
+            <p className="text-xs text-slate-500 mt-0.5">YES vs NO</p>
           </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-slate-600">Pending</p>
-              <p className="text-3xl font-bold text-amber-600 mt-2">{stats?.pendingPatients || 0}</p>
-            </div>
-            <div className="bg-amber-50 p-3 rounded-full">
-              <svg className="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-slate-600">Completion Rate</p>
-              <p className="text-3xl font-bold text-slate-900 mt-2">{stats?.completionRate}%</p>
-            </div>
-            <div className="bg-slate-100 p-3 rounded-full">
-              <svg className="w-6 h-6 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-              </svg>
-            </div>
+          <div className="p-4 h-64 flex items-center justify-center">
+            {responseMix.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={responseMix}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={50}
+                    outerRadius={80}
+                    paddingAngle={2}
+                    dataKey="value"
+                    nameKey="name"
+                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                  >
+                    {responseMix.map((entry, i) => (
+                      <Cell key={entry.name} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value) => [value, 'Items']} />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="text-slate-400 text-sm">No responses yet</div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Patient Status */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-          <h3 className="text-lg font-semibold text-slate-800 mb-4">Patient Action Status</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={stats?.patientStatus}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                outerRadius={80}
-                fill="#8884d8"
-                dataKey="value"
-              >
-                {stats?.patientStatus.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={index === 0 ? '#10b981' : '#f59e0b'} />
-                ))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
+      {/* By department – advanced table + bar */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-100">
+          <h2 className="text-base font-semibold text-slate-800">By department</h2>
+          <p className="text-xs text-slate-500 mt-0.5">Submissions and actions per department</p>
         </div>
-
-        {/* Department Distribution */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-          <h3 className="text-lg font-semibold text-slate-800 mb-4">Patients by Department</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={stats?.departmentDistribution}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip />
-              <Bar dataKey="count" fill="#8b5cf6" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* Summary */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-        <h3 className="text-lg font-semibold text-slate-800 mb-4">Summary</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-          <div className="p-4 bg-purple-50 rounded-lg">
-            <p className="text-slate-600">Total Checklist Items Reviewed</p>
-            <p className="text-2xl font-bold text-purple-700 mt-2">{stats?.totalSubmissions || 0}</p>
-          </div>
-          <div className="p-4 bg-green-50 rounded-lg">
-            <p className="text-slate-600">Items with Actions Added</p>
-            <p className="text-2xl font-bold text-green-700 mt-2">{stats?.submissionsWithActions || 0}</p>
-          </div>
+        <div className="p-4">
+          {byDept.length > 0 ? (
+            <>
+              <div className="hidden sm:block mb-6">
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={byDept} layout="vertical" margin={{ top: 8, right: 24, left: 100, bottom: 8 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis type="number" tick={{ fontSize: 11 }} />
+                    <YAxis type="category" dataKey="departmentName" width={96} tick={{ fontSize: 11 }} />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="totalSubmissions" name="Items" fill={CHART_COLORS.primary} radius={[0, 4, 4, 0]} />
+                    <Bar dataKey="withActions" name="With actions" fill={CHART_COLORS.success} radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-slate-600 font-medium">
+                      <th className="text-left py-3 px-2">Department</th>
+                      <th className="text-right py-3 px-2">Items</th>
+                      <th className="text-right py-3 px-2">NO</th>
+                      <th className="text-right py-3 px-2">Actions</th>
+                      <th className="text-right py-3 px-2">Patients</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {byDept.map((row) => (
+                      <tr key={row.departmentName} className="border-b border-slate-100 hover:bg-slate-50">
+                        <td className="py-2.5 px-2 font-medium text-slate-800">{row.departmentName}</td>
+                        <td className="py-2.5 px-2 text-right text-slate-700">{row.totalSubmissions}</td>
+                        <td className="py-2.5 px-2 text-right text-amber-700">{row.noCount}</td>
+                        <td className="py-2.5 px-2 text-right text-emerald-700">{row.withActions}</td>
+                        <td className="py-2.5 px-2 text-right text-slate-600">{row.patientCount}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          ) : (
+            <div className="py-12 text-center text-slate-500 text-sm">No department data yet</div>
+          )}
         </div>
       </div>
+    </div>
+  )
+}
+
+function KpiCard({ label, value, sub, accent = 'indigo' }) {
+  const valueColor = {
+    indigo: 'text-indigo-700',
+    slate: 'text-slate-800',
+    emerald: 'text-emerald-700',
+    violet: 'text-violet-700',
+    amber: 'text-amber-700',
+  }[accent] || 'text-slate-800'
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+      <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">{label}</p>
+      <p className={`mt-2 text-2xl font-bold tabular-nums ${valueColor}`}>{value}</p>
+      {sub && <p className="mt-1 text-xs text-slate-400">{sub}</p>}
     </div>
   )
 }

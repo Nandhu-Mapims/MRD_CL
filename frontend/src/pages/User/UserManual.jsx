@@ -38,15 +38,14 @@ export function UserManual() {
           'Enter UHID (from OP Card) and IPID (Admission ID)',
           'Enter Patient Name, Ward, Unit No',
           'Select Unit Chief from dropdown',
-          'Set Audit Date (default: today) and Audit Time (default: current time) – used to identify this audit session',
           'Answer YES or NO for each item',
           'Add remarks if NO is selected (mandatory)',
           'Click "Submit Checklist"'
         ]},
-        { type: 'tip', value: 'You can audit the same admission (UHID + IPID) multiple times per day: use a different Audit Time for each submission. Uniqueness is UHID + IPID + Department + Date + Time.' },
+        { type: 'tip', value: 'Audit date and time are set automatically by the system when you submit. Uniqueness is UHID + IPID + Department + Date + Time.' },
         { type: 'warning', value: 'One submission per UHID + IPID + Department + Date + Time. Submissions are locked after submit (cannot edit).' }
       ],
-      keywords: ['submit', 'checklist', 'form', 'uhid', 'ipid', 'patient', 'ward', 'unit', 'audit date', 'audit time', 'yes', 'no', 'remarks', 'auditor']
+      keywords: ['submit', 'checklist', 'form', 'uhid', 'ipid', 'patient', 'ward', 'unit', 'yes', 'no', 'remarks', 'auditor']
     },
     {
       id: 'chief-review',
@@ -193,10 +192,10 @@ export function UserManual() {
       title: 'Audit Flow Overview',
       icon: '🔄',
       content: [
-        { type: 'text', value: 'End-to-end flow: submit checklist with Audit Date + Time → system enforces one submission per UHID + IPID + Department + Date + Time → reports and logs show audits grouped by Date + Time + IPID.' },
+        { type: 'text', value: 'End-to-end flow: submit checklist → system sets date/time automatically and enforces one submission per UHID + IPID + Department + Date + Time → reports and logs show audits grouped by Date + Time + IPID.' },
         { type: 'steps', value: [
-          'Submit: Auditor fills form, sets Audit Date and Audit Time (defaults: today and current time), submits.',
-          'Uniqueness: Same UHID + IPID + Department + same Date + same Time = one submission. Use a different date or time to submit another audit for the same admission.',
+          'Submit: Auditor fills form and submits; system records date and time automatically.',
+          'Uniqueness: Same UHID + IPID + Department + same Date + same Time = one submission. Submit at a different time to add another audit for the same admission.',
           'Patient Report: Enter UHID → list shows one row per audit (Date, Time, IPID) → select one to view that audit’s report.',
           'Department Logs: Click UHID in logs → list shows audits by Date, Time, IPID → select one to view that audit’s checklist.'
         ]}
@@ -212,7 +211,7 @@ export function UserManual() {
           { term: 'UHID', desc: 'Unique Hospital ID - Permanent patient identifier (e.g., UHID000001)' },
           { term: 'IPID', desc: 'In-Patient ID - Unique per admission (e.g., IPID000001)' }
         ]},
-        { type: 'text', value: 'A patient can have multiple IPIDs if admitted multiple times. For the same admission (IPID), you can submit multiple audit checklists on different dates or at different times; each is identified by UHID + IPID + Department + Date + Time.' }
+        { type: 'text', value: 'A patient can have multiple IPIDs if admitted multiple times. For the same admission (IPID), you can submit multiple audit checklists; the system records date and time automatically. Each submission is identified by UHID + IPID + Department + Date + Time.' }
       ],
       keywords: ['uhid', 'ipid', 'patient', 'id', 'identifier', 'admission', 'audit', 'date', 'time']
     },
@@ -222,7 +221,7 @@ export function UserManual() {
       icon: '⚠️',
       content: [
         { type: 'rules', value: [
-          'One submission per UHID + IPID + Department + Date + Time (you can audit the same admission multiple times per day by using a different Audit Date or Time)',
+          'One submission per UHID + IPID + Department + Date + Time (date/time are set by the system on submit; submit again at a different time for another audit)',
           'Submissions are locked after submit (cannot edit)',
           'Remarks required when selecting NO',
           'Only Chiefs can add corrective/preventive actions',
@@ -237,7 +236,7 @@ export function UserManual() {
       icon: '🔧',
       content: [
         { type: 'faq', value: [
-          { q: 'Duplicate - Cannot Submit', a: 'A submission already exists for this UHID + IPID + Department + Date + Time. Change the Audit Date or Audit Time to submit another audit for the same admission.' },
+          { q: 'Duplicate - Cannot Submit', a: 'A submission already exists for this UHID + IPID + Department for the current date and time. Wait a moment and try again, or submit another audit later.' },
           { q: 'Form not visible in navigation', a: 'Ask admin to assign the form to you.' },
           { q: 'Cannot edit submitted checklist', a: 'Submissions are locked. Contact admin if needed.' },
           { q: 'Report or Logs: which audit do I open?', a: 'List is grouped by Date + Time + IPID. Pick the row with the date and time of the audit you want to view.' },

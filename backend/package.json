@@ -10,7 +10,7 @@
     "seed:cs": "node src/seed/seedCSForm.js",
     "seed:dummy": "node src/scripts/seedDummyData.js",
     "seed:complete": "node src/scripts/seedCompleteDummyData.js",
-    "seed:multidept": "node src/scripts/seedMultiDeptDummyData.js",
+    "seed:multidept-dummy": "node src/scripts/seedMultiDeptDummyData.js",
     "seed:perfect": "node src/scripts/seedPerfectData.js",
     "clear-db": "node src/scripts/clearDatabase.js",
     "clear-data": "node src/scripts/clearDataKeepUsersDepts.js",
@@ -24,7 +24,9 @@
     "seed:comprehensive": "node src/scripts/seedComprehensiveData.js",
     "reset-admin": "node src/scripts/resetAdminPassword.js",
     "reset-all": "node src/scripts/resetAndSeedAll.js",
-    "seed:detailed": "node src/scripts/seedDetailedData.js"
+    "seed:detailed": "node src/scripts/seedDetailedData.js",
+    "seed:multidept": "node src/scripts/seedMultiDeptSubmissions.js",
+    "seed:ward-unit": "node src/scripts/seedWardUnit.js"
   },
   "keywords": [],
   "author": "",

@@ -176,87 +176,6 @@ exports.updateCorrectivePreventive = async (req, res) => {
   }
 };
 
-// Bulk update corrective and preventive actions for multiple submissions
-// NOTE: Chiefs can ONLY update corrective/preventive fields
-// Original checklist data (responseValue, remarks, responsibility) remains READ-ONLY
-exports.bulkUpdateCorrectivePreventive = async (req, res) => {
-  try {
-    const { ipid, chiefName, corrective, preventive } = req.body;
-    const userId = req.user?.sub;
-
-    if (!userId) {
-      return res.status(401).json({ message: 'User not authenticated' });
-    }
-
-    if (!ipid || !ipid.trim()) {
-      return res.status(400).json({ message: 'IPID is required' });
-    }
-
-    // Find all submissions for this IPID and chief with NO response only
-    const filter = {
-      ipid: ipid.trim().toUpperCase(),
-      $or: [
-        { responseValue: /^NO$/i },
-        { yesNoNa: /^NO$/i },
-      ],
-    };
-    if (chiefName) {
-      filter.unitChief = chiefName.trim();
-    }
-
-    const submissions = await AuditSubmission.find(filter).select(
-      '_id submittedBy uhid ipid'
-    );
-
-    if (!submissions || submissions.length === 0) {
-      return res.status(404).json({
-        message: 'No NO-response submissions found for this IPID/chief. Corrective/preventive can only be applied to NO responses.',
-      });
-    }
-
-    const result = await AuditSubmission.updateMany(filter, {
-      corrective: corrective?.trim() || '',
-      preventive: preventive?.trim() || '',
-      correctivePreventiveBy: userId,
-      correctivePreventiveAt: new Date(),
-    });
-
-    // Create notifications for distinct submitting doctors
-    const notifiedUserIds = new Set();
-    const notificationDocs = [];
-    submissions.forEach((sub) => {
-      if (!sub.submittedBy) return;
-      const key = sub.submittedBy.toString();
-      if (notifiedUserIds.has(key)) return;
-      notifiedUserIds.add(key);
-
-      notificationDocs.push({
-        user: sub.submittedBy,
-        title: 'Corrective & Preventive Actions Added',
-        message: `Chief has updated corrective and preventive actions for UHID ${sub.uhid} (IPID ${sub.ipid || 'N/A'}).`,
-        type: 'action',
-      });
-    });
-
-    if (notificationDocs.length) {
-      try {
-        await Notification.insertMany(notificationDocs);
-      } catch (notifyErr) {
-        console.error('Notification insert error (bulkUpdateCorrectivePreventive):', notifyErr);
-      }
-    }
-
-    res.json({
-      message: 'Corrective and preventive actions updated successfully',
-      modifiedCount: result.modifiedCount,
-      notifiedDoctors: notificationDocs.length,
-    });
-  } catch (err) {
-    console.error('bulkUpdateCorrectivePreventive error', err);
-    res.status(500).json({ message: 'Server error' });
-  }
-};
-
 // Admin only: Chief Analytics - statistics, trends, performance insights of all chiefs
 exports.getChiefAnalytics = async (req, res) => {
   try {
@@ -350,6 +269,103 @@ exports.getChiefAnalytics = async (req, res) => {
   }
 };
 
+// Chief's own analytics (for Chief role) – summary, by department, trend
+exports.getMyAnalytics = async (req, res) => {
+  try {
+    const { chiefName } = req.query;
+    if (!chiefName || !chiefName.trim()) {
+      return res.status(400).json({ message: 'Chief name is required' });
+    }
+
+    const name = chiefName.trim();
+    const submissions = await AuditSubmission.find({ unitChief: name })
+      .select('department responseValue yesNoNa corrective preventive submittedAt ipid uhid')
+      .populate('department', 'name code')
+      .lean();
+
+    const now = new Date();
+    const dayBuckets = [];
+    for (let d = 6; d >= 0; d--) {
+      const date = new Date(now);
+      date.setDate(date.getDate() - d);
+      date.setUTCHours(0, 0, 0, 0);
+      dayBuckets.push({ date: date.toISOString().slice(0, 10), count: 0 });
+    }
+
+    const summary = {
+      totalSubmissions: 0,
+      yesCount: 0,
+      noCount: 0,
+      withActionsCount: 0,
+      ipids: new Set(),
+      uhids: new Set(),
+    };
+    const byDept = {};
+    submissions.forEach((sub) => {
+      summary.totalSubmissions++;
+      const val = (sub.responseValue || sub.yesNoNa || '').toString().toUpperCase();
+      if (val === 'YES') summary.yesCount++;
+      else if (val === 'NO') summary.noCount++;
+      if (sub.corrective || sub.preventive) summary.withActionsCount++;
+      if (sub.ipid) summary.ipids.add(sub.ipid);
+      if (sub.uhid) summary.uhids.add(sub.uhid);
+
+      const deptId = sub.department?._id?.toString() || 'unknown';
+      const deptName = sub.department?.name || 'Unknown';
+      if (!byDept[deptId]) {
+        byDept[deptId] = { departmentName: deptName, departmentCode: sub.department?.code, totalSubmissions: 0, withActions: 0, noCount: 0, ipids: new Set() };
+      }
+      byDept[deptId].totalSubmissions++;
+      if (sub.corrective || sub.preventive) byDept[deptId].withActions++;
+      if (val === 'NO') byDept[deptId].noCount++;
+      if (sub.ipid) byDept[deptId].ipids.add(sub.ipid);
+
+      const subDate = sub.submittedAt ? new Date(sub.submittedAt) : null;
+      if (subDate) {
+        const key = subDate.toISOString().slice(0, 10);
+        const bucket = dayBuckets.find((b) => b.date === key);
+        if (bucket) bucket.count++;
+      }
+    });
+
+    const byDepartment = Object.values(byDept).map((d) => ({
+      departmentName: d.departmentName,
+      departmentCode: d.departmentCode,
+      totalSubmissions: d.totalSubmissions,
+      withActions: d.withActions,
+      noCount: d.noCount,
+      patientCount: d.ipids.size,
+    })).sort((a, b) => b.totalSubmissions - a.totalSubmissions);
+
+    const totalPatients = summary.ipids.size;
+    const complianceRate = summary.totalSubmissions > 0
+      ? parseFloat(((summary.yesCount / summary.totalSubmissions) * 100).toFixed(1))
+      : 0;
+    const actionCoverageRate = summary.noCount > 0
+      ? parseFloat(((summary.withActionsCount / summary.noCount) * 100).toFixed(1))
+      : 100;
+
+    res.json({
+      chiefName: name,
+      summary: {
+        totalSubmissions: summary.totalSubmissions,
+        yesCount: summary.yesCount,
+        noCount: summary.noCount,
+        withActionsCount: summary.withActionsCount,
+        totalPatients,
+        complianceRate,
+        actionCoverageRate,
+      },
+      byDepartment,
+      last7Days: dayBuckets,
+      generatedAt: new Date(),
+    });
+  } catch (err) {
+    console.error('getMyAnalytics error', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 // Get doctor performance analytics for this chief
 exports.getDoctorPerformance = async (req, res) => {
   try {
@@ -383,8 +399,8 @@ exports.getDoctorPerformance = async (req, res) => {
             role: sub.submittedBy.role,
           },
           totalSubmissions: 0,
-          compliantSubmissions: 0, // YES responses
-          nonCompliantSubmissions: 0, // NO responses
+          noResponses: 0,
+          noWithRemarks: 0,
           departments: new Set(),
           patients: new Set(),
           lastSubmittedAt: sub.submittedAt,
@@ -395,11 +411,13 @@ exports.getDoctorPerformance = async (req, res) => {
       const stats = doctorStats[doctorId];
       stats.totalSubmissions++;
 
-      // Track compliance (YES = compliant, NO = non-compliant)
-      if (sub.responseValue === 'YES') {
-        stats.compliantSubmissions++;
-      } else if (sub.responseValue === 'NO') {
-        stats.nonCompliantSubmissions++;
+      // Track thoroughness: when auditor marks NO, did they add remarks? (required for proper documentation)
+      const responseVal = (sub.responseValue || sub.yesNoNa || '').toString().toUpperCase();
+      if (responseVal === 'NO') {
+        stats.noResponses++;
+        if (sub.remarks && String(sub.remarks).trim()) {
+          stats.noWithRemarks++;
+        }
       }
 
       // Track departments and patients
@@ -419,18 +437,19 @@ exports.getDoctorPerformance = async (req, res) => {
       }
     });
 
-    // Convert to array and calculate percentages
+    // Convert to array - auditor performance = productivity + thoroughness (not department compliance)
     const performanceData = Object.values(doctorStats).map((stats) => {
-      const complianceRate = stats.totalSubmissions > 0
-        ? ((stats.compliantSubmissions / stats.totalSubmissions) * 100).toFixed(1)
-        : 0;
+      // Thoroughness: when auditor found NO (non-compliance), did they document with remarks?
+      const thoroughnessRate = stats.noResponses > 0
+        ? Math.round((stats.noWithRemarks / stats.noResponses) * 100)
+        : 100; // No NOs = fully thorough (nothing to document)
 
       return {
         doctor: stats.doctor,
         totalSubmissions: stats.totalSubmissions,
-        compliantSubmissions: stats.compliantSubmissions,
-        nonCompliantSubmissions: stats.nonCompliantSubmissions,
-        complianceRate: parseFloat(complianceRate),
+        noResponses: stats.noResponses,
+        noWithRemarks: stats.noWithRemarks,
+        thoroughnessRate,
         departments: Array.from(stats.departments),
         totalPatients: stats.patients.size,
         lastSubmittedAt: stats.lastSubmittedAt,

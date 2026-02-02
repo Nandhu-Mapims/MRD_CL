@@ -247,11 +247,14 @@ const RUN = async () => {
       }
       const email = `auditor${i + 1}@hospital.com`;
       const password = `Auditor@${i + 1}23`;
+      const designation =
+        spec.prefix.startsWith('MRD') ? 'MRD Staff' : spec.prefix.startsWith('Lab') ? 'Lab Technician' : 'Doctor';
       const user = await User.create({
         name: displayName,
         email,
         passwordHash: await bcrypt.hash(password, 10),
         role: 'auditor',
+        designation,
         department: dept._id,
         isActive: true,
       });
@@ -285,6 +288,7 @@ const RUN = async () => {
         email: chiefEmail,
         passwordHash: await bcrypt.hash(chiefPassword, 10),
         role: 'chief',
+        designation: 'Chief',
         department: chiefDept._id,
         isActive: true,
       });
@@ -335,16 +339,21 @@ const RUN = async () => {
     }
     console.log(`   ✅ Created 12 forms with ${CHECKLIST_DEFS.length} items each\n`);
 
-    // Assign auditors to forms (so they see forms in sidebar): 2–3 auditors per form
+    // Cross-audit only: assign users from OTHER departments to each form (not same department)
     for (let f = 0; f < formTemplates.length; f++) {
       const form = formTemplates[f];
-      const deptId = form.departments[0].toString();
-      const usersInDept = userMap.get(deptId) || [];
-      const userIds = usersInDept.slice(0, 3).map((u) => u._id);
+      const formDeptId = form.departments[0].toString();
+      const otherDeptIds = createdDepts.filter((d) => d._id.toString() !== formDeptId).map((d) => d._id.toString());
+      const usersFromOtherDepts = [];
+      for (const oid of otherDeptIds) {
+        const list = userMap.get(oid) || [];
+        usersFromOtherDepts.push(...list);
+      }
+      const userIds = usersFromOtherDepts.slice(0, 3).map((u) => u._id);
       form.assignedUsers = userIds;
       await form.save();
     }
-    console.log('   ✅ Assigned auditors to forms\n');
+    console.log('   ✅ Assigned auditors to forms (cross-department only)\n');
 
     // ============= STEP 5: 60 PATIENTS + MULTIPLE ADMISSIONS (IPIDs) PER UHID =============
     console.log('👨‍⚕️ STEP 5: Creating 60 patients with 2–4 admissions (IPIDs) per UHID...');

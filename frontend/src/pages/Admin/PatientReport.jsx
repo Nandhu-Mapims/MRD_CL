@@ -125,8 +125,8 @@ export function PatientReport() {
                   uhid: normalizedUHID,
                   admissionDate: subWithIPID?.submittedAt || new Date(),
                   status: 'Admitted',
-                  ward: subWithIPID?.ward || subWithIPID?.patient?.ward || 'N/A',
-                  unitNo: subWithIPID?.unitNo || subWithIPID?.patient?.unitNo || 'N/A',
+                  ward: subWithIPID?.admission?.ward || subWithIPID?.ward || subWithIPID?.patient?.ward || 'N/A',
+                  unitNo: subWithIPID?.admission?.unitNo || subWithIPID?.unitNo || subWithIPID?.patient?.unitNo || 'N/A',
                   isVirtual: true
                 }
               })
@@ -249,8 +249,8 @@ export function PatientReport() {
       const admission = submissions[0]?.admission
       const firstSubmission = submissions[0]
       if (admission) {
-        if (admission.ward && !ward.trim()) setWard(admission.ward)
-        if (admission.unitNo && !unitNo.trim()) setUnitNo(admission.unitNo)
+        setWard(admission.ward || '')
+        setUnitNo(admission.unitNo || '')
       }
       // Unit Chief is stored in submission
       if (firstSubmission?.unitChief) {
@@ -297,8 +297,12 @@ export function PatientReport() {
     setError('')
     const firstSub = group.submissions[0]
     if (firstSub?.unitChief) setUnitChief(firstSub.unitChief)
-    if (firstSub?.ward && !ward.trim()) setWard(firstSub.ward)
-    if (firstSub?.unitNo && !unitNo.trim()) setUnitNo(firstSub.unitNo)
+    // Ward and unitNo are on admission, not directly on submission
+    const adm = firstSub?.admission
+    const w = adm?.ward || firstSub?.ward || ''
+    const u = adm?.unitNo || firstSub?.unitNo || ''
+    setWard(w)
+    setUnitNo(u)
     if (data?.departments?.length > 0) {
       const firstDept = data.departments.find(d => d.submittedBy?.name)
       if (firstDept?.submittedBy?.name) setConsultantName(firstDept.submittedBy.name)
@@ -825,8 +829,8 @@ export function PatientReport() {
                 {groupsFromUHID.map((group, idx) => {
                   const dateStr = group.date ? new Date(group.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'
                   const timeStr = group.auditTime || (group.submissions?.[0]?.submittedAt ? new Date(group.submissions[0].submittedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '')
-                  const ward = group.submissions?.[0]?.ward || group.submissions?.[0]?.patient?.ward || 'N/A'
-                  const unitNo = group.submissions?.[0]?.unitNo || group.submissions?.[0]?.patient?.unitNo || 'N/A'
+                  const ward = group.submissions?.[0]?.admission?.ward || group.submissions?.[0]?.ward || group.submissions?.[0]?.patient?.ward || 'N/A'
+                  const unitNo = group.submissions?.[0]?.admission?.unitNo || group.submissions?.[0]?.unitNo || group.submissions?.[0]?.patient?.unitNo || 'N/A'
                   return (
                     <button
                       key={idx}

@@ -3,6 +3,30 @@ export default {
   content: ['./index.html', './src/**/*.{js,jsx,ts,tsx}'],
   theme: {
     extend: {
+      keyframes: {
+        'logo-fade-in': {
+          '0%': { opacity: '0', transform: 'scale(0.92)' },
+          '100%': { opacity: '1', transform: 'scale(1)' },
+        },
+        'logo-soft-pulse': {
+          '0%, 100%': { opacity: '1', transform: 'scale(1)' },
+          '50%': { opacity: '0.97', transform: 'scale(1.02)' },
+        },
+        'logo-breathe': {
+          '0%, 100%': { transform: 'scale(1)' },
+          '50%': { transform: 'scale(1.04)' },
+        },
+        'logo-glow': {
+          '0%, 100%': { filter: 'drop-shadow(0 0 8px rgba(99, 102, 241, 0.3))' },
+          '50%': { filter: 'drop-shadow(0 0 14px rgba(99, 102, 241, 0.5))' },
+        },
+      },
+      animation: {
+        'logo-fade-in': 'logo-fade-in 0.7s ease-out forwards',
+        'logo-soft-pulse': 'logo-soft-pulse 4s ease-in-out infinite',
+        'logo-breathe': 'logo-breathe 3s ease-in-out infinite',
+        'logo-glow': 'logo-glow 2.5s ease-in-out infinite',
+      },
       colors: {
         primary: {
           50: '#eff6ff',

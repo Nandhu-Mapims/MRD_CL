@@ -11,6 +11,7 @@ export function UserManagement() {
     email: '',
     password: '',
     role: 'auditor',
+    designation: '',
     departmentId: '',
     isActive: true,
   })
@@ -57,6 +58,7 @@ export function UserManagement() {
         email: '',
         password: '',
         role: 'auditor',
+        designation: '',
         departmentId: '',
         isActive: true,
       })
@@ -74,6 +76,7 @@ export function UserManagement() {
       email: user.email,
       password: '',
       role: user.role || 'auditor',
+      designation: user.designation || '',
       departmentId: user.department?._id || user.department?.id || '',
       isActive: user.isActive !== undefined ? user.isActive : true,
     })
@@ -107,6 +110,7 @@ export function UserManagement() {
               email: '',
               password: '',
               role: 'auditor',
+              designation: '',
               departmentId: '',
               isActive: true,
             })
@@ -191,6 +195,26 @@ export function UserManagement() {
               </select>
             </div>
 
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Designation
+              </label>
+              <select
+                value={formData.designation}
+                onChange={(e) => setFormData({ ...formData, designation: e.target.value })}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              >
+                <option value="">Select designation</option>
+                <option value="Doctor">Doctor</option>
+                <option value="Chief">Chief</option>
+                <option value="MRD Staff">MRD Staff</option>
+                <option value="Lab Technician">Lab Technician</option>
+                <option value="Nurse">Nurse</option>
+                <option value="Pharmacist">Pharmacist</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+
             {(formData.role === 'auditor' || formData.role === 'chief') && (
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
@@ -256,6 +280,7 @@ export function UserManagement() {
                 <th className="text-left px-4 lg:px-6 py-3 lg:py-4 font-semibold text-xs lg:text-sm text-slate-700 uppercase tracking-wide">Name</th>
                 <th className="text-left px-4 lg:px-6 py-3 lg:py-4 font-semibold text-xs lg:text-sm text-slate-700 uppercase tracking-wide">Email</th>
                 <th className="text-left px-4 lg:px-6 py-3 lg:py-4 font-semibold text-xs lg:text-sm text-slate-700 uppercase tracking-wide">Role</th>
+                <th className="text-left px-4 lg:px-6 py-3 lg:py-4 font-semibold text-xs lg:text-sm text-slate-700 uppercase tracking-wide">Designation</th>
                 <th className="text-left px-4 lg:px-6 py-3 lg:py-4 font-semibold text-xs lg:text-sm text-slate-700 uppercase tracking-wide">Department</th>
                 <th className="text-left px-4 lg:px-6 py-3 lg:py-4 font-semibold text-xs lg:text-sm text-slate-700 uppercase tracking-wide">Status</th>
                 <th className="text-left px-4 lg:px-6 py-3 lg:py-4 font-semibold text-xs lg:text-sm text-slate-700 uppercase tracking-wide">Created</th>
@@ -265,7 +290,7 @@ export function UserManagement() {
             <tbody className="divide-y divide-slate-200">
               {users.length === 0 ? (
                 <tr>
-                  <td colSpan="7" className="px-6 py-8 text-center text-slate-500 text-sm">
+                  <td colSpan="8" className="px-6 py-8 text-center text-slate-500 text-sm">
                     No users found. Click "Create New User" to add users.
                   </td>
                 </tr>
@@ -284,6 +309,9 @@ export function UserManagement() {
                       >
                         {user.role === 'admin' ? 'Admin' : user.role === 'chief' ? 'Chief/HOD' : 'Auditor'}
                       </span>
+                    </td>
+                    <td className="px-4 lg:px-6 py-3 lg:py-4 text-xs lg:text-sm text-slate-600">
+                      {user.designation || '—'}
                     </td>
                     <td className="px-4 lg:px-6 py-3 lg:py-4 text-xs lg:text-sm text-slate-600">
                       {user.department
@@ -355,6 +383,12 @@ export function UserManagement() {
                 </span>
               </div>
               <div className="space-y-2 text-xs">
+                {user.designation && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500">Designation:</span>
+                    <span className="text-slate-700 font-medium">{user.designation}</span>
+                  </div>
+                )}
                 <div className="flex items-center justify-between">
                   <span className="text-slate-500">Department:</span>
                   <span className="text-slate-700 font-medium">

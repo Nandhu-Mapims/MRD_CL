@@ -254,7 +254,7 @@ exports.reorderChecklistItems = async (req, res) => {
   }
 };
 
-// User: get checklist by department - only items assigned to this department or its form templates
+// User: get checklist by department - or by form (user-assignment access when formTemplateId provided, for cross-audit)
 exports.getChecklistForDepartment = async (req, res) => {
   try {
     const { departmentId } = req.params; // Get from URL params
@@ -274,8 +274,7 @@ exports.getChecklistForDepartment = async (req, res) => {
       return res.status(400).json({ message: 'Invalid department ID format' });
     }
 
-    // If formTemplateId is provided, get items for that specific form template
-    // BUT first verify the form is assigned to this department
+    // When formTemplateId is provided: use user-assignment access (cross-audit)
     if (formTemplateId) {
       let formTemplateObjectId;
       try {
@@ -284,85 +283,39 @@ exports.getChecklistForDepartment = async (req, res) => {
         return res.status(400).json({ message: 'Invalid form template ID format' });
       }
 
-      // Verify the form template is assigned to this department or is common (ANAE/NUS only)
-      const formTemplate = await FormTemplate.findById(formTemplateObjectId).populate('departments');
+      const formTemplate = await FormTemplate.findById(formTemplateObjectId);
       if (!formTemplate) {
         return res.status(404).json({ message: 'Form template not found' });
       }
 
-      // Get ANAE and NUS department IDs - these forms are common for all departments
-      const Department = require('../models/Department');
-      const anaDept = await Department.findOne({ code: 'ANAE' });
-      const nusDept = await Department.findOne({ code: 'NUS' });
-      const anaDeptId = anaDept?._id?.toString();
-      const nusDeptId = nusDept?._id?.toString();
+      const userId = req.user?.sub ? new mongoose.Types.ObjectId(req.user.sub) : null;
+      const isAdmin = req.user?.role === 'admin';
 
-      // Check if form is assigned to ANAE or NUS - these are common for all departments
-      const formDeptIds = (formTemplate.departments || []).map(dept => {
-        if (dept._id) return dept._id.toString();
-        if (dept.toString) return dept.toString();
-        return String(dept);
-      });
-      
-      const isAnaeForm = anaDeptId && formDeptIds.includes(anaDeptId);
-      const isNusForm = nusDeptId && formDeptIds.includes(nusDeptId);
-      const isCommonForm = isAnaeForm || isNusForm;
-
-      // Check if form is assigned to this department
-      // Handle both populated (object with _id) and unpopulated (ObjectId) departments
-      let isAssigned = false;
-      if (isCommonForm) {
-        // ANAE and NUS forms are accessible to all departments
-        isAssigned = true;
-        console.log(`[DEBUG] Form template ${formTemplateId} is assigned to ANAE/NUS, accessible to all departments`);
-      } else if (formTemplate.departments && formTemplate.departments.length > 0) {
-        // Convert department IDs to strings for comparison
-        const deptIdStr = departmentId.toString();
-        const deptObjectIdStr = deptObjectId.toString();
-        
-        isAssigned = formDeptIds.some(id => id === deptIdStr || id === deptObjectIdStr);
-        
-        console.log(`[DEBUG] Form template ${formTemplateId} department check:`, {
-          formDeptIds,
-          requestedDeptId: deptIdStr,
-          requestedDeptObjectId: deptObjectIdStr,
-          isAssigned
-        });
+      let hasAccess = false;
+      if (isAdmin) {
+        hasAccess = true;
+      } else if (formTemplate.isCommon) {
+        hasAccess = true;
+      } else if (userId && formTemplate.assignedUsers && formTemplate.assignedUsers.length > 0) {
+        const assignedIds = (formTemplate.assignedUsers || []).map(id => id.toString());
+        hasAccess = assignedIds.includes(userId.toString());
       }
 
-      if (!isAssigned) {
-        console.log(`[DEBUG] Form template ${formTemplateId} is not assigned to department ${departmentId}`);
-        console.log(`[DEBUG] Form departments:`, formTemplate.departments);
-        console.log(`[DEBUG] Form isCommon:`, formTemplate.isCommon);
-        return res.json([]); // Return empty array if form not assigned to department
+      if (!hasAccess) {
+        return res.json([]);
       }
 
-      // Get items for this form template that match the department scope
-      // Use ObjectId for proper MongoDB comparison
-      // Note: Schema only supports 'SINGLE' and 'ALL' scopes, not 'MULTIPLE'
-      const query = {
-        isActive: true,
-        formTemplate: formTemplateObjectId,
-        $or: [
-          { departmentScope: 'ALL' },
-          { departmentScope: 'SINGLE', department: deptObjectId },
-        ],
-      };
-      
-      console.log(`[DEBUG] Query for items:`, JSON.stringify({
-        isActive: true,
-        formTemplate: formTemplateObjectId.toString(),
-        $or: query.$or
-      }, null, 2));
-      
       let items;
       try {
-        items = await ChecklistItem.find(query)
+        items = await ChecklistItem.find({
+          isActive: true,
+          formTemplate: formTemplateObjectId,
+        })
           .sort({ section: 1, order: 1, createdAt: 1 })
           .populate({
             path: 'department',
             select: 'name code',
-            strictPopulate: false // Allow null/undefined departments (for ALL scope items)
+            strictPopulate: false
           })
           .populate({
             path: 'formTemplate',
@@ -371,50 +324,12 @@ exports.getChecklistForDepartment = async (req, res) => {
           });
       } catch (populateErr) {
         console.error('[DEBUG] Error populating items:', populateErr);
-        // Try without populate if it fails
-        items = await ChecklistItem.find(query)
-          .sort({ section: 1, order: 1, createdAt: 1 });
-        console.log('[DEBUG] Loaded items without populate due to error');
-      }
-      
-      console.log(`[DEBUG] getChecklistForDepartment with formTemplateId: departmentId=${departmentId}, formTemplateId=${formTemplateId}, items=${items.length}`);
-      console.log(`[DEBUG] Items breakdown: ALL scope=${items.filter(i => i.departmentScope === 'ALL').length}, SINGLE scope=${items.filter(i => i.departmentScope === 'SINGLE').length}`);
-      
-      // Also check if there are any items for this form template at all (for debugging)
-      const allItemsForForm = await ChecklistItem.find({
-        isActive: true,
-        formTemplate: formTemplateObjectId,
-      });
-      console.log(`[DEBUG] Total items for form template ${formTemplateId} (any department): ${allItemsForForm.length}`);
-      if (allItemsForForm.length > 0 && items.length === 0) {
-        console.log(`[DEBUG] WARNING: Form has ${allItemsForForm.length} items but none match the department query`);
-        console.log(`[DEBUG] Requested department: ${departmentId} (ObjectId: ${deptObjectId})`);
-        console.log(`[DEBUG] Sample items:`, allItemsForForm.slice(0, 5).map(i => ({
-          _id: i._id,
-          label: i.label,
-          departmentScope: i.departmentScope,
-          department: i.department ? (i.department._id || i.department).toString() : 'null',
-          departmentType: typeof i.department,
-          section: i.section
-        })));
-        
-        // Try a simpler query to see if we can find items at all
-        const simpleQueryItems = await ChecklistItem.find({
+        items = await ChecklistItem.find({
           isActive: true,
           formTemplate: formTemplateObjectId,
-          departmentScope: 'SINGLE'
-        }).limit(5);
-        console.log(`[DEBUG] Items with SINGLE scope:`, simpleQueryItems.map(i => ({
-          department: i.department ? (i.department._id || i.department).toString() : 'null',
-          matches: i.department && (
-            i.department.toString() === departmentId || 
-            i.department.toString() === deptObjectId.toString() ||
-            (i.department._id && i.department._id.toString() === departmentId) ||
-            (i.department._id && i.department._id.toString() === deptObjectId.toString())
-          )
-        })));
+        }).sort({ section: 1, order: 1, createdAt: 1 });
       }
-      
+
       return res.json(items);
     }
 

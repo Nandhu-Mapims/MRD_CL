@@ -75,7 +75,7 @@ exports.registerAdmin = async (req, res) => {
 
 exports.registerUser = async (req, res) => {
   try {
-    const { name, email, password, role = 'user', departmentId } = req.body;
+    const { name, email, password, role = 'auditor', departmentId, designation } = req.body;
     
     // Input validation
     if (!name || !email || !password) {
@@ -105,7 +105,8 @@ exports.registerUser = async (req, res) => {
       email: email.toLowerCase().trim(),
       passwordHash,
       role,
-      department: role === 'user' ? departmentId : undefined,
+      designation: designation?.trim() || undefined,
+      department: (role === 'auditor' || role === 'chief') ? departmentId : undefined,
     });
     const populated = await User.findById(user._id).populate('department');
     res.status(201).json({
@@ -113,6 +114,7 @@ exports.registerUser = async (req, res) => {
       email: user.email,
       name: user.name,
       role: user.role,
+      designation: user.designation,
       department: populated.department,
     });
   } catch (err) {
@@ -157,6 +159,7 @@ exports.login = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
+        designation: user.designation || null,
         department: user.department
           ? { id: user.department._id, name: user.department.name, code: user.department.code }
           : null,
@@ -185,8 +188,8 @@ exports.listUsers = async (req, res) => {
 exports.updateUser = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, email, role, isActive, departmentId } = req.body;
-    const update = { name, email, role, isActive };
+    const { name, email, role, isActive, departmentId, designation } = req.body;
+    const update = { name, email, role, isActive, designation: designation?.trim() || '' };
     if (role === 'admin') {
       update.department = undefined;
     } else if ((role === 'auditor' || role === 'chief') && departmentId) {

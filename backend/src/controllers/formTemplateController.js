@@ -16,11 +16,20 @@ exports.assignUsersToForm = async (req, res) => {
       return res.status(404).json({ message: 'Form template not found' });
     }
 
-    // Verify all user IDs exist
+    // Verify all user IDs exist and enforce cross-audit only (no same-department assignment)
     if (userIds.length > 0) {
-      const users = await User.find({ _id: { $in: userIds } });
+      const users = await User.find({ _id: { $in: userIds } }).populate('department', '_id');
       if (users.length !== userIds.length) {
         return res.status(400).json({ message: 'One or more user IDs are invalid' });
+      }
+      const formDeptIds = (formTemplate.departments || []).map((d) => d.toString());
+      for (const u of users) {
+        const userDeptId = u.department ? (u.department._id || u.department).toString() : null;
+        if (userDeptId && formDeptIds.includes(userDeptId)) {
+          return res.status(400).json({
+            message: 'Cross audit only: users from the form\'s department cannot be assigned to audit that department. Please assign users from other departments.',
+          });
+        }
       }
     }
 
@@ -62,19 +71,13 @@ exports.getAccessibleForms = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // Find forms that:
-    // 1. Are assigned to this specific user (REGARDLESS of department), OR
-    // 2. Have no assigned users AND are in user's department (default access), OR
-    // 3. Are common forms (available to all)
+    // Admin only allocates: auditors/chiefs see only forms they are explicitly assigned to (or common forms).
+    // Department on form is a label only; no same-department default access.
     const forms = await FormTemplate.find({
       isActive: true,
       $or: [
-        { assignedUsers: userId }, // Specifically assigned - CROSS-DEPARTMENT access
-        { 
-          assignedUsers: { $size: 0 }, 
-          departments: user.department 
-        }, // No assignment, default to user's department
-        { isCommon: true }, // Common forms for all
+        { assignedUsers: userId }, // Explicitly assigned by admin (cross-audit only)
+        { isCommon: true },       // Common forms for all
       ],
     })
       .populate('departments', 'name code')
