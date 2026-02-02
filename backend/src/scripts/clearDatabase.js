@@ -9,6 +9,7 @@ const Admission = require('../models/Admission');
 const ChiefDoctor = require('../models/ChiefDoctor');
 const User = require('../models/User');
 const Patient = require('../models/Patient');
+const Notification = require('../models/Notification');
 
 dotenv.config();
 
@@ -28,6 +29,7 @@ const RUN = async () => {
       chiefDoctors: await ChiefDoctor.countDocuments(),
       patients: await Patient.countDocuments(),
       users: await User.countDocuments(),
+      notifications: await Notification.countDocuments(),
     };
 
     console.log('📊 Current data counts:');
@@ -38,9 +40,11 @@ const RUN = async () => {
     console.log(`   - Admissions: ${counts.admissions}`);
     console.log(`   - Chief Doctors: ${counts.chiefDoctors}`);
     console.log(`   - Patients: ${counts.patients}`);
-    console.log(`   - Users: ${counts.users}\n`);
+    console.log(`   - Users: ${counts.users}`);
+    console.log(`   - Notifications: ${counts.notifications}\n`);
 
     console.log('⚠️  WARNING: This will delete ALL data including:');
+    console.log('   - All notifications');
     console.log('   - All audit submissions');
     console.log('   - All patients');
     console.log('   - All admissions');
@@ -52,6 +56,9 @@ const RUN = async () => {
 
     // Delete in order (respecting foreign key relationships)
     console.log('🗑️  Deleting data...\n');
+
+    const deletedNotifications = await Notification.deleteMany({});
+    console.log(`✅ Deleted ${deletedNotifications.deletedCount} notification(s)`);
 
     const deletedSubmissions = await AuditSubmission.deleteMany({});
     console.log(`✅ Deleted ${deletedSubmissions.deletedCount} audit submission(s)`);
@@ -79,6 +86,7 @@ const RUN = async () => {
     console.log(`✅ Deleted ${deletedUsers.deletedCount} user(s) (including admins)`);
 
     console.log('\n🎉 Database completely cleared!');
+    console.log('   (Admin user will be re-created on next server start.)');
     console.log('\n📌 All data has been deleted. Run seed script to repopulate data.');
     console.log('   Command: npm run seed\n');
 

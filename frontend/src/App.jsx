@@ -15,6 +15,7 @@ import { AuditorDashboard } from './pages/Auditor/AuditorDashboard'
 import { AuditorAnalytics } from './pages/Auditor/AuditorAnalytics'
 import { Dashboard } from './pages/Admin/Dashboard'
 import { Analytics } from './pages/Admin/Analytics'
+import { ChiefAnalytics as AdminChiefAnalytics } from './pages/Admin/ChiefAnalytics'
 import { PatientReport } from './pages/Admin/PatientReport'
 import { DepartmentLogs } from './pages/Admin/DepartmentLogs'
 import { Form } from './pages/User/Form'
@@ -122,6 +123,14 @@ function App() {
             element={
               <ProtectedRoute roles={['admin']}>
                 <Analytics />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/chief-analytics"
+            element={
+              <ProtectedRoute roles={['admin']}>
+                <AdminChiefAnalytics />
               </ProtectedRoute>
             }
           />

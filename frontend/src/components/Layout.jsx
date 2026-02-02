@@ -433,6 +433,12 @@ export function Layout({ children }) {
                             isActive={isActive('/admin/analytics')}
                           />
                           <SidebarMenuItem
+                            to="/admin/chief-analytics"
+                            icon="👔"
+                            label="Chief Analytics"
+                            isActive={isActive('/admin/chief-analytics')}
+                          />
+                          <SidebarMenuItem
                             to="/admin/patient-report"
                             icon="📋"
                             label="Patient Report"

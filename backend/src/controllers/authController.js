@@ -187,10 +187,10 @@ exports.updateUser = async (req, res) => {
     const { id } = req.params;
     const { name, email, role, isActive, departmentId } = req.body;
     const update = { name, email, role, isActive };
-    if (role === 'user' && departmentId) {
-      update.department = departmentId;
-    } else if (role === 'admin') {
+    if (role === 'admin') {
       update.department = undefined;
+    } else if ((role === 'auditor' || role === 'chief') && departmentId) {
+      update.department = departmentId;
     }
     const user = await User.findByIdAndUpdate(id, update, { new: true })
       .select('-passwordHash')
