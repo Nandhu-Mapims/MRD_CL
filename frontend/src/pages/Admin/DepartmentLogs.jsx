@@ -802,12 +802,21 @@ export function DepartmentLogs() {
                 <p className="text-sm text-slate-600 flex items-center gap-2">
                   {previewData?.patient?.patientName ? (
                     <span className="font-medium">Patient: {previewData.patient.patientName}</span>
-                  ) : (
+                  ) : selectedUhid && !selectedIPID && groupsFromUHID.length > 0 && (groupsFromUHID[0]?.submissions?.[0]?.patient?.patientName || groupsFromUHID[0]?.submissions?.[0]?.patientName) ? (
+                    <span className="font-medium">Patient: {groupsFromUHID[0].submissions[0].patient?.patientName || groupsFromUHID[0].submissions[0].patientName}</span>
+                  ) : selectedUhid && !selectedIPID && loadingAdmissions ? (
                     <span className="flex items-center gap-2">
                       <span className="inline-block animate-spin rounded-full h-3 w-3 border-t-2 border-b-2 border-indigo-700"></span>
                       Loading...
                     </span>
-                  )}
+                  ) : selectedIPID && loadingPreview ? (
+                    <span className="flex items-center gap-2">
+                      <span className="inline-block animate-spin rounded-full h-3 w-3 border-t-2 border-b-2 border-indigo-700"></span>
+                      Loading checklist...
+                    </span>
+                  ) : selectedUhid && !selectedIPID ? (
+                    <span className="text-slate-500">UHID: {selectedUhid}</span>
+                  ) : null}
                 </p>
               </div>
               <button
@@ -828,9 +837,6 @@ export function DepartmentLogs() {
               {/* List: groups (date+time+IPID) or admissions (IPID) */}
               {selectedUhid && !selectedIPID && !previewData?.departments?.length && (
                 <div className="mb-6">
-                  <h3 className="text-lg font-bold text-slate-800 mb-4">
-                    {groupsFromUHID.length > 0 ? '📋 Select Audit (Date + Time + IPID)' : '📋 Select Admission (IPID)'} for UHID: {selectedUhid}
-                  </h3>
                   {loadingAdmissions ? (
                     <div className="text-center py-8">
                       <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-600 mb-4"></div>
@@ -840,39 +846,86 @@ export function DepartmentLogs() {
                       </div>
                     </div>
                   ) : groupsFromUHID.length > 0 ? (
-                    <div className="space-y-2">
-                      {groupsFromUHID.map((group, idx) => {
-                        const dateStr = group.date ? new Date(group.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'
-                        const timeStr = group.auditTime || (group.submissions?.[0]?.submittedAt ? new Date(group.submissions[0].submittedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '')
-                        return (
-                          <button
-                            key={idx}
-                            type="button"
-                            onClick={() => handleGroupClick(group)}
-                            className="w-full text-left p-4 rounded-lg border-2 border-slate-200 bg-white hover:border-blue-400 hover:bg-blue-50 transition-all"
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-3 mb-2 flex-wrap">
-                                  <span className="text-lg font-bold text-blue-600 hover:text-blue-800 hover:underline">
-                                    IPID: {group.ipid}
+                    (() => {
+                      // Group all audits by IPID – one box per IPID, Ward/Unit at top, checklist buttons inside
+                      const byIPID = new Map()
+                      groupsFromUHID.forEach((group) => {
+                        const ipid = (group.ipid || '').toString().trim().toUpperCase()
+                        if (!ipid) return
+                        if (!byIPID.has(ipid)) {
+                          byIPID.set(ipid, {
+                            ipid,
+                            ward: group.submissions?.[0]?.admission?.ward || group.submissions?.[0]?.ward || group.submissions?.[0]?.patient?.ward || 'N/A',
+                            unitNo: group.submissions?.[0]?.admission?.unitNo || group.submissions?.[0]?.unitNo || group.submissions?.[0]?.patient?.unitNo || 'N/A',
+                            groups: []
+                          })
+                        }
+                        byIPID.get(ipid).groups.push(group)
+                      })
+                      // Sort groups within each IPID by time (newest first)
+                      byIPID.forEach((entry) => {
+                        entry.groups.sort((a, b) => {
+                          const tA = a.submissions?.[0]?.submittedAt ? new Date(a.submissions[0].submittedAt).getTime() : 0
+                          const tB = b.submissions?.[0]?.submittedAt ? new Date(b.submissions[0].submittedAt).getTime() : 0
+                          return tB - tA
+                        })
+                      })
+                      const ipidEntries = Array.from(byIPID.values())
+                      return (
+                        <div className="space-y-5">
+                          {ipidEntries.map((entry) => (
+                            <div
+                              key={entry.ipid}
+                              className="rounded-xl border border-slate-200 bg-white overflow-hidden shadow-md hover:shadow-lg transition-shadow"
+                            >
+                              <div className="bg-gradient-to-r from-slate-50 to-blue-50/30 border-b border-slate-200 px-5 py-3.5">
+                                <div className="flex items-center gap-3 flex-wrap">
+                                  <span className="text-lg font-bold text-blue-700">IPID: {entry.ipid}</span>
+                                  <span className="text-sm font-medium text-slate-600 bg-white/80 border border-slate-200 px-2.5 py-1 rounded-md shadow-sm">
+                                    Ward: {entry.ward}
                                   </span>
-                                  <span className="text-sm font-medium text-slate-600 bg-slate-100 px-2 py-1 rounded">{dateStr}</span>
-                                  <span className="text-sm font-medium text-indigo-700 bg-indigo-50 px-2 py-1 rounded">{timeStr}</span>
-                                </div>
-                                <div className="grid grid-cols-2 gap-2 text-sm text-slate-600">
-                                  <div><span className="font-medium">Ward:</span> {group.submissions?.[0]?.admission?.ward || group.submissions?.[0]?.ward || group.submissions?.[0]?.patient?.ward || 'N/A'}</div>
-                                  <div><span className="font-medium">Unit:</span> {group.submissions?.[0]?.admission?.unitNo || group.submissions?.[0]?.unitNo || group.submissions?.[0]?.patient?.unitNo || 'N/A'}</div>
+                                  <span className="text-sm font-medium text-slate-600 bg-white/80 border border-slate-200 px-2.5 py-1 rounded-md shadow-sm">
+                                    Unit: {entry.unitNo}
+                                  </span>
                                 </div>
                               </div>
-                              <div className="ml-4">
-                                <span className="text-blue-600 text-sm font-semibold">View Checklist →</span>
+                              <div className="p-5">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                  {entry.groups.map((group, gIdx) => {
+                                    const checklistName = group.submissions?.[0]?.formTemplate?.name || 'Checklist'
+                                    const dateStr = group.date ? new Date(group.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'
+                                    const timeStr = group.auditTime || (group.submissions?.[0]?.submittedAt ? new Date(group.submissions[0].submittedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '')
+                                    return (
+                                      <button
+                                        key={gIdx}
+                                        type="button"
+                                        onClick={() => handleGroupClick(group)}
+                                        className="group flex items-start gap-3 text-left p-4 rounded-xl border border-slate-200 bg-white hover:border-indigo-300 hover:bg-indigo-50/50 shadow-sm hover:shadow transition-all duration-200"
+                                      >
+                                        <span className="flex-shrink-0 w-10 h-10 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center group-hover:bg-indigo-200">
+                                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                          </svg>
+                                        </span>
+                                        <div className="min-w-0 flex-1">
+                                          <span className="block font-semibold text-slate-800 text-sm leading-tight group-hover:text-indigo-700">{checklistName}</span>
+                                          <span className="block text-[10px] text-slate-400 mt-1">{dateStr} · {timeStr}</span>
+                                        </div>
+                                        <span className="flex-shrink-0 text-slate-400 group-hover:text-indigo-500 transition-colors">
+                                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                          </svg>
+                                        </span>
+                                      </button>
+                                    )
+                                  })}
+                                </div>
                               </div>
                             </div>
-                          </button>
-                        )
-                      })}
-                    </div>
+                          ))}
+                        </div>
+                      )
+                    })()
                   ) : admissions.length === 0 ? (
                     <div className="text-center py-8 text-slate-500 bg-yellow-50 border border-yellow-200 rounded-lg">
                       <div className="text-4xl mb-2">📭</div>
@@ -1123,7 +1176,7 @@ export function DepartmentLogs() {
                 <div className="text-center py-8 text-slate-500">
                   <p>No checklist data found for IPID: {selectedIPID}</p>
                 </div>
-              ) : !selectedIPID && admissions.length === 0 && !loadingAdmissions ? (
+              ) : !selectedIPID && admissions.length === 0 && groupsFromUHID.length === 0 && !loadingAdmissions ? (
                 <div className="text-center py-8 text-slate-500">
                   <p>No admissions found for UHID: {selectedUhid}</p>
                 </div>

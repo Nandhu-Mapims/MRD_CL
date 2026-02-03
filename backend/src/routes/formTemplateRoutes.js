@@ -4,14 +4,20 @@ const FormTemplate = require('../models/FormTemplate');
 const formTemplateController = require('../controllers/formTemplateController');
 const auth = require('../middleware/auth');
 
-// Admin: create form template
+// Admin: create form template (department required for analytics - form belongs to one department)
 router.post('/', auth('admin'), async (req, res) => {
   try {
     const { name, description, departmentIds, isCommon, isActive, sections } = req.body;
+    const deptIds = Array.isArray(departmentIds) ? departmentIds : [];
+    if (deptIds.length === 0) {
+      return res.status(400).json({
+        message: 'Please select the department this form belongs to (required for analytics).',
+      });
+    }
     const form = await FormTemplate.create({
       name,
       description,
-      departments: departmentIds || [],
+      departments: deptIds,
       isCommon: !!isCommon,
       sections: sections || [],
       isActive: isActive !== undefined ? isActive : true,
@@ -56,13 +62,16 @@ router.put('/:id', auth('admin'), async (req, res) => {
   try {
     const { id } = req.params;
     const { name, description, departmentIds, isCommon, isActive, sections } = req.body;
-    
-    console.log(`[DEBUG] Updating form template ${id} with departmentIds:`, departmentIds);
-    
+    const deptIds = Array.isArray(departmentIds) ? departmentIds : [];
+    if (deptIds.length === 0) {
+      return res.status(400).json({
+        message: 'Please select the department this form belongs to (required for analytics).',
+      });
+    }
     const updateData = {
       name,
       description,
-      departments: departmentIds || [], // Ensure it's an array
+      departments: deptIds,
       isCommon: isCommon !== undefined ? isCommon : false,
       sections: sections || [],
       isActive: isActive !== undefined ? isActive : true,

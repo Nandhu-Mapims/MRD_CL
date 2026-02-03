@@ -6,10 +6,11 @@ export function FormTemplateManagement() {
   const [departments, setDepartments] = useState([])
   const [showForm, setShowForm] = useState(false)
   const [editingForm, setEditingForm] = useState(null)
+  const [deleteConfirmId, setDeleteConfirmId] = useState(null)
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    departmentIds: [],
+    departmentId: '', // Single department this form belongs to (for analytics) - required
     isCommon: false,
     isActive: true,
   })
@@ -29,44 +30,60 @@ export function FormTemplateManagement() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    if (!formData.departmentId) {
+      alert('Please select the department this form belongs to (required for analytics).')
+      return
+    }
+    const payload = {
+      ...formData,
+      departmentIds: formData.departmentId ? [formData.departmentId] : [],
+    }
     try {
       if (editingForm) {
-        await apiClient.put(`/form-templates/${editingForm._id}`, formData)
+        await apiClient.put(`/form-templates/${editingForm._id}`, payload)
       } else {
-        await apiClient.post('/form-templates', formData)
+        await apiClient.post('/form-templates', payload)
       }
       setShowForm(false)
       setEditingForm(null)
       setFormData({
         name: '',
         description: '',
-        departmentIds: [],
+        departmentId: '',
         isCommon: false,
         isActive: true,
       })
       loadData()
     } catch (err) {
-      alert('Error saving form template')
+      const msg = err.response?.data?.message || err.message
+      alert(msg || 'Error saving form template')
       console.error(err)
     }
   }
 
   const handleEdit = (form) => {
     setEditingForm(form)
+    const firstDept = form.departments?.[0]
+    const departmentId = firstDept ? (typeof firstDept === 'object' ? firstDept._id : firstDept) : ''
     setFormData({
       name: form.name,
       description: form.description || '',
-      departmentIds: form.departments?.map((d) => (typeof d === 'object' ? d._id : d)) || [],
+      departmentId: departmentId || '',
       isCommon: form.isCommon || false,
       isActive: form.isActive !== undefined ? form.isActive : true,
     })
     setShowForm(true)
   }
 
-  const handleDelete = async (id) => {
-    if (!confirm('Are you sure you want to delete this form template?')) return
+  const handleDeleteClick = (id) => {
+    setDeleteConfirmId(id)
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteConfirmId) return
     try {
-      await apiClient.delete(`/form-templates/${id}`)
+      await apiClient.delete(`/form-templates/${deleteConfirmId}`)
+      setDeleteConfirmId(null)
       loadData()
     } catch (err) {
       alert('Error deleting form template')
@@ -125,7 +142,7 @@ export function FormTemplateManagement() {
             setFormData({
               name: '',
               description: '',
-              departmentIds: [],
+              departmentId: '',
               isCommon: false,
               isActive: true,
             })
@@ -165,59 +182,28 @@ export function FormTemplateManagement() {
               />
             </div>
 
-            <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
-              <div className="flex items-center justify-between mb-3">
-                <label className="block text-sm font-medium text-slate-700">
-                  Assign to Departments *
-                </label>
-                <span className="text-xs text-slate-500 bg-blue-50 px-2 py-1 rounded">
-                  💡 Multiple forms can be assigned to one department
-                </span>
-              </div>
-              <div className="space-y-2">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Form belongs to department (for analytics) <span className="text-red-500">*</span>
+              </label>
+              <select
+                required
+                value={formData.departmentId}
+                onChange={(e) => setFormData({ ...formData, departmentId: e.target.value })}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              >
+                <option value="">Select department</option>
                 {departments
                   .filter((d) => d.isActive !== false)
                   .map((dept) => (
-                    <label
-                      key={dept._id}
-                      className="flex items-center gap-3 p-2 hover:bg-white rounded cursor-pointer transition-colors"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={formData.departmentIds.includes(dept._id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setFormData({
-                              ...formData,
-                              departmentIds: [...formData.departmentIds, dept._id],
-                            })
-                          } else {
-                            setFormData({
-                              ...formData,
-                              departmentIds: formData.departmentIds.filter((id) => id !== dept._id),
-                            })
-                          }
-                        }}
-                        className="w-5 h-5 text-indigo-700 border-slate-300 rounded focus:ring-indigo-500"
-                      />
-                      <div className="flex-1">
-                        <span className="font-medium text-slate-800">{dept.name}</span>
-                        <span className="text-sm text-slate-500 ml-2">({dept.code})</span>
-                      </div>
-                    </label>
+                    <option key={dept._id} value={dept._id}>
+                      {dept.name} ({dept.code})
+                    </option>
                   ))}
-              </div>
-              {formData.departmentIds.length === 0 && (
-                <p className="text-sm text-blue-600 mt-2">
-                  ⚠️ Please select at least one department
-                </p>
-              )}
-              {formData.departmentIds.length > 0 && (
-                <p className="text-xs text-slate-600 mt-2">
-                  ✓ {formData.departmentIds.length} department{formData.departmentIds.length !== 1 ? 's' : ''} selected. 
-                  This form will be available to all selected departments.
-                </p>
-              )}
+              </select>
+              <p className="text-xs text-slate-500 mt-1">
+                Required for analytics — labels which department this form is for. User assignment is done in Configure → Assign Forms.
+              </p>
             </div>
 
             <div className="flex items-center gap-2">
@@ -234,8 +220,7 @@ export function FormTemplateManagement() {
             <div className="flex gap-3 pt-4">
               <button
                 type="submit"
-                disabled={formData.departmentIds.length === 0}
-                className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:bg-slate-400 disabled:cursor-not-allowed text-white px-6 py-2 rounded-lg shadow-sm transition-colors font-medium"
+                className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white px-6 py-2 rounded-lg shadow-sm transition-colors font-medium"
               >
                 {editingForm ? 'Update' : 'Create'} Form
               </button>
@@ -323,7 +308,7 @@ export function FormTemplateManagement() {
                           Edit
                         </button>
                         <button
-                          onClick={() => handleDelete(form._id)}
+                          onClick={() => handleDeleteClick(form._id)}
                           className="text-red-600 hover:text-red-700 text-sm font-medium px-3 py-1 rounded hover:bg-red-50 transition-colors"
                         >
                           Delete
@@ -336,6 +321,38 @@ export function FormTemplateManagement() {
             )}
           </tbody>
         </table>
+        </div>
+      )}
+
+      {/* Delete confirmation modal - centered, small popup */}
+      {deleteConfirmId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/50"
+            aria-hidden
+            onClick={() => setDeleteConfirmId(null)}
+          />
+          <div className="relative bg-white rounded-xl shadow-xl border border-slate-200 p-5 w-full max-w-sm">
+            <p className="text-slate-800 font-medium text-center mb-5">
+              Are you sure you want to delete this form template?
+            </p>
+            <div className="flex gap-3 justify-center">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmId(null)}
+                className="px-4 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 font-medium hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteConfirm}
+                className="px-4 py-2 rounded-lg bg-red-600 text-white font-medium hover:bg-red-700 transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
