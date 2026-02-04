@@ -10,6 +10,8 @@ export function MultiDepartmentForm() {
   const [unitNo, setUnitNo] = useState('')
   const [unitChief, setUnitChief] = useState('')
   const [chiefDoctors, setChiefDoctors] = useState([])
+  const [wards, setWards] = useState([])
+  const [units, setUnits] = useState([])
   const [checklists, setChecklists] = useState([])
   const [answers, setAnswers] = useState({})
   const [loading, setLoading] = useState(false)
@@ -20,17 +22,22 @@ export function MultiDepartmentForm() {
   // UHID is entered manually from OP card - no database lookup needed
   // Patient record will be created automatically when form is submitted
 
-  // Load chief doctors on mount
+  // Load chief doctors and wards/units on mount
   useEffect(() => {
-    const loadChiefDoctors = async () => {
+    const loadInitialData = async () => {
       try {
-        const chiefs = await apiClient.get('/chief-doctors?isActive=true')
+        const [chiefs, wardsUnits] = await Promise.all([
+          apiClient.get('/chief-doctors?isActive=true'),
+          apiClient.get('/admissions/wards-and-units'),
+        ])
         setChiefDoctors(chiefs || [])
+        setWards(wardsUnits?.wards || [])
+        setUnits(wardsUnits?.units || [])
       } catch (err) {
-        console.error('Error loading chief doctors:', err)
+        console.error('Error loading initial data:', err)
       }
     }
-    loadChiefDoctors()
+    loadInitialData()
   }, [])
 
   const loadChecklists = async () => {
@@ -212,27 +219,33 @@ export function MultiDepartmentForm() {
             <label className="block text-sm font-medium text-slate-700 mb-2">
               Ward <span className="text-red-500">*</span>
             </label>
-            <input
-              type="text"
+            <select
               value={ward}
               onChange={(e) => setWard(e.target.value)}
               className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-              placeholder="Enter Ward"
               required
-            />
+            >
+              <option value="">Select Ward</option>
+              {wards.map((w) => (
+                <option key={w} value={w}>{w}</option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">
               Unit No <span className="text-red-500">*</span>
             </label>
-            <input
-              type="text"
+            <select
               value={unitNo}
               onChange={(e) => setUnitNo(e.target.value)}
               className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-              placeholder="Enter Unit No"
               required
-            />
+            >
+              <option value="">Select Unit No</option>
+              {units.map((u) => (
+                <option key={u} value={u}>{u}</option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">

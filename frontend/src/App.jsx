@@ -18,6 +18,9 @@ import { Analytics } from './pages/Admin/Analytics'
 import { ChiefAnalytics as AdminChiefAnalytics } from './pages/Admin/ChiefAnalytics'
 import { PatientReport } from './pages/Admin/PatientReport'
 import { DepartmentLogs } from './pages/Admin/DepartmentLogs'
+import { MasterDataManagement } from './pages/Admin/MasterDataManagement'
+import { WardListManagement } from './pages/Admin/WardListManagement'
+import { UnitListManagement } from './pages/Admin/UnitListManagement'
 import { Form } from './pages/User/Form'
 import { UserManual } from './pages/User/UserManual'
 import { ProtectedRoute } from './components/ProtectedRoute'
@@ -147,6 +150,30 @@ function App() {
             element={
               <ProtectedRoute roles={['admin', 'auditor', 'chief']}>
                 <DepartmentLogs />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/master-data"
+            element={
+              <ProtectedRoute roles={['admin']}>
+                <MasterDataManagement />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/ward-list"
+            element={
+              <ProtectedRoute roles={['admin']}>
+                <WardListManagement />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/unit-list"
+            element={
+              <ProtectedRoute roles={['admin']}>
+                <UnitListManagement />
               </ProtectedRoute>
             }
           />

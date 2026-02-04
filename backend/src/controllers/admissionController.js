@@ -224,3 +224,26 @@ exports.getAllAdmissions = async (req, res) => {
   }
 };
 
+const DEFAULT_WARDS = ['A1', 'A2', 'B1', 'B2', 'C1', 'ICU', 'CCU', 'Maternity'];
+const DEFAULT_UNITS = ['Unit 1', 'Unit 2', 'Unit 3', 'Unit 4'];
+
+exports.getWardsAndUnits = async (req, res) => {
+  try {
+    const MasterData = require('../models/MasterData');
+    const doc = await MasterData.findOne({ key: 'default' }).lean();
+    if (doc?.wards?.length > 0 && doc?.units?.length > 0) {
+      return res.json({ wards: doc.wards, units: doc.units });
+    }
+    const [wardDocs, unitDocs] = await Promise.all([
+      Admission.distinct('ward').then((arr) => arr.filter(Boolean).sort()),
+      Admission.distinct('unitNo').then((arr) => arr.filter(Boolean).sort()),
+    ]);
+    const wards = wardDocs.length > 0 ? wardDocs : DEFAULT_WARDS;
+    const units = unitDocs.length > 0 ? unitDocs : DEFAULT_UNITS;
+    res.json({ wards, units });
+  } catch (err) {
+    console.error('getWardsAndUnits error', err);
+    res.json({ wards: DEFAULT_WARDS, units: DEFAULT_UNITS });
+  }
+};
+

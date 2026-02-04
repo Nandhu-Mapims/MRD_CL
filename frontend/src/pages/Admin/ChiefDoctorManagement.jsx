@@ -4,6 +4,7 @@ import { apiClient } from '../../api/client'
 export function ChiefDoctorManagement() {
   const [chiefDoctors, setChiefDoctors] = useState([])
   const [departments, setDepartments] = useState([])
+  const [designations, setDesignations] = useState([])
   const [loading, setLoading] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [formData, setFormData] = useState({
@@ -21,12 +22,14 @@ export function ChiefDoctorManagement() {
   const loadData = async () => {
     setLoading(true)
     try {
-      const [chiefs, depts] = await Promise.all([
+      const [chiefs, depts, masterData] = await Promise.all([
         apiClient.get('/chief-doctors'),
         apiClient.get('/departments'),
+        apiClient.get('/master-data'),
       ])
       setChiefDoctors(chiefs)
       setDepartments(depts)
+      setDesignations(masterData.designations || [])
     } catch (err) {
       alert('Error loading data: ' + (err.response?.data?.message || err.message))
     } finally {
@@ -124,13 +127,16 @@ export function ChiefDoctorManagement() {
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">Designation</label>
-              <input
-                type="text"
+              <select
                 value={formData.designation}
                 onChange={(e) => setFormData({ ...formData, designation: e.target.value })}
                 className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                placeholder="Unit Chief"
-              />
+              >
+                <option value="">Select designation</option>
+                {designations.map((d) => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">

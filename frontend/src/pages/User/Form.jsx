@@ -21,6 +21,8 @@ export function Form() {
   const [unitNo, setUnitNo] = useState('')
   const [unitChief, setUnitChief] = useState('')
   const [chiefDoctors, setChiefDoctors] = useState([])
+  const [wards, setWards] = useState([])
+  const [units, setUnits] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(null)
   const [showSuccessModal, setShowSuccessModal] = useState(false)
@@ -139,14 +141,17 @@ export function Form() {
       try {
         console.log('Loading form template:', formTemplateId)
         
-        // Load form template and chief doctors
-        const [form, chiefs] = await Promise.all([
+        // Load form template, chief doctors, and wards/units
+        const [form, chiefs, wardsUnits] = await Promise.all([
           apiClient.get(`/form-templates/${formTemplateId}`),
-          apiClient.get('/chief-doctors?isActive=true')
+          apiClient.get('/chief-doctors?isActive=true'),
+          apiClient.get('/admissions/wards-and-units'),
         ])
         console.log('Form template loaded:', form)
         setFormTemplate(form)
         setChiefDoctors(chiefs || [])
+        setWards(wardsUnits?.wards || [])
+        setUnits(wardsUnits?.units || [])
         
         // Check if form is assigned to chief's department
         if (user?.role === 'chief' && form) {
@@ -838,33 +843,39 @@ export function Form() {
                 <label className="block text-xs font-semibold text-slate-700">
                   Ward <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="text"
+                <select
                   value={ward}
                   onChange={(e) => setWard(e.target.value)}
                   className={`w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all ${
                     duplicateExists ? 'border-red-500 bg-red-50' : 'border-slate-300 hover:border-slate-400'
                   }`}
-                  placeholder="Enter Ward"
                   required
                   disabled={duplicateExists}
-                />
+                >
+                  <option value="">Select Ward</option>
+                  {wards.map((w) => (
+                    <option key={w} value={w}>{w}</option>
+                  ))}
+                </select>
               </div>
               <div className="space-y-1.5">
                 <label className="block text-xs font-semibold text-slate-700">
                   Unit No <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="text"
+                <select
                   value={unitNo}
                   onChange={(e) => setUnitNo(e.target.value)}
                   className={`w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all ${
                     duplicateExists ? 'border-red-500 bg-red-50' : 'border-slate-300 hover:border-slate-400'
                   }`}
-                  placeholder="Enter Unit No"
                   required
                   disabled={duplicateExists}
-                />
+                >
+                  <option value="">Select Unit No</option>
+                  {units.map((u) => (
+                    <option key={u} value={u}>{u}</option>
+                  ))}
+                </select>
               </div>
               <div className="space-y-1.5">
                 <label className="block text-xs font-semibold text-slate-700">

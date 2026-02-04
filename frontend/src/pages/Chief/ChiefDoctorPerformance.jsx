@@ -72,13 +72,6 @@ export function ChiefDoctorPerformance() {
     return 'text-red-700 bg-red-50'
   }
 
-  const getThoroughnessRank = (rate) => {
-    if (rate >= 90) return { label: 'Excellent', emoji: '⭐' }
-    if (rate >= 75) return { label: 'Good', emoji: '✅' }
-    if (rate >= 60) return { label: 'Average', emoji: '⚠️' }
-    return { label: 'Needs Improvement', emoji: '❌' }
-  }
-
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -310,21 +303,18 @@ export function ChiefDoctorPerformance() {
                 <th className="text-center p-3 font-semibold text-slate-700">Thoroughness</th>
                 <th className="text-center p-3 font-semibold text-slate-700">Patients</th>
                 <th className="text-left p-3 font-semibold text-slate-700">Departments</th>
-                <th className="text-center p-3 font-semibold text-slate-700">Performance</th>
                 <th className="text-left p-3 font-semibold text-slate-700">Last Activity</th>
               </tr>
             </thead>
             <tbody>
               {sortedDoctors.length === 0 ? (
                 <tr>
-                  <td colSpan="11" className="p-8 text-center text-slate-600">
+                  <td colSpan="10" className="p-8 text-center text-slate-600">
                     No auditor performance data available yet.
                   </td>
                 </tr>
               ) : (
-                sortedDoctors.map((doctor, index) => {
-                  const rank = getThoroughnessRank(doctor.thoroughnessRate)
-                  return (
+                sortedDoctors.map((doctor, index) => (
                     <tr key={doctor.doctor.id} className="border-b border-slate-100 hover:bg-slate-50">
                       <td className="p-3 text-slate-600">{index + 1}</td>
                       <td className="p-3">
@@ -360,48 +350,15 @@ export function ChiefDoctorPerformance() {
                       <td className="p-3 text-xs text-slate-600">
                         {doctor.departments.join(', ') || 'N/A'}
                       </td>
-                      <td className="p-3 text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          <span className="text-xl">{rank.emoji}</span>
-                          <span className="text-xs text-slate-600">{rank.label}</span>
-                        </div>
-                      </td>
                       <td className="p-3 text-xs text-slate-600">
                         {new Date(doctor.lastSubmittedAt).toLocaleDateString()}
                       </td>
                     </tr>
-                  )
-                })
+                ))
               )}
             </tbody>
           </table>
         </div>
-      </div>
-
-      {/* Legend */}
-      <div className="bg-indigo-50 rounded-lg border border-indigo-200 p-4">
-        <h4 className="font-semibold text-slate-900 mb-3">Performance Metrics Explained</h4>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-          <div>
-            <p className="text-slate-900 font-medium mb-1">Documentation Thoroughness:</p>
-            <p className="text-slate-700">
-              When an auditor marks &quot;NO&quot; (non-compliance), did they document with remarks?
-              This reflects how well auditors identify and document issues. Higher is better.
-            </p>
-          </div>
-          <div>
-            <p className="text-slate-900 font-medium mb-1">Performance Ranking:</p>
-            <ul className="text-slate-700 space-y-1">
-              <li>⭐ Excellent: ≥90% of NOs documented with remarks</li>
-              <li>✅ Good: 75-89%</li>
-              <li>⚠️ Average: 60-74%</li>
-              <li>❌ Needs Improvement: &lt;60%</li>
-            </ul>
-          </div>
-        </div>
-        <p className="text-xs text-slate-600 mt-3 italic">
-          Note: YES/NO responses reflect department compliance, not auditor performance. Auditors document what they observe.
-        </p>
       </div>
     </div>
   )

@@ -272,7 +272,7 @@ export function Layout({ children }) {
   const isActive = (path) => location.pathname === path
   
   const isConfigActive = () => {
-    return isActive('/admin/departments') || isActive('/admin/users') || isActive('/admin/assign-forms')
+    return isActive('/admin/departments') || isActive('/admin/users') || isActive('/admin/assign-forms') || isActive('/admin/ward-list') || isActive('/admin/unit-list') || isActive('/admin/master-data')
   }
 
   const isCreateFormsActive = () => {
@@ -508,8 +508,26 @@ export function Layout({ children }) {
                             <SubMenuItem
                               to="/admin/assign-forms"
                               icon="📋"
-                              label="Assign Forms"
+                              label="Assign forms"
                               isActive={isActive('/admin/assign-forms')}
+                            />
+                            <SubMenuItem
+                              to="/admin/ward-list"
+                              icon="🛏️"
+                              label="Ward list"
+                              isActive={isActive('/admin/ward-list')}
+                            />
+                            <SubMenuItem
+                              to="/admin/unit-list"
+                              icon="📑"
+                              label="Unit no list"
+                              isActive={isActive('/admin/unit-list')}
+                            />
+                            <SubMenuItem
+                              to="/admin/master-data"
+                              icon="📌"
+                              label="Designations"
+                              isActive={isActive('/admin/master-data')}
                             />
                           </SidebarSection>
                         </div>

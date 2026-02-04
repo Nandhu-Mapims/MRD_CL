@@ -21,5 +21,8 @@ router.put('/:ipid/discharge', auth(['admin', 'auditor']), admissionController.d
 // Get all admissions (with filters)
 router.get('/', auth(['admin']), admissionController.getAllAdmissions);
 
+// Get distinct wards and units (for dropdowns)
+router.get('/wards-and-units', auth(['admin', 'auditor', 'chief']), admissionController.getWardsAndUnits);
+
 module.exports = router;
 

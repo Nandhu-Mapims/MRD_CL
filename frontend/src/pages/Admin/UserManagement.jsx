@@ -4,6 +4,7 @@ import { apiClient } from '../../api/client'
 export function UserManagement() {
   const [users, setUsers] = useState([])
   const [departments, setDepartments] = useState([])
+  const [designations, setDesignations] = useState([])
   const [showForm, setShowForm] = useState(false)
   const [editingUser, setEditingUser] = useState(null)
   const [formData, setFormData] = useState({
@@ -19,7 +20,17 @@ export function UserManagement() {
   useEffect(() => {
     loadUsers()
     loadDepartments()
+    loadMasterData()
   }, [])
+
+  const loadMasterData = async () => {
+    try {
+      const data = await apiClient.get('/master-data')
+      setDesignations(data.designations || [])
+    } catch (err) {
+      console.error('Error loading master data', err)
+    }
+  }
 
   const loadDepartments = async () => {
     try {
@@ -205,13 +216,9 @@ export function UserManagement() {
                 className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               >
                 <option value="">Select designation</option>
-                <option value="Doctor">Doctor</option>
-                <option value="Chief">Chief</option>
-                <option value="MRD Staff">MRD Staff</option>
-                <option value="Lab Technician">Lab Technician</option>
-                <option value="Nurse">Nurse</option>
-                <option value="Pharmacist">Pharmacist</option>
-                <option value="Other">Other</option>
+                {designations.map((d) => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
               </select>
             </div>
 

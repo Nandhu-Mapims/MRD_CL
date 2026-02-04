@@ -89,6 +89,7 @@ app.use('/api/admissions', require('./routes/admissionRoutes'));
 app.use('/api/chief-doctors', require('./routes/chiefDoctorRoutes'));
 app.use('/api/chief', require('./routes/chiefRoutes'));
 app.use('/api/notifications', require('./routes/notificationRoutes'));
+app.use('/api/master-data', require('./routes/masterDataRoutes'));
 
 app.get('/', (_req, res) => {
   res.json({ status: 'MRD Audit API running' });
