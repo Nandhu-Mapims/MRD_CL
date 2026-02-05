@@ -1,13 +1,12 @@
+// Load config first (in production uses process.env; in dev loads .env via env.js)
+const config = require('./config/env');
 const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
-const dotenv = require('dotenv');
 const helmet = require('helmet');
 const connectDB = require('./config/db');
 const User = require('./models/User');
 const bcrypt = require('bcrypt');
-
-dotenv.config();
 
 const app = express();
 
@@ -30,7 +29,7 @@ app.use(helmet({
 // Middleware
 // CORS configuration - restrict to frontend origin
 const corsOptions = {
-  origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+  origin: config.CORS_ORIGIN,
   credentials: true,
   optionsSuccessStatus: 200
 };
@@ -95,9 +94,8 @@ app.get('/', (_req, res) => {
   res.json({ status: 'MRD Audit API running' });
 });
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+app.listen(config.PORT, () => {
+  console.log(`Server running on port ${config.PORT}`);
 });
 
 module.exports = app;

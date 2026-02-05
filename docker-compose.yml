@@ -1,7 +1,7 @@
 services:
-  # MongoDB Database
-  mongodb:
-    image: mongo:7.0
+  # MongoDB Database (service name "mongo" is used in MONGO_URI)
+  mongo:
+    image: mongo:7
     container_name: mrd-mongodb
     restart: unless-stopped
     volumes:
@@ -10,10 +10,11 @@ services:
     environment:
       - MONGO_INITDB_ROOT_USERNAME=${MONGO_ROOT_USERNAME:-admin}
       - MONGO_INITDB_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD:-changeme}
+      - MONGO_INITDB_DATABASE=${MONGO_DATABASE:-mrd_audit}
     networks:
       - mrd-network
     ports:
-      - "27017:27017"  # Expose MongoDB for Compass access
+      - "27017:27017"
     healthcheck:
       test: ["CMD-SHELL", "mongosh --eval 'db.adminCommand(\"ping\")' --quiet || exit 1"]
       interval: 10s
@@ -21,7 +22,7 @@ services:
       retries: 5
       start_period: 40s
 
-  # Backend API
+  # Backend API (reads JWT_SECRET, MONGO_URI, CORS_ORIGIN from env – set in Hostinger or .env)
   backend:
     build:
       context: ./backend
@@ -31,18 +32,14 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=5000
-      # Use host.docker.internal so backend can reach MongoDB via host port (avoids Docker DNS issues on Windows)
-      - MONGO_HOST=${MONGO_HOST:-host.docker.internal}
-      - MONGO_PORT=${MONGO_PORT:-27017}
-      - MONGO_ROOT_USERNAME=${MONGO_ROOT_USERNAME:-admin}
-      - MONGO_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD:-changeme}
-      - MONGO_DATABASE=${MONGO_DATABASE:-mrd_audit}
       - JWT_SECRET=${JWT_SECRET}
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:3000}
+      # Full URI; in Compose use service name "mongo". For Hostinger set MONGO_URI in Environment UI.
+      - MONGO_URI=${MONGO_URI:-mongodb://admin:changeme@mongo:27017/mrd_audit?authSource=admin}
     ports:
       - "5000:5000"
     depends_on:
-      mongodb:
+      mongo:
         condition: service_healthy
     volumes:
       - ./backend/logs:/app/logs

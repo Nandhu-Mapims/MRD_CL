@@ -1,10 +1,84 @@
-# Production override file
-# Use with: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-version: '3.8'
+# Production stack for https://checklist.mapims.edu.in
+# Usage: Set JWT_SECRET and MONGO_ROOT_PASSWORD in Hostinger Environment UI or .env, then:
+#   docker-compose -f docker-compose.prod.yml up -d --build
 
 services:
+  mongodb:
+    image: mongo:7
+    container_name: mrd-mongodb
+    restart: unless-stopped
+    volumes:
+      - mongodb_data:/data/db
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
+      MONGO_INITDB_DATABASE: ${MONGO_DATABASE:-mrd_audit}
+    networks:
+      - mrd-network
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --eval 'db.adminCommand(\"ping\")' --quiet || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: mrd-backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      JWT_SECRET: ${JWT_SECRET}
+      CORS_ORIGIN: https://checklist.mapims.edu.in
+      # Built from .env; for special chars in password set MONGO_URI directly in Hostinger backend env.
+      MONGO_URI: mongodb://${MONGO_ROOT_USERNAME:-admin}:${MONGO_ROOT_PASSWORD}@mongodb:27017/${MONGO_DATABASE:-mrd_audit}?authSource=admin
+    expose:
+      - "5000"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    volumes:
+      - ./backend/logs:/app/logs
+    networks:
+      - mrd-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: /api
+    container_name: mrd-frontend
+    restart: unless-stopped
+    expose:
+      - "3000"
+    depends_on:
+      - backend
+    networks:
+      - mrd-network
+
   nginx:
-    profiles: []  # Enable nginx in production
+    image: nginx:alpine
+    container_name: mrd-nginx
+    restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - mrd-network
+
+volumes:
+  mongodb_data:
+
+networks:
+  mrd-network:
+    driver: bridge

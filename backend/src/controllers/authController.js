@@ -1,13 +1,8 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const { JWT_SECRET } = require('../config/env');
 const User = require('../models/User');
 
-// Security: Require JWT_SECRET - no default fallback
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) {
-  console.error('❌ CRITICAL: JWT_SECRET environment variable is not set!');
-  process.exit(1);
-}
 const JWT_EXPIRES_IN = '8h';
 
 // Password strength validation
@@ -142,12 +137,6 @@ exports.login = async (req, res) => {
     if (mongoose.connection.readyState !== 1) {
       console.error('MongoDB not connected. Connection state:', mongoose.connection.readyState);
       return res.status(503).json({ message: 'Database connection unavailable. Please try again in a moment.' });
-    }
-    
-    // Verify JWT_SECRET is available
-    if (!JWT_SECRET) {
-      console.error('JWT_SECRET is not set!');
-      return res.status(500).json({ message: 'Server configuration error' });
     }
     
     // Populate department safely - handle cases where department might not exist

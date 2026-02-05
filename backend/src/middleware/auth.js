@@ -1,13 +1,5 @@
 const jwt = require('jsonwebtoken');
-
-// Security: Require JWT_SECRET - no default fallback
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) {
-  console.error('❌ CRITICAL: JWT_SECRET environment variable is not set!');
-  console.error('   Set JWT_SECRET in your .env file or environment variables.');
-  console.error('   Generate a strong secret: openssl rand -base64 32');
-  process.exit(1);
-}
+const { JWT_SECRET } = require('../config/env');
 
 const authMiddleware = (roles = []) => {
   if (typeof roles === 'string') {
