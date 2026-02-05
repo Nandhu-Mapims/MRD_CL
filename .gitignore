@@ -34,10 +34,20 @@ desktop.ini
 *.db
 *.sqlite
 
+# MongoDB Backups (large binary files - should not be in repo)
+mongodb-backup/
+mongodb-backup-full/
+*.bson
+
 # Temporary files
 *.tmp
 *.temp
 .cache/
+
+# SSL Certificates (sensitive)
+nginx/ssl/*.pem
+nginx/ssl/*.key
+nginx/ssl/*.crt
 
 # Backend specific
 backend/node_modules/

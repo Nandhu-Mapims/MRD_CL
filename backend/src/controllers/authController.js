@@ -137,10 +137,39 @@ exports.login = async (req, res) => {
       return res.status(400).json({ message: 'Invalid email format' });
     }
     
-    const user = await User.findOne({ email: email.toLowerCase().trim(), isActive: true }).populate('department');
+    // Check if MongoDB is connected
+    const mongoose = require('mongoose');
+    if (mongoose.connection.readyState !== 1) {
+      console.error('MongoDB not connected. Connection state:', mongoose.connection.readyState);
+      return res.status(503).json({ message: 'Database connection unavailable. Please try again in a moment.' });
+    }
+    
+    // Verify JWT_SECRET is available
+    if (!JWT_SECRET) {
+      console.error('JWT_SECRET is not set!');
+      return res.status(500).json({ message: 'Server configuration error' });
+    }
+    
+    // Populate department safely - handle cases where department might not exist
+    const user = await User.findOne({ email: email.toLowerCase().trim(), isActive: true })
+      .populate({
+        path: 'department',
+        select: 'name code',
+        // If department doesn't exist, set to null instead of throwing error
+        options: { lean: false }
+      })
+      .maxTimeMS(5000); // 5 second timeout for the query
+    
     if (!user) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
+    
+    // Verify user has passwordHash
+    if (!user.passwordHash) {
+      console.error('User found but passwordHash is missing:', user.email);
+      return res.status(500).json({ message: 'Server error' });
+    }
+    
     const match = await bcrypt.compare(password, user.passwordHash);
     if (!match) {
       return res.status(401).json({ message: 'Invalid credentials' });
@@ -152,6 +181,16 @@ exports.login = async (req, res) => {
       { expiresIn: JWT_EXPIRES_IN }
     );
 
+    // Safely extract department info - handle null or missing properties
+    let departmentInfo = null;
+    if (user.department && user.department._id) {
+      departmentInfo = {
+        id: user.department._id,
+        name: user.department.name || null,
+        code: user.department.code || null,
+      };
+    }
+
     res.json({
       token,
       user: {
@@ -160,13 +199,25 @@ exports.login = async (req, res) => {
         email: user.email,
         role: user.role,
         designation: user.designation || null,
-        department: user.department
-          ? { id: user.department._id, name: user.department.name, code: user.department.code }
-          : null,
+        department: departmentInfo,
       },
     });
   } catch (err) {
     console.error('login error', err);
+    // Log full error for debugging (server-side only)
+    console.error('Login error details:', {
+      message: err.message,
+      stack: err.stack,
+      email: req.body?.email,
+      errorName: err.name,
+    });
+    
+    // Handle specific error types
+    if (err.name === 'MongooseError' || err.message?.includes('buffering')) {
+      console.error('MongoDB connection issue during login');
+      return res.status(503).json({ message: 'Database connection issue. Please try again.' });
+    }
+    
     // Security: Generic error message to prevent user enumeration
     res.status(500).json({ message: 'Server error' });
   }
