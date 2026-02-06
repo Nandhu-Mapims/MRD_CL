@@ -215,7 +215,7 @@ exports.login = async (req, res) => {
 // List users with role 'chief' for Unit Chief dropdown (admin, auditor, chief can call)
 exports.listChiefUsers = async (req, res) => {
   try {
-    const chiefs = await User.find({ role: 'chief', isActive: true })
+    const chiefs = await User.find({ role: 'chief' })
       .select('_id name designation')
       .sort({ name: 1 });
     res.json(chiefs);

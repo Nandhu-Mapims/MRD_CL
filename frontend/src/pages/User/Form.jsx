@@ -139,7 +139,7 @@ export function Form() {
       setMessage('')
 
       try {
-        console.log('Loading form template:', formTemplateId)
+        console.log('Loading form template: meow meow meow', formTemplateId)
         
         // Load form template and wards/units first
         const [form, wardsUnits] = await Promise.all([
