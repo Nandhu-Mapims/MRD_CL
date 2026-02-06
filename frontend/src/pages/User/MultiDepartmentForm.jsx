@@ -22,17 +22,23 @@ export function MultiDepartmentForm() {
   // UHID is entered manually from OP card - no database lookup needed
   // Patient record will be created automatically when form is submitted
 
-  // Load chief doctors and wards/units on mount
+  // Load chiefs and wards/units on mount (prefer chief users, fallback to chief-doctors for production)
   useEffect(() => {
     const loadInitialData = async () => {
       try {
-        const [chiefs, wardsUnits] = await Promise.all([
-          apiClient.get('/auth/users/chiefs'),
-          apiClient.get('/admissions/wards-and-units'),
-        ])
-        setChiefDoctors(chiefs || [])
+        const wardsUnits = await apiClient.get('/admissions/wards-and-units')
         setWards(wardsUnits?.wards || [])
         setUnits(wardsUnits?.units || [])
+        let chiefs = []
+        try {
+          chiefs = await apiClient.get('/auth/users/chiefs') || []
+        } catch (chiefsErr) {
+          console.warn('Chief users endpoint failed, trying chief-doctors fallback:', chiefsErr?.response?.status)
+          try {
+            chiefs = await apiClient.get('/chief-doctors?isActive=true') || []
+          } catch (_) {}
+        }
+        setChiefDoctors(Array.isArray(chiefs) ? chiefs : [])
       } catch (err) {
         console.error('Error loading initial data:', err)
       }

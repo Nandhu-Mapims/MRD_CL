@@ -141,18 +141,30 @@ export function Form() {
       try {
         console.log('Loading form template:', formTemplateId)
         
-        // Load form template, chief users (from User Management), and wards/units
-        const [form, chiefs, wardsUnits] = await Promise.all([
+        // Load form template and wards/units first
+        const [form, wardsUnits] = await Promise.all([
           apiClient.get(`/form-templates/${formTemplateId}`),
-          apiClient.get('/auth/users/chiefs'),
           apiClient.get('/admissions/wards-and-units'),
         ])
-        console.log('Form template loaded:', form)
+        console.log('Form template loaded:', form, wardsUnits)
         setFormTemplate(form)
-        setChiefDoctors(chiefs || [])
         setWards(wardsUnits?.wards || [])
         setUnits(wardsUnits?.units || [])
-        
+
+        // Load Unit Chief list: prefer chief users (User Management), fallback to chief-doctors (production compatibility)
+        let chiefs = []
+        try {
+          chiefs = await apiClient.get('/auth/users/chiefs') || []
+        } catch (chiefsErr) {
+          console.warn('Chief users endpoint failed, trying chief-doctors fallback:', chiefsErr?.response?.status, chiefsErr?.message)
+          try {
+            chiefs = await apiClient.get('/chief-doctors?isActive=true') || []
+          } catch (fallbackErr) {
+            console.warn('Chief doctors fallback also failed:', fallbackErr?.message)
+          }
+        }
+        setChiefDoctors(Array.isArray(chiefs) ? chiefs : [])
+
         // Check if form is assigned to chief's department
         if (user?.role === 'chief' && form) {
           // Get user's department
