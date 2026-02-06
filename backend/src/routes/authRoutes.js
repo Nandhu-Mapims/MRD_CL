@@ -10,6 +10,8 @@ router.post('/login', authController.login);
 
 // Admin-only routes
 router.post('/users', auth('admin'), authController.registerUser);
+// Unit Chief dropdown: list chief users (admin, auditor, chief)
+router.get('/users/chiefs', auth(['admin', 'auditor', 'chief']), authController.listChiefUsers);
 router.get('/users', auth('admin'), authController.listUsers);
 router.put('/users/:id', auth('admin'), authController.updateUser);
 router.delete('/users/:id', auth('admin'), authController.deleteUser);

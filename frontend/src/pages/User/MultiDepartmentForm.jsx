@@ -27,7 +27,7 @@ export function MultiDepartmentForm() {
     const loadInitialData = async () => {
       try {
         const [chiefs, wardsUnits] = await Promise.all([
-          apiClient.get('/chief-doctors?isActive=true'),
+          apiClient.get('/auth/users/chiefs'),
           apiClient.get('/admissions/wards-and-units'),
         ])
         setChiefDoctors(chiefs || [])

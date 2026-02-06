@@ -212,6 +212,19 @@ exports.login = async (req, res) => {
   }
 };
 
+// List users with role 'chief' for Unit Chief dropdown (admin, auditor, chief can call)
+exports.listChiefUsers = async (req, res) => {
+  try {
+    const chiefs = await User.find({ role: 'chief', isActive: true })
+      .select('_id name designation')
+      .sort({ name: 1 });
+    res.json(chiefs);
+  } catch (err) {
+    console.error('listChiefUsers error', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 exports.listUsers = async (req, res) => {
   try {
     const users = await User.find()

@@ -141,10 +141,10 @@ export function Form() {
       try {
         console.log('Loading form template:', formTemplateId)
         
-        // Load form template, chief doctors, and wards/units
+        // Load form template, chief users (from User Management), and wards/units
         const [form, chiefs, wardsUnits] = await Promise.all([
           apiClient.get(`/form-templates/${formTemplateId}`),
-          apiClient.get('/chief-doctors?isActive=true'),
+          apiClient.get('/auth/users/chiefs'),
           apiClient.get('/admissions/wards-and-units'),
         ])
         console.log('Form template loaded:', form)
