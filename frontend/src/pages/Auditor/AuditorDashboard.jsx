@@ -28,9 +28,13 @@ export function AuditorDashboard() {
   }
 
   const loadDashboardData = async () => {
+    if (!user?._id) {
+      setLoading(false)
+      return
+    }
     setLoading(true)
     try {
-      const allSubmissions = await apiClient.get(`/audits?submittedBy=${user?._id || ''}`)
+      const allSubmissions = await apiClient.get(`/audits?submittedBy=${user._id}`)
 
       const totalSubmissions = allSubmissions.length
       const uniquePatients = new Set(allSubmissions.map(s => s.uhid)).size
@@ -138,6 +142,7 @@ export function AuditorDashboard() {
             <table className="w-full text-sm">
               <thead className="bg-slate-100 border-b border-slate-200">
                 <tr>
+                  <th className="text-left p-3 font-semibold text-slate-700 w-12">#</th>
                   <th className="text-left p-3 font-semibold text-slate-700">Date</th>
                   <th className="text-left p-3 font-semibold text-slate-700">UHID</th>
                   <th className="text-left p-3 font-semibold text-slate-700">IPID</th>
@@ -148,8 +153,9 @@ export function AuditorDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {recentSubmissions.map((sub) => (
+                {recentSubmissions.map((sub, idx) => (
                   <tr key={sub._id} className="border-b border-slate-100 hover:bg-slate-50">
+                    <td className="p-3 text-slate-500 font-medium">{idx + 1}</td>
                     <td className="p-3 text-slate-600">
                       {new Date(sub.submittedAt).toLocaleDateString()}
                     </td>

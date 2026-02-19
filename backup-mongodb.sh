@@ -6,9 +6,10 @@ set -e
 
 MONGO_HOST="${MONGO_HOST:-localhost}"
 MONGO_PORT="${MONGO_PORT:-27017}"
-MONGO_DATABASE="${MONGO_DATABASE:-mrd_audit}"
-MONGO_USER="${MONGO_ROOT_USERNAME:-admin}"
-MONGO_PASSWORD="${MONGO_ROOT_PASSWORD:-}"
+MONGO_DATABASE="${MONGO_DATABASE:-MRD_CL}"
+MONGO_USER="${MONGO_USER:-${MONGO_ROOT_USERNAME:-}}"
+MONGO_PASSWORD="${MONGO_PASSWORD:-${MONGO_ROOT_PASSWORD:-}}"
+MONGO_AUTH_DB="${MONGO_AUTH_DB:-admin}"
 OUT_DIR="${OUT_DIR:-mongodb-backup-full}"
 
 echo "========================================="
@@ -24,9 +25,15 @@ echo ""
 
 mkdir -p "$OUT_DIR"
 
-if [ -n "$MONGO_PASSWORD" ]; then
+if ! command -v mongodump >/dev/null 2>&1; then
+  echo "Error: mongodump command not found."
+  echo "Install MongoDB Database Tools and add them to PATH."
+  exit 1
+fi
+
+if [ -n "$MONGO_USER" ] && [ -n "$MONGO_PASSWORD" ]; then
   mongodump --host "$MONGO_HOST" --port "$MONGO_PORT" \
-    --username "$MONGO_USER" --password "$MONGO_PASSWORD" --authenticationDatabase admin \
+    --username "$MONGO_USER" --password "$MONGO_PASSWORD" --authenticationDatabase "$MONGO_AUTH_DB" \
     --db "$MONGO_DATABASE" --out "$OUT_DIR"
 else
   mongodump --host "$MONGO_HOST" --port "$MONGO_PORT" \

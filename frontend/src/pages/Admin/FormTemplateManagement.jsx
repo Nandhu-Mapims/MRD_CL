@@ -14,18 +14,25 @@ export function FormTemplateManagement() {
     isCommon: false,
     isActive: true,
   })
+  const [loadError, setLoadError] = useState('')
 
   useEffect(() => {
     loadData()
   }, [])
 
   const loadData = async () => {
-    const [formsData, deptsData] = await Promise.all([
-      apiClient.get('/form-templates'),
-      apiClient.get('/departments'),
-    ])
-    setForms(formsData)
-    setDepartments(deptsData)
+    try {
+      setLoadError('')
+      const [formsData, deptsData] = await Promise.all([
+        apiClient.get('/form-templates'),
+        apiClient.get('/departments'),
+      ])
+      setForms(Array.isArray(formsData) ? formsData : [])
+      setDepartments(Array.isArray(deptsData) ? deptsData : [])
+    } catch (err) {
+      console.error('Error loading form templates', err)
+      setLoadError(err.response?.data?.message || err.message || 'Failed to load form templates')
+    }
   }
 
   const handleSubmit = async (e) => {
@@ -130,6 +137,12 @@ export function FormTemplateManagement() {
 
   return (
     <div className="space-y-4 sm:space-y-5 md:space-y-6">
+      {loadError && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-700 text-sm flex items-center justify-between">
+          <span>{loadError}</span>
+          <button type="button" onClick={loadData} className="text-red-600 hover:text-red-800 font-medium">Retry</button>
+        </div>
+      )}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
         <div>
           <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-800">Form Templates</h2>
@@ -244,9 +257,10 @@ export function FormTemplateManagement() {
           <table className="w-full">
           <thead className="bg-slate-50 border-b border-slate-200">
             <tr>
+              <th className="text-left px-6 py-4 font-semibold text-sm text-slate-700 uppercase tracking-wide w-12">#</th>
               <th className="text-left px-6 py-4 font-semibold text-sm text-slate-700 uppercase tracking-wide">Form Name</th>
               <th className="text-left px-6 py-4 font-semibold text-sm text-slate-700 uppercase tracking-wide">Description</th>
-              <th className="text-left px-6 py-4 font-semibold text-sm text-slate-700 uppercase tracking-wide">Assigned Departments</th>
+              <th className="text-left px-6 py-4 font-semibold text-sm text-slate-700 uppercase tracking-wide">Departments</th>
               <th className="text-left px-6 py-4 font-semibold text-sm text-slate-700 uppercase tracking-wide">Status</th>
               <th className="text-center px-6 py-4 font-semibold text-sm text-slate-700 uppercase tracking-wide">Actions</th>
             </tr>
@@ -254,37 +268,33 @@ export function FormTemplateManagement() {
           <tbody className="divide-y divide-slate-200">
             {forms.length === 0 ? (
               <tr>
-                <td colSpan="5" className="px-6 py-8 text-center text-slate-500">
+                <td colSpan="6" className="px-6 py-8 text-center text-slate-500">
                   No form templates created yet. Click "Create New Form" to get started.
                 </td>
               </tr>
             ) : (
-              forms.map((form) => {
+              forms.map((form, idx) => {
                 const assignedDepts = getFormDepartments(form)
                 return (
                   <tr key={form._id} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-6 py-4 text-slate-500 font-medium">{idx + 1}</td>
                     <td className="px-6 py-4 font-medium text-slate-800">{form.name}</td>
                     <td className="px-6 py-4 text-sm text-slate-600 max-w-xs truncate">
                       {form.description || '-'}
                     </td>
                     <td className="px-6 py-4">
                       {assignedDepts.length === 0 ? (
-                        <span className="text-sm text-amber-600 font-medium">Not Assigned</span>
+                        <span className="text-sm text-amber-600 font-medium">None</span>
                       ) : (
-                        <div className="space-y-2">
-                          <div className="flex flex-wrap gap-2">
-                            {assignedDepts.map((dept) => (
-                              <span
-                                key={dept._id}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-full text-xs font-medium"
-                              >
-                                {dept.name} ({dept.code})
-                              </span>
-                            ))}
-                          </div>
-                          <div className="text-[10px] text-slate-500 italic">
-                            {assignedDepts.length} department{assignedDepts.length !== 1 ? 's' : ''} can access this form
-                          </div>
+                        <div className="flex flex-wrap gap-2">
+                          {assignedDepts.map((dept) => (
+                            <span
+                              key={dept._id}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-full text-xs font-medium"
+                            >
+                              {dept.name} ({dept.code})
+                            </span>
+                          ))}
                         </div>
                       )}
                     </td>

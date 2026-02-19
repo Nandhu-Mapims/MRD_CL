@@ -93,7 +93,7 @@ export function Dashboard() {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">Admin Dashboard</h1>
-              <p className="mt-1 text-sm text-slate-600">Comprehensive department-wise compliance and case analytics</p>
+              <p className="mt-1 text-sm text-slate-600">Comprehensive department-wise compliance and case analytics (by form&apos;s assigned department)</p>
             </div>
             <span className="inline-flex items-center rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 px-3 py-1 text-xs font-semibold text-white shadow-lg shadow-indigo-500/50">
               ADMIN ROLE
@@ -112,7 +112,7 @@ export function Dashboard() {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">Admin Dashboard</h1>
-              <p className="mt-1 text-sm text-slate-600">Department-wise compliance and case analytics</p>
+              <p className="mt-1 text-sm text-slate-600">Department-wise compliance and case analytics (by form&apos;s assigned department)</p>
             </div>
             <span className="inline-flex items-center rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 px-3 py-1 text-xs font-semibold text-white shadow-lg shadow-indigo-500/50">
               ADMIN ROLE
@@ -143,7 +143,7 @@ export function Dashboard() {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">Admin Dashboard</h1>
-              <p className="mt-1 text-sm text-slate-600">Department-wise compliance and case analytics</p>
+              <p className="mt-1 text-sm text-slate-600">Department-wise compliance and case analytics (by form&apos;s assigned department)</p>
             </div>
             <span className="inline-flex items-center rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 px-3 py-1 text-xs font-semibold text-white shadow-lg shadow-indigo-500/50">
               ADMIN ROLE
@@ -198,7 +198,7 @@ export function Dashboard() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">Admin Dashboard</h1>
-            <p className="mt-1 text-sm text-slate-600">Comprehensive department-wise compliance and case analytics</p>
+            <p className="mt-1 text-sm text-slate-600">Comprehensive department-wise compliance and case analytics (by form&apos;s assigned department)</p>
           </div>
           <span className="inline-flex items-center rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 px-3 py-1 text-xs font-semibold text-white shadow-lg shadow-indigo-500/50">
             ADMIN ROLE
@@ -442,12 +442,13 @@ export function Dashboard() {
       <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-xl overflow-hidden border border-indigo-200/50">
         <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border-b border-indigo-200/50 px-5 sm:px-6 py-4 sm:py-5">
           <h3 className="text-base sm:text-lg font-semibold text-slate-900">Department-wise Statistics</h3>
-          <p className="text-slate-600 text-xs sm:text-sm mt-1">Detailed breakdown by department</p>
+          <p className="text-slate-600 text-xs sm:text-sm mt-1">By form&apos;s assigned department (not submitter&apos;s)</p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[800px]">
             <thead className="bg-slate-50">
               <tr>
+                <th className="px-4 sm:px-6 py-3 text-left text-xs font-bold text-slate-700 uppercase tracking-wider w-12">#</th>
                 <th className="px-4 sm:px-6 py-3 text-left text-xs font-bold text-slate-700 uppercase tracking-wider">
                   Department
                 </th>
@@ -474,6 +475,7 @@ export function Dashboard() {
                   key={index} 
                   className="hover:bg-blue-50 transition-colors duration-150"
                 >
+                  <td className="px-4 sm:px-6 py-4 text-slate-500 font-medium">{index + 1}</td>
                   <td className="px-4 sm:px-6 py-4">
                     <div className="font-semibold text-sm sm:text-base text-slate-800">{dept.fullName}</div>
                     <div className="text-xs text-slate-500">({dept.name})</div>

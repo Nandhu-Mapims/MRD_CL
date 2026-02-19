@@ -104,8 +104,13 @@ export function ChiefAnalytics() {
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
           <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Total Submissions</div>
-          <div className="text-2xl font-bold text-indigo-600">{summary.totalSubmissions ?? 0}</div>
-          <div className="text-xs text-slate-500 mt-1">Checklist items under chiefs</div>
+          <div className="text-2xl font-bold text-indigo-600">
+            {summary.totalChecklistFields ?? summary.totalSubmissions ?? 0}
+            <span className="text-base font-normal text-slate-600 ml-1">
+              (from {summary.totalSubmissions ?? 0} form submissions)
+            </span>
+          </div>
+          <div className="text-xs text-slate-500 mt-1">Checklist fields from submitted forms</div>
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
           <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">NO Responses</div>
@@ -136,6 +141,7 @@ export function ChiefAnalytics() {
             <table className="w-full text-sm">
               <thead className="bg-slate-100 border-b border-slate-200">
                 <tr>
+                  <th className="text-left p-3 font-semibold text-slate-700 w-12">#</th>
                   <th className="text-left p-3 font-semibold text-slate-700">Chief Name</th>
                   <th className="text-right p-3 font-semibold text-slate-700">Submissions</th>
                   <th className="text-right p-3 font-semibold text-slate-700">YES</th>
@@ -154,6 +160,7 @@ export function ChiefAnalytics() {
                     key={chief.chiefName || idx}
                     className="border-b border-slate-100 hover:bg-slate-50"
                   >
+                    <td className="p-3 text-slate-500 font-medium">{idx + 1}</td>
                     <td className="p-3 font-medium text-slate-800">{chief.chiefName}</td>
                     <td className="p-3 text-right text-slate-700">{chief.totalSubmissions}</td>
                     <td className="p-3 text-right text-emerald-600">{chief.yesCount}</td>

@@ -168,6 +168,7 @@ export function FormBuilder() {
         <table className="w-full text-sm">
           <thead className="bg-slate-50">
             <tr>
+              <th className="text-left px-3 py-2 w-12">#</th>
               <th className="text-left px-3 py-2">Label</th>
               <th className="text-left px-3 py-2">Scope</th>
               <th className="text-left px-3 py-2">Mandatory</th>
@@ -176,8 +177,9 @@ export function FormBuilder() {
             </tr>
           </thead>
           <tbody>
-            {items.map((it) => (
+            {items.map((it, idx) => (
               <tr key={it._id} className="border-t">
+                <td className="px-3 py-2 text-slate-500 font-medium">{idx + 1}</td>
                 <td className="px-3 py-2">{it.label}</td>
                 <td className="px-3 py-2 text-xs">
                   {it.departmentScope === 'ALL'

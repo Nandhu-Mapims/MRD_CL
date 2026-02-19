@@ -171,6 +171,7 @@ export function ExportSubmissions() {
             <table className="w-full min-w-[1200px] text-xs sm:text-sm">
               <thead className="bg-blue-50">
                 <tr>
+                  <th className="px-2 sm:px-3 py-2 text-left font-semibold text-slate-700 w-12">#</th>
                   <th className="px-2 sm:px-3 py-2 text-left font-semibold text-slate-700">Date</th>
                   <th className="px-2 sm:px-3 py-2 text-left font-semibold text-slate-700">Department</th>
                   <th className="px-2 sm:px-3 py-2 text-left font-semibold text-slate-700">UHID</th>
@@ -183,6 +184,7 @@ export function ExportSubmissions() {
               <tbody className="divide-y divide-slate-200">
                 {exportData.data.slice(0, 50).map((row, idx) => (
                   <tr key={idx} className="hover:bg-blue-50">
+                    <td className="px-2 sm:px-3 py-2 text-slate-500 font-medium">{idx + 1}</td>
                     <td className="px-2 sm:px-3 py-2">{row['Submission Date']}</td>
                     <td className="px-2 sm:px-3 py-2">{row['Department']}</td>
                     <td className="px-2 sm:px-3 py-2">{row['UHID']}</td>

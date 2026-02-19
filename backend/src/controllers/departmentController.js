@@ -1,6 +1,7 @@
 const Department = require('../models/Department');
 const AuditSubmission = require('../models/AuditSubmission');
 const User = require('../models/User');
+const FormTemplate = require('../models/FormTemplate');
 
 exports.createDepartment = async (req, res) => {
   try {
@@ -73,17 +74,24 @@ exports.getDepartmentUsers = async (_req, res) => {
 exports.getDepartmentLogs = async (req, res) => {
   try {
     const { departmentId } = req.query;
-    const userId = req.user.sub;
+    const userId = req.user?.sub;
+    if (!userId) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
     const User = require('../models/User');
     const user = await User.findById(userId).populate('department');
-    
-    // Allow all users to view all departments
-    let targetDepartmentId = departmentId;
+    if (!user) {
+      return res.status(401).json({ message: 'User not found' });
+    }
 
-    // Get all departments if no specific department requested
-    const departments = targetDepartmentId 
+    // Allow all users to view all departments
+    const targetDepartmentId = departmentId;
+
+    // Get all departments if no specific department requested; filter out null if id invalid
+    const rawDepartments = targetDepartmentId
       ? [await Department.findById(targetDepartmentId)]
       : await Department.find({ isActive: true }).sort({ name: 1 });
+    const departments = rawDepartments.filter(Boolean);
 
     console.log(`[getDepartmentLogs] Found ${departments.length} active departments for user ${user.role}:`, departments.map(d => d.name));
     
@@ -128,10 +136,14 @@ exports.getDepartmentLogs = async (req, res) => {
             // Take the first submission's data as representative
             firstSubmissionId: { $first: '$_id' },
             patientName: { $first: '$patientName' },
+            ipid: { $first: '$ipid' },
             submittedAt: { $first: '$submittedAt' },
             createdAt: { $first: '$createdAt' },
             updatedAt: { $max: '$updatedAt' },
             submittedBy: { $first: '$submittedBy' },
+            formTemplate: { $first: '$formTemplate' },
+            auditDate: { $first: '$auditDate' },
+            auditTime: { $first: '$auditTime' },
             // Count how many checklist items in this form
             itemCount: { $sum: 1 }
           }
@@ -141,22 +153,37 @@ exports.getDepartmentLogs = async (req, res) => {
       ]);
 
       // Populate the submittedBy field
-      const User = require('../models/User');
-      const Patient = require('../models/Patient');
-      
-      const submissions = await Promise.all(formSubmissions.map(async (formSub) => {
-        const user = await User.findById(formSub.submittedBy).select('name email');
+      const userIds = [...new Set(formSubmissions.map((s) => String(s.submittedBy)).filter(Boolean))];
+      const formTemplateIds = [...new Set(formSubmissions.map((s) => String(s.formTemplate)).filter(Boolean))];
+
+      const [usersList, formTemplates] = await Promise.all([
+        userIds.length > 0 ? User.find({ _id: { $in: userIds } }).select('name email designation') : [],
+        formTemplateIds.length > 0 ? FormTemplate.find({ _id: { $in: formTemplateIds } }).select('name') : [],
+      ]);
+
+      const usersById = new Map(usersList.map((u) => [String(u._id), u]));
+      const formsById = new Map(formTemplates.map((f) => [String(f._id), f]));
+
+      const submissions = formSubmissions.map((formSub) => {
+        const user = usersById.get(String(formSub.submittedBy));
+        const formTemplate = formsById.get(String(formSub.formTemplate));
+
         return {
           _id: formSub.firstSubmissionId,
           uhid: formSub._id.uhid,
           patientName: formSub.patientName,
+          ipid: formSub.ipid || null,
           submittedAt: formSub.submittedAt,
           createdAt: formSub.createdAt || formSub.submittedAt,
           updatedAt: formSub.updatedAt || formSub.submittedAt,
-          submittedBy: user ? { name: user.name, email: user.email } : null,
+          submittedBy: user ? { name: user.name, email: user.email, designation: user.designation } : null,
+          formTemplate: formSub.formTemplate || null,
+          formTemplateName: formTemplate?.name || 'Unknown Form',
+          auditDate: formSub.auditDate || null,
+          auditTime: formSub.auditTime || null,
           itemCount: formSub.itemCount
         };
-      }));
+      });
 
       // Count unique forms (unique UHIDs)
       const uniqueUHIDs = new Set();
@@ -308,10 +335,15 @@ exports.getDepartmentLogs = async (req, res) => {
             id: sub._id,
             uhid: sub.uhid,
             patientName: sub.patientName,
+            ipid: sub.ipid || null,
             submittedAt: sub.submittedAt,
             updatedAt: sub.updatedAt || sub.submittedAt,
             isEdited: updatedAt.getTime() - createdAt.getTime() > 1000,
-            submittedBy: sub.submittedBy?.name || 'Unknown',
+            submittedBy: sub.submittedBy ? { name: sub.submittedBy.name, email: sub.submittedBy.email, designation: sub.submittedBy.designation } : { name: 'Unknown' },
+            formTemplate: sub.formTemplate || null,
+            formTemplateName: sub.formTemplateName || 'Unknown Form',
+            auditDate: sub.auditDate || null,
+            auditTime: sub.auditTime || null,
           };
         }),
       });

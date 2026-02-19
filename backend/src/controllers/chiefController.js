@@ -37,14 +37,21 @@ exports.getChiefPatients = async (req, res) => {
           admissionDate: sub.admission?.admissionDate,
           departments: new Set(),
           totalSubmissions: 0,
-          submissionsWithActions: 0,
+          noCount: 0,
+          noWithActions: 0,
           lastSubmittedAt: sub.submittedAt,
         };
       }
 
       patientsMap[ipid].totalSubmissions++;
-      if (sub.corrective || sub.preventive) {
-        patientsMap[ipid].submissionsWithActions++;
+      const isNo = (sub.responseValue || sub.yesNoNa || '').toString().toUpperCase() === 'NO';
+      if (isNo) {
+        patientsMap[ipid].noCount++;
+        const cor = (sub.corrective || '').trim();
+        const prev = (sub.preventive || '').trim();
+        if (cor.length > 0 && prev.length > 0) {
+          patientsMap[ipid].noWithActions++;
+        }
       }
       if (sub.department) {
         patientsMap[ipid].departments.add(sub.department.name);
@@ -86,16 +93,17 @@ exports.getChiefPatientSubmissions = async (req, res) => {
       .populate('patient', 'uhid patientName')
       .populate('admission', 'ipid ward unitNo admissionDate')
       .populate('department', 'name code')
-      .populate('checklistItemId', 'label description responseType isMandatory')
-      .populate('submittedBy', 'name email')
+      .populate('checklistItemId', 'label description responseType isMandatory section order')
+      .populate('submittedBy', 'name email designation')
       .populate('correctivePreventiveBy', 'name email')
-      .sort({ submittedAt: -1 });
+      .sort({ submittedAt: -1 })
+      .lean();
 
     if (submissions.length === 0) {
       return res.status(404).json({ message: 'No submissions found for this IPID and chief' });
     }
 
-    // Group by department
+    // Group by department; sort submissions by section then order for consistent display
     const byDepartment = {};
     submissions.forEach((sub) => {
       const deptId = sub.department?._id?.toString() || 'unknown';
@@ -106,6 +114,16 @@ exports.getChiefPatientSubmissions = async (req, res) => {
         };
       }
       byDepartment[deptId].submissions.push(sub);
+    });
+    Object.values(byDepartment).forEach((d) => {
+      d.submissions.sort((a, b) => {
+        const secA = (a.checklistItemId?.section || '').toString();
+        const secB = (b.checklistItemId?.section || '').toString();
+        if (secA !== secB) return secA.localeCompare(secB);
+        const ordA = a.checklistItemId?.order ?? 0;
+        const ordB = b.checklistItemId?.order ?? 0;
+        return ordA - ordB;
+      });
     });
 
     res.json({
@@ -144,8 +162,16 @@ exports.updateCorrectivePreventive = async (req, res) => {
       });
     }
 
-    submission.corrective = corrective?.trim() || '';
-    submission.preventive = preventive?.trim() || '';
+    const correctiveVal = corrective?.trim() || '';
+    const preventiveVal = preventive?.trim() || '';
+    if (!correctiveVal && !preventiveVal) {
+      return res.status(400).json({
+        message: 'Please enter at least one of Corrective Action or Preventive Action.',
+      });
+    }
+
+    submission.corrective = correctiveVal;
+    submission.preventive = preventiveVal;
     submission.correctivePreventiveBy = userId;
     submission.correctivePreventiveAt = new Date();
 
@@ -186,38 +212,55 @@ exports.getChiefAnalytics = async (req, res) => {
     fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
 
     const allSubmissions = await AuditSubmission.find({})
-      .select('unitChief ipid uhid responseValue yesNoNa corrective preventive submittedAt')
+      .select('unitChief ipid uhid department formTemplate responseValue yesNoNa corrective preventive submittedAt')
       .lean();
 
     const chiefsMap = {};
-    const chiefsTrendMap = {}; // chiefName -> { last7: count, prev7: count }
+    const chiefsTrendMap = {}; // chiefName -> { last7SessionKeys: Set, prev7SessionKeys: Set }
 
     allSubmissions.forEach((sub) => {
       const chiefName = (sub.unitChief || '').trim();
       if (!chiefName) return;
 
+      const deptId = sub.department ? (sub.department._id ? sub.department._id.toString() : sub.department.toString()) : '';
+      const formId = sub.formTemplate ? (sub.formTemplate._id ? sub.formTemplate._id.toString() : sub.formTemplate.toString()) : '';
+      // Use second-level granularity so all rows from the same form submission get the same key (one submit = many checklist rows)
+      const submittedAtMs = sub.submittedAt ? new Date(sub.submittedAt).getTime() : 0;
+      const submittedAtSec = Math.floor(submittedAtMs / 1000);
+      const sessionKey = `${chiefName}|${(sub.uhid || '')}|${(sub.ipid || '')}|${deptId}|${formId}|${submittedAtSec}`;
+
       if (!chiefsMap[chiefName]) {
         chiefsMap[chiefName] = {
           chiefName,
-          totalSubmissions: 0,
+          sessionKeys: new Set(),
           yesCount: 0,
           noCount: 0,
+          itemCount: 0,
+          compliantCount: 0,
           patients: new Set(),
           ipids: new Set(),
           withActionsCount: 0,
           lastSubmittedAt: null,
         };
-        chiefsTrendMap[chiefName] = { last7: 0, prev7: 0 };
+        chiefsTrendMap[chiefName] = { last7SessionKeys: new Set(), prev7SessionKeys: new Set() };
       }
 
       const stats = chiefsMap[chiefName];
-      stats.totalSubmissions++;
-      const val = (sub.responseValue || sub.yesNoNa || '').toString().toUpperCase();
+      stats.sessionKeys.add(sessionKey);
+      stats.itemCount++;
+      const val = (sub.responseValue || sub.yesNoNa || '').toString().trim().toUpperCase();
       if (val === 'YES') stats.yesCount++;
       else if (val === 'NO') stats.noCount++;
       if (sub.ipid) stats.ipids.add(sub.ipid);
       if (sub.uhid) stats.patients.add(sub.uhid);
       if (sub.corrective || sub.preventive) stats.withActionsCount++;
+
+      // Compliance: only NO is negative; YES, N/A, text/select = positive; NO with both corrective+preventive filled = positive
+      const cor = (sub.corrective || '').trim();
+      const prev = (sub.preventive || '').trim();
+      const hasActions = cor.length > 0 && prev.length > 0;
+      const isCompliant = val === 'NO' ? hasActions : (val === 'YES' || val === 'N/A' || val === 'NA' || val.length > 0);
+      if (isCompliant) stats.compliantCount++;
       if (sub.submittedAt) {
         if (!stats.lastSubmittedAt || sub.submittedAt > stats.lastSubmittedAt) {
           stats.lastSubmittedAt = sub.submittedAt;
@@ -226,34 +269,37 @@ exports.getChiefAnalytics = async (req, res) => {
 
       const subDate = sub.submittedAt ? new Date(sub.submittedAt) : null;
       if (subDate) {
-        if (subDate >= sevenDaysAgo) chiefsTrendMap[chiefName].last7++;
-        else if (subDate >= fourteenDaysAgo) chiefsTrendMap[chiefName].prev7++;
+        if (subDate >= sevenDaysAgo) chiefsTrendMap[chiefName].last7SessionKeys.add(sessionKey);
+        else if (subDate >= fourteenDaysAgo) chiefsTrendMap[chiefName].prev7SessionKeys.add(sessionKey);
       }
     });
 
     const chiefs = Object.values(chiefsMap).map((s) => ({
       chiefName: s.chiefName,
-      totalSubmissions: s.totalSubmissions,
+      totalSubmissions: s.sessionKeys.size,
       yesCount: s.yesCount,
       noCount: s.noCount,
       totalPatients: s.ipids.size,
       withActionsCount: s.withActionsCount,
-      complianceRate: s.totalSubmissions > 0
-        ? parseFloat(((s.yesCount / s.totalSubmissions) * 100).toFixed(1))
+      complianceRate: s.itemCount > 0
+        ? parseFloat(((s.compliantCount / s.itemCount) * 100).toFixed(1))
         : 0,
       actionCoverageRate: s.noCount > 0
         ? parseFloat(((s.withActionsCount / s.noCount) * 100).toFixed(1))
         : 100,
       lastSubmittedAt: s.lastSubmittedAt,
-      trendLast7: chiefsTrendMap[s.chiefName]?.last7 ?? 0,
-      trendPrev7: chiefsTrendMap[s.chiefName]?.prev7 ?? 0,
+      trendLast7: chiefsTrendMap[s.chiefName]?.last7SessionKeys?.size ?? 0,
+      trendPrev7: chiefsTrendMap[s.chiefName]?.prev7SessionKeys?.size ?? 0,
     }));
 
     chiefs.sort((a, b) => b.totalSubmissions - a.totalSubmissions);
 
+    const totalFormSubmissions = chiefs.reduce((sum, c) => sum + c.totalSubmissions, 0);
+    const totalChecklistFields = Object.values(chiefsMap).reduce((sum, s) => sum + s.itemCount, 0);
     const summary = {
       totalChiefs: chiefs.length,
-      totalSubmissions: chiefs.reduce((sum, c) => sum + c.totalSubmissions, 0),
+      totalSubmissions: totalFormSubmissions,
+      totalChecklistFields,
       totalNoResponses: chiefs.reduce((sum, c) => sum + c.noCount, 0),
       totalWithActions: chiefs.reduce((sum, c) => sum + c.withActionsCount, 0),
     };
@@ -296,6 +342,7 @@ exports.getMyAnalytics = async (req, res) => {
       totalSubmissions: 0,
       yesCount: 0,
       noCount: 0,
+      compliantCount: 0,
       withActionsCount: 0,
       ipids: new Set(),
       uhids: new Set(),
@@ -303,12 +350,18 @@ exports.getMyAnalytics = async (req, res) => {
     const byDept = {};
     submissions.forEach((sub) => {
       summary.totalSubmissions++;
-      const val = (sub.responseValue || sub.yesNoNa || '').toString().toUpperCase();
+      const val = (sub.responseValue || sub.yesNoNa || '').toString().trim().toUpperCase();
       if (val === 'YES') summary.yesCount++;
       else if (val === 'NO') summary.noCount++;
       if (sub.corrective || sub.preventive) summary.withActionsCount++;
       if (sub.ipid) summary.ipids.add(sub.ipid);
       if (sub.uhid) summary.uhids.add(sub.uhid);
+
+      const cor = (sub.corrective || '').trim();
+      const prev = (sub.preventive || '').trim();
+      const hasActions = cor.length > 0 && prev.length > 0;
+      const isCompliant = val === 'NO' ? hasActions : (val === 'YES' || val === 'N/A' || val === 'NA' || val.length > 0);
+      if (isCompliant) summary.compliantCount++;
 
       const deptId = sub.department?._id?.toString() || 'unknown';
       const deptName = sub.department?.name || 'Unknown';
@@ -339,7 +392,7 @@ exports.getMyAnalytics = async (req, res) => {
 
     const totalPatients = summary.ipids.size;
     const complianceRate = summary.totalSubmissions > 0
-      ? parseFloat(((summary.yesCount / summary.totalSubmissions) * 100).toFixed(1))
+      ? parseFloat(((summary.compliantCount / summary.totalSubmissions) * 100).toFixed(1))
       : 0;
     const actionCoverageRate = summary.noCount > 0
       ? parseFloat(((summary.withActionsCount / summary.noCount) * 100).toFixed(1))

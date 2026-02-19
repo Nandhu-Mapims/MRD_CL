@@ -6,10 +6,17 @@ export function DepartmentManagement() {
   const [name, setName] = useState('')
   const [code, setCode] = useState('')
   const [editing, setEditing] = useState(null)
+  const [error, setError] = useState('')
 
   const load = async () => {
-    const data = await apiClient.get('/departments')
-    setDepartments(data)
+    try {
+      setError('')
+      const data = await apiClient.get('/departments')
+      setDepartments(Array.isArray(data) ? data : [])
+    } catch (err) {
+      console.error('Error loading departments', err)
+      setError(err.response?.data?.message || err.message || 'Failed to load departments')
+    }
   }
 
   useEffect(() => {
@@ -18,15 +25,21 @@ export function DepartmentManagement() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (editing) {
-      await apiClient.put(`/departments/${editing._id}`, { name, code, isActive: editing.isActive })
-    } else {
-      await apiClient.post('/departments', { name, code })
+    setError('')
+    try {
+      if (editing) {
+        await apiClient.put(`/departments/${editing._id}`, { name, code, isActive: editing.isActive })
+      } else {
+        await apiClient.post('/departments', { name, code })
+      }
+      setName('')
+      setCode('')
+      setEditing(null)
+      await load()
+    } catch (err) {
+      console.error('Error saving department', err)
+      setError(err.response?.data?.message || err.message || 'Failed to save department')
     }
-    setName('')
-    setCode('')
-    setEditing(null)
-    await load()
   }
 
   const handleEdit = (dept) => {
@@ -36,12 +49,18 @@ export function DepartmentManagement() {
   }
 
   const toggleActive = async (dept) => {
-    await apiClient.put(`/departments/${dept._id}`, {
-      name: dept.name,
-      code: dept.code,
-      isActive: !dept.isActive,
-    })
-    await load()
+    try {
+      setError('')
+      await apiClient.put(`/departments/${dept._id}`, {
+        name: dept.name,
+        code: dept.code,
+        isActive: !dept.isActive,
+      })
+      await load()
+    } catch (err) {
+      console.error('Error toggling department status', err)
+      setError(err.response?.data?.message || err.message || 'Failed to update department status')
+    }
   }
 
   return (
@@ -50,6 +69,12 @@ export function DepartmentManagement() {
         <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-800">Department Management</h2>
         <p className="text-xs sm:text-sm md:text-base text-slate-600 mt-1">Create and manage hospital departments</p>
       </div>
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-700 text-sm flex items-center justify-between">
+          <span>{error}</span>
+          <button type="button" onClick={() => setError('')} className="text-red-500 hover:text-red-700 font-medium">Dismiss</button>
+        </div>
+      )}
       <form
         onSubmit={handleSubmit}
         className="bg-white shadow-sm rounded-xl border border-slate-200 p-4 grid grid-cols-1 md:grid-cols-4 gap-3 items-end"
@@ -101,6 +126,7 @@ export function DepartmentManagement() {
           <table className="w-full text-sm">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
+                <th className="text-left px-4 lg:px-6 py-3 font-semibold text-xs lg:text-sm text-slate-700 uppercase tracking-wide w-12">#</th>
                 <th className="text-left px-4 lg:px-6 py-3 font-semibold text-xs lg:text-sm text-slate-700 uppercase tracking-wide">Name</th>
                 <th className="text-left px-4 lg:px-6 py-3 font-semibold text-xs lg:text-sm text-slate-700 uppercase tracking-wide">Code</th>
                 <th className="text-left px-4 lg:px-6 py-3 font-semibold text-xs lg:text-sm text-slate-700 uppercase tracking-wide">Status</th>
@@ -108,8 +134,9 @@ export function DepartmentManagement() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
-              {departments.map((d) => (
+              {departments.map((d, idx) => (
                 <tr key={d._id} className="hover:bg-slate-50 transition-colors">
+                  <td className="px-4 lg:px-6 py-3 text-slate-500 font-medium text-sm">{idx + 1}</td>
                   <td className="px-4 lg:px-6 py-3 text-sm font-medium text-slate-800">{d.name}</td>
                   <td className="px-4 lg:px-6 py-3 text-xs lg:text-sm text-slate-600 font-mono">{d.code}</td>
                   <td className="px-4 lg:px-6 py-3">

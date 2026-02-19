@@ -5,9 +5,12 @@ export function DepartmentLogs() {
   const [logs, setLogs] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [expandedDepts, setExpandedDepts] = useState(new Set())
+  const [expandedForms, setExpandedForms] = useState(new Set())
+  const [uhidSearchByDept, setUhidSearchByDept] = useState({})
+  const [uhidPageByDept, setUhidPageByDept] = useState({})
   const [previewModalOpen, setPreviewModalOpen] = useState(false)
   const [selectedUhid, setSelectedUhid] = useState('')
+  const [selectedDepartment, setSelectedDepartment] = useState(null)
   const [previewData, setPreviewData] = useState(null)
   const [loadingPreview, setLoadingPreview] = useState(false)
   const [admissions, setAdmissions] = useState([])
@@ -70,10 +73,6 @@ export function DepartmentLogs() {
       setError(null)
       const data = await apiClient.get('/departments/logs')
       setLogs(data)
-      // Auto-expand if there's only one department (for regular users)
-      if (data.departments && data.departments.length === 1) {
-        setExpandedDepts(new Set([data.departments[0].department._id]))
-      }
     } catch (err) {
       console.error('Error loading department logs', err)
       setError(err.response?.data?.message || err.message || 'Failed to load department logs')
@@ -82,18 +81,47 @@ export function DepartmentLogs() {
     }
   }
 
-  const toggleExpand = (deptId) => {
-    const newExpanded = new Set(expandedDepts)
-    if (newExpanded.has(deptId)) {
-      newExpanded.delete(deptId)
+  const toggleFormExpand = (formKey) => {
+    const newExpanded = new Set(expandedForms)
+    if (newExpanded.has(formKey)) {
+      newExpanded.delete(formKey)
     } else {
-      newExpanded.add(deptId)
+      newExpanded.add(formKey)
     }
-    setExpandedDepts(newExpanded)
+    setExpandedForms(newExpanded)
+  }
+
+  const PAGE_SIZE = 3
+
+  const matchesSelectedDepartment = (sub, department) => {
+    if (!department) return true
+
+    const selectedId = String(department._id || department.id || '')
+    const selectedCode = String(department.code || '').toUpperCase()
+    const selectedName = String(department.name || '').toUpperCase()
+
+    const subDept = sub?.department || null
+    const subDeptId = String(subDept?._id || subDept?.id || subDept || '')
+    const subDeptCode = String(subDept?.code || '').toUpperCase()
+    const subDeptName = String(subDept?.name || '').toUpperCase()
+
+    if (selectedId && subDeptId && selectedId === subDeptId) return true
+    if (selectedCode && subDeptCode && selectedCode === subDeptCode) return true
+    if (selectedName && subDeptName && selectedName === subDeptName) return true
+    return false
+  }
+
+  const handleUhidSearchChange = (deptId, value) => {
+    setUhidSearchByDept((prev) => ({ ...prev, [deptId]: value }))
+    setUhidPageByDept((prev) => ({ ...prev, [deptId]: 1 }))
+  }
+
+  const handleUhidPageChange = (deptId, page) => {
+    setUhidPageByDept((prev) => ({ ...prev, [deptId]: page }))
   }
 
   // Load admissions or submission groups for UHID (prefer grouped by date+time+IPID)
-  const loadAdmissionsForPreview = async (uhid) => {
+  const loadAdmissionsForPreview = async (uhid, department = selectedDepartment, fallbackGroups = []) => {
     if (!uhid || !uhid.trim()) return
     
     setLoadingAdmissions(true)
@@ -110,48 +138,69 @@ export function DepartmentLogs() {
         const auditsRes = await apiClient.get(`/audits/uhid/${encodeURIComponent(normalizedUHID)}`)
         if (auditsRes?.groupedByDateAndIPID && auditsRes.groupedByDateAndIPID.length > 0) {
           groups = auditsRes.groupedByDateAndIPID
+            .map((group) => {
+              const filteredSubmissions = (group.submissions || []).filter((sub) =>
+                matchesSelectedDepartment(sub, department)
+              )
+              return {
+                ...group,
+                submissions: filteredSubmissions
+              }
+            })
+            .filter((group) => group.submissions.length > 0)
           setGroupsFromUHID(groups)
         }
       } catch (auditErr) {
         if (auditErr.response?.status !== 404) console.error('Error loading audits by UHID:', auditErr)
       }
       if (groups.length === 0) {
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Request timeout: Backend server may not be responding. Please check if the server is running on port 5000.')), 15000)
-        })
-        const admissionsData = await Promise.race([
-          apiClient.get(`/admissions/patient/${encodeURIComponent(normalizedUHID)}`),
-          timeoutPromise
-        ])
-        let admissionsList = []
-        if (Array.isArray(admissionsData)) admissionsList = admissionsData
-        else if (admissionsData?.admissions) admissionsList = admissionsData.admissions
-        else if (admissionsData?.data?.admissions) admissionsList = admissionsData.data.admissions
-        setAdmissions(admissionsList)
-        if (admissionsList.length === 0) {
-          try {
-            const submissions = await apiClient.get(`/audits/uhid/${encodeURIComponent(normalizedUHID)}`)
-            const raw = submissions?.submissions || (Array.isArray(submissions) ? submissions : [])
-            if (raw.length > 0) {
-              const uniqueIPIDs = [...new Set(raw.map(s => s.ipid).filter(Boolean))]
-              const virtualAdmissions = uniqueIPIDs.map(ipid => {
-                const subWithIPID = raw.find(s => s.ipid === ipid)
-                return {
-                  ipid,
-                  uhid: normalizedUHID,
-                  admissionDate: subWithIPID?.submittedAt || new Date(),
-                  status: 'Admitted',
-                  ward: subWithIPID?.admission?.ward || subWithIPID?.ward || subWithIPID?.patient?.ward || 'N/A',
-                  unitNo: subWithIPID?.admission?.unitNo || subWithIPID?.unitNo || subWithIPID?.patient?.unitNo || 'N/A',
-                  isVirtual: true
-                }
-              })
-              setAdmissions(virtualAdmissions)
-            }
-          } catch (subErr) {
-            console.error('Error loading submissions as fallback:', subErr)
+        try {
+          const submissions = await apiClient.get(`/audits/uhid/${encodeURIComponent(normalizedUHID)}`)
+          const raw = submissions?.submissions || (Array.isArray(submissions) ? submissions : [])
+          const filteredRaw = raw.filter((sub) => matchesSelectedDepartment(sub, department))
+
+          if (filteredRaw.length > 0) {
+            const groupedMap = new Map()
+            filteredRaw.forEach((sub) => {
+              const key = `${sub.ipid || 'N/A'}_${sub.auditDate || ''}_${sub.auditTime || ''}_${sub.formTemplate?._id || sub.formTemplate || ''}`
+              if (!groupedMap.has(key)) {
+                groupedMap.set(key, {
+                  ipid: sub.ipid,
+                  date: sub.auditDate || sub.submittedAt,
+                  auditTime: sub.auditTime || '',
+                  submissions: []
+                })
+              }
+              groupedMap.get(key).submissions.push(sub)
+            })
+            const syntheticGroups = Array.from(groupedMap.values())
+            setGroupsFromUHID(syntheticGroups)
+
+            const uniqueIPIDs = [...new Set(filteredRaw.map((s) => s.ipid).filter(Boolean))]
+            const virtualAdmissions = uniqueIPIDs.map((ipid) => {
+              const subWithIPID = filteredRaw.find((s) => s.ipid === ipid)
+              return {
+                ipid,
+                uhid: normalizedUHID,
+                admissionDate: subWithIPID?.submittedAt || new Date(),
+                status: 'Admitted',
+                ward: subWithIPID?.admission?.ward || subWithIPID?.ward || subWithIPID?.patient?.ward || 'N/A',
+                unitNo: subWithIPID?.admission?.unitNo || subWithIPID?.unitNo || subWithIPID?.patient?.unitNo || 'N/A',
+                isVirtual: true
+              }
+            })
+            setAdmissions(virtualAdmissions)
+          } else {
+            setAdmissions([])
           }
+        } catch (subErr) {
+          console.error('Error loading submissions as fallback:', subErr)
         }
+      }
+
+      // Use department-log preloaded groups only when API-side grouped data is unavailable
+      if (groups.length === 0 && fallbackGroups && fallbackGroups.length > 0) {
+        setGroupsFromUHID(fallbackGroups)
       }
     } catch (err) {
       console.error('[loadAdmissionsForPreview] Error loading admissions:', err)
@@ -205,7 +254,7 @@ export function DepartmentLogs() {
   }
 
   // Load checklist for specific IPID
-  const loadChecklistByIPID = async (ipid) => {
+  const loadChecklistByIPID = async (ipid, department = selectedDepartment) => {
     if (!ipid || !ipid.trim()) return
     
     setLoadingPreview(true)
@@ -215,25 +264,28 @@ export function DepartmentLogs() {
     try {
       // Get all submissions for this IPID grouped by department
       const submissions = await apiClient.get(`/audits/ipid/${encodeURIComponent(ipid.trim().toUpperCase())}`)
+      const filteredSubmissions = (submissions || []).filter((sub) =>
+        matchesSelectedDepartment(sub, department)
+      )
       
-      if (!submissions || submissions.length === 0) {
+      if (!filteredSubmissions || filteredSubmissions.length === 0) {
         setPreviewData({
-          patient: { uhid: uhid.trim().toUpperCase(), patientName: 'N/A' },
+          patient: { uhid: selectedUhid || 'N/A', patientName: 'N/A' },
           departments: []
         })
         return
       }
 
       // Transform flat array of submissions into structured format
-      const patient = submissions[0]?.patient || { 
-        uhid: uhid.trim().toUpperCase(), 
-        patientName: submissions[0]?.patientName || 'N/A' 
+      const patient = filteredSubmissions[0]?.patient || {
+        uhid: selectedUhid || 'N/A',
+        patientName: filteredSubmissions[0]?.patientName || 'N/A'
       }
 
       // Group submissions by department and section
       const deptMap = new Map()
       
-      submissions.forEach(sub => {
+      filteredSubmissions.forEach(sub => {
         const deptId = sub.department?._id || sub.department
         const deptName = sub.department?.name || 'Unknown Department'
         const deptCode = sub.department?.code || 'N/A'
@@ -288,7 +340,7 @@ export function DepartmentLogs() {
       const errorMessage = err.response?.data?.message || err.message || 'Failed to load data'
       setPreviewData({ 
         error: errorMessage,
-        patient: { uhid: uhid.trim().toUpperCase(), patientName: 'N/A' },
+        patient: { uhid: selectedUhid || 'N/A', patientName: 'N/A' },
         departments: [] 
       })
     } finally {
@@ -296,20 +348,21 @@ export function DepartmentLogs() {
     }
   }
 
-  const loadPreviewData = async (uhid) => {
+  const loadPreviewData = async (uhid, department, fallbackGroups = []) => {
     if (!uhid || !uhid.trim()) return
     
     setPreviewModalOpen(true)
     setSelectedUhid(uhid.trim().toUpperCase())
+    setSelectedDepartment(department || null)
     setPreviewData(null)
     setSelectedIPID(null)
     
     // First, load admissions list
-    await loadAdmissionsForPreview(uhid.trim())
+    await loadAdmissionsForPreview(uhid.trim(), department || null, fallbackGroups)
   }
 
   const handleIPIDClick = async (ipid) => {
-    await loadChecklistByIPID(ipid)
+    await loadChecklistByIPID(ipid, selectedDepartment)
   }
 
   const handleGroupClick = (group) => {
@@ -317,6 +370,69 @@ export function DepartmentLogs() {
     setSelectedIPID(group.ipid)
     const data = buildPreviewFromSubmissions(group.submissions, selectedUhid)
     if (data) setPreviewData(data)
+  }
+
+  const handleFallbackGroupClick = async (group) => {
+    if (!group?.ipid) return
+
+    setLoadingPreview(true)
+    setSelectedGroup(group)
+    setSelectedIPID(group.ipid)
+    setPreviewData(null)
+
+    try {
+      const submissions = await apiClient.get(`/audits/ipid/${encodeURIComponent(String(group.ipid).trim().toUpperCase())}`)
+
+      // Start with selected-department filtering.
+      let filtered = (submissions || []).filter((sub) => matchesSelectedDepartment(sub, selectedDepartment))
+
+      // Narrow down to the exact form session (form + date + time) when possible.
+      const refSub = group.submissions?.[0]
+      const refFormId = refSub?.formTemplate?._id || refSub?.formTemplate || null
+      const refFormName = refSub?.formTemplate?.name || refSub?.formTemplateName || null
+      const refAuditTime = group.auditTime || null
+      const refDate = group.date ? new Date(group.date).toISOString().slice(0, 10) : null
+
+      filtered = filtered.filter((sub) => {
+        const subFormId = sub?.formTemplate?._id || sub?.formTemplate || null
+        const subFormName = sub?.formTemplate?.name || null
+        const subDate = (sub.auditDate ? new Date(sub.auditDate) : new Date(sub.submittedAt)).toISOString().slice(0, 10)
+        const subTime = sub.auditTime || (sub.submittedAt ? new Date(sub.submittedAt).toISOString().slice(11, 16) : null)
+
+        const formMatch =
+          (refFormId && subFormId && String(refFormId) === String(subFormId)) ||
+          (refFormName && subFormName && String(refFormName) === String(subFormName)) ||
+          (!refFormId && !refFormName)
+
+        const dateMatch = refDate ? subDate === refDate : true
+        const timeMatch = refAuditTime ? subTime === refAuditTime : true
+
+        return formMatch && dateMatch && timeMatch
+      })
+
+      // If strict filter returns nothing, keep department-filtered data as fallback.
+      if (filtered.length === 0) {
+        filtered = (submissions || []).filter((sub) => matchesSelectedDepartment(sub, selectedDepartment))
+      }
+
+      const data = buildPreviewFromSubmissions(filtered, selectedUhid)
+      if (data) setPreviewData(data)
+      else {
+        setPreviewData({
+          patient: { uhid: selectedUhid || 'N/A', patientName: 'N/A' },
+          departments: []
+        })
+      }
+    } catch (err) {
+      console.error('Error loading fallback group checklist:', err)
+      setPreviewData({
+        error: err.response?.data?.message || err.message || 'Failed to load checklist',
+        patient: { uhid: selectedUhid || 'N/A', patientName: 'N/A' },
+        departments: []
+      })
+    } finally {
+      setLoadingPreview(false)
+    }
   }
 
   const formatDate = (dateString) => {
@@ -397,7 +513,7 @@ export function DepartmentLogs() {
       <div className="space-y-6">
         <div className="bg-white/95 backdrop-blur-md border border-indigo-200/50 rounded-2xl shadow-xl px-5 py-4 sm:py-5">
           <h1 className="text-2xl sm:text-3xl font-semibold text-slate-900">Department Activity Logs</h1>
-          <p className="mt-1 text-sm text-slate-600">Track form submissions and edits across all departments</p>
+          <p className="mt-1 text-sm text-slate-600">Department-wise UHID, IPID and checklist drilldown</p>
         </div>
         <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-xl p-12 text-center border border-dashed border-slate-300">
           <svg className="w-16 h-16 mx-auto mb-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -405,7 +521,7 @@ export function DepartmentLogs() {
           </svg>
           <p className="text-slate-700 text-lg font-medium mb-2">No department activity yet</p>
           <p className="text-sm text-slate-500">
-            Start submitting forms to see activity logs here
+            Start submitting forms to see logs here
           </p>
         </div>
       </div>
@@ -418,7 +534,7 @@ export function DepartmentLogs() {
       <div className="bg-white/95 backdrop-blur-md border border-indigo-200/50 rounded-2xl shadow-xl px-5 py-4 sm:py-5">
         <h1 className="text-2xl sm:text-3xl font-semibold text-slate-900">Department Activity Logs</h1>
         <p className="mt-1 text-sm text-slate-600">
-          Track form submissions, submission dates, and recent edits for all departments
+          Department-wise view based on form/submission department labels
         </p>
       </div>
 
@@ -430,7 +546,7 @@ export function DepartmentLogs() {
               <p className="text-xs text-slate-600 mb-1 font-medium uppercase tracking-wide">
                 Total Departments
               </p>
-              <p className="text-3xl font-bold text-slate-900">{logs.totalDepartments}</p>
+              <p className="text-3xl font-bold text-slate-900">{logs.totalDepartments || logs.departments.length}</p>
             </div>
             <div className="w-14 h-14 bg-indigo-50 rounded-xl flex items-center justify-center">
               <svg className="w-7 h-7 text-indigo-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -447,7 +563,7 @@ export function DepartmentLogs() {
                 Total Forms Submitted
               </p>
               <p className="text-3xl font-bold text-slate-900">
-                {logs.departments.reduce((sum, dept) => sum + dept.totalFormsSubmitted, 0)}
+                {logs.departments.reduce((sum, dept) => sum + (dept.totalFormsSubmitted || 0), 0)}
               </p>
             </div>
             <div className="w-14 h-14 bg-indigo-50 rounded-xl flex items-center justify-center">
@@ -465,7 +581,7 @@ export function DepartmentLogs() {
                 Recently Edited
               </p>
               <p className="text-3xl font-bold text-amber-600">
-                {logs.departments.reduce((sum, dept) => sum + dept.recentlyEditedCount, 0)}
+                {logs.departments.reduce((sum, dept) => sum + (dept.recentlyEditedCount || 0), 0)}
               </p>
             </div>
             <div className="w-14 h-14 bg-amber-50 rounded-xl flex items-center justify-center">
@@ -480,302 +596,186 @@ export function DepartmentLogs() {
       {/* Department Logs */}
       <div className="space-y-4">
         {logs.departments.map((deptLog) => {
-          const isExpanded = expandedDepts.has(deptLog.department._id)
-          const isSingleDepartment = logs.departments.length === 1
+          const isExpanded = expandedForms.has(deptLog.department._id)
+          const deptUhidMap = Object.values(
+            (deptLog.allSubmissions || []).reduce((acc, sub) => {
+              const uhid = sub.uhid || 'N/A'
+              if (!acc[uhid]) {
+                acc[uhid] = {
+                  uhid,
+                  patientName: sub.patientName || 'N/A',
+                  submissions: 0,
+                  lastSubmissionAt: null
+                }
+              }
+              acc[uhid].submissions += 1
+              if (!acc[uhid].lastSubmissionAt || new Date(sub.submittedAt) > new Date(acc[uhid].lastSubmissionAt)) {
+                acc[uhid].lastSubmissionAt = sub.submittedAt
+              }
+
+              return acc
+            }, {})
+          )
+          const sortedUhids = deptUhidMap.sort((a, b) => new Date(b.lastSubmissionAt || 0) - new Date(a.lastSubmissionAt || 0))
+          const deptId = deptLog.department._id
+          const searchText = (uhidSearchByDept[deptId] || '').trim().toLowerCase()
+          const filteredUhids = sortedUhids.filter((entry) =>
+            entry.uhid?.toLowerCase().includes(searchText) || entry.patientName?.toLowerCase().includes(searchText)
+          )
+          const totalPages = Math.max(1, Math.ceil(filteredUhids.length / PAGE_SIZE))
+          const currentPage = Math.min(uhidPageByDept[deptId] || 1, totalPages)
+          const pageStart = (currentPage - 1) * PAGE_SIZE
+          const paginatedUhids = filteredUhids.slice(pageStart, pageStart + PAGE_SIZE)
+          const showingFrom = filteredUhids.length === 0 ? 0 : pageStart + 1
+          const showingTo = Math.min(pageStart + PAGE_SIZE, filteredUhids.length)
+
           return (
             <div
               key={deptLog.department._id}
-              className="bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-slate-200 overflow-hidden"
+              className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden"
             >
-              {/* Department Header */}
               <div
-                className="bg-slate-50 p-4 sm:p-6 cursor-pointer hover:bg-slate-100 transition-colors border-b border-slate-200"
-                onClick={() => toggleExpand(deptLog.department._id)}
+                className="bg-slate-50/80 p-4 sm:p-5 cursor-pointer hover:bg-slate-100 transition-colors border-b border-slate-200"
+                onClick={() => toggleFormExpand(deptLog.department._id)}
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <h3 className="text-lg sm:text-xl font-semibold text-slate-900">
-                        {deptLog.department.name}
-                      </h3>
-                      <span className="px-3 py-1 bg-indigo-50 text-indigo-700 text-xs font-semibold rounded-full border border-indigo-100">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-lg sm:text-xl font-semibold text-slate-900 truncate">{deptLog.department.name}</h3>
+                    <div className="mt-2">
+                      <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 text-[11px] font-medium rounded-full border border-indigo-100">
                         {deptLog.department.code}
                       </span>
                     </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                    <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
                       <div>
-                        <span className="text-slate-600">Forms Submitted:</span>
-                        <span className="ml-2 font-bold text-slate-800">
-                          {deptLog.totalFormsSubmitted}
-                        </span>
+                        <span className="text-slate-600">UHIDs:</span>
+                        <span className="ml-2 font-bold text-slate-800">{sortedUhids.length}</span>
                       </div>
                       <div>
-                        <span className="text-slate-600">Total Submissions:</span>
-                        <span className="ml-2 font-bold text-slate-800">
-                          {deptLog.totalSubmissions}
-                        </span>
+                        <span className="text-slate-600">Submissions:</span>
+                        <span className="ml-2 font-bold text-slate-800">{deptLog.totalSubmissions || 0}</span>
                       </div>
                       <div>
-                        <span className="text-slate-600">Recently Edited:</span>
-                        <span className="ml-2 font-bold text-orange-600">
-                          {deptLog.recentlyEditedCount}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-slate-600">Last Submission:</span>
+                        <span className="text-slate-600">Last:</span>
                         <span className="ml-2 font-semibold text-slate-700">
-                          {deptLog.latestSubmissionDate
-                            ? getTimeAgo(deptLog.latestSubmissionDate)
-                            : 'Never'}
+                          {deptLog.latestSubmissionDate ? getTimeAgo(deptLog.latestSubmissionDate) : 'Never'}
                         </span>
                       </div>
                     </div>
                   </div>
-                  <div className="ml-4">
-                    <button className="text-slate-600 hover:text-slate-800 transition-colors">
-                      {isExpanded ? (
-                        <svg
-                          className="w-6 h-6"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M5 15l7-7 7 7"
-                          />
-                        </svg>
-                      ) : (
-                        <svg
-                          className="w-6 h-6"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M19 9l-7 7-7-7"
-                          />
-                        </svg>
-                      )}
-                    </button>
-                  </div>
+                  <button className="text-slate-600 hover:text-slate-800 transition-colors mt-1">
+                    {isExpanded ? (
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                      </svg>
+                    ) : (
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    )}
+                  </button>
                 </div>
               </div>
 
-              {/* Expanded Content */}
-              {(isExpanded || isSingleDepartment) && (
-                <div className="p-4 sm:p-6 border-t border-slate-200 space-y-6">
-                  {/* Patient-Based View (Primary for single department) */}
-                  {deptLog.patients && deptLog.patients.length > 0 && (
-                    <div>
-                      <h4 className="text-base font-semibold text-slate-900 mb-3">
-                        Forms by Patient ID (UHID) - {deptLog.patients.length} Patient{deptLog.patients.length !== 1 ? 's' : ''}
-                      </h4>
-                      <div className="bg-slate-50 rounded-lg p-4 max-h-96 overflow-y-auto">
-                        <div className="space-y-3">
-                          {deptLog.patients.map((patient, idx) => (
-                            <div
-                              key={idx}
-                              className="bg-white p-4 rounded-lg border border-slate-200 hover:border-blue-300 transition-colors"
-                            >
-                              <div className="flex items-start justify-between mb-3">
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-3 mb-2">
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        loadPreviewData(patient.uhid)
-                                      }}
-                                      className="font-semibold text-lg text-indigo-700 hover:text-indigo-800 hover:underline transition-colors"
-                                    >
-                                      UHID: {patient.uhid}
-                                    </button>
-                                  </div>
-                                  <p className="text-sm text-slate-600 mb-2">
-                                    <span className="font-medium">Patient Name:</span> {patient.patientName}
-                                  </p>
-                                  <div className="text-xs text-slate-600 space-y-1">
-                                    <div>
-                                      <span className="font-medium">Department:</span>{' '}
-                                      {deptLog.department.name} ({deptLog.department.code})
-                                    </div>
-                                    <div>
-                                      <span className="font-medium">Time:</span>{' '}
-                                      {patient.lastSubmission ? formatDate(patient.lastSubmission) : 'N/A'}
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
+              {isExpanded && (
+                <div className="p-4 sm:p-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                    <h4 className="text-base font-semibold text-slate-900 flex items-center gap-2">
+                      <span className="inline-block w-1 h-5 rounded-full bg-violet-500" />
+                      UHID List
+                    </h4>
+                    <div className="flex items-center gap-2">
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={uhidSearchByDept[deptId] || ''}
+                          onChange={(e) => handleUhidSearchChange(deptId, e.target.value)}
+                          placeholder="Search UHID..."
+                          className="w-44 sm:w-52 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+                        />
                       </div>
                     </div>
-                  )}
+                  </div>
 
-                  {/* Submission Dates Timeline */}
-                  {deptLog.submissionDates && deptLog.submissionDates.length > 0 && (
-                    <div>
-                      <h4 className="text-base font-semibold text-slate-900 mb-3">
-                        Submission Timeline (Last 30 Days)
-                      </h4>
-                      <div className="bg-slate-50 rounded-lg p-4 max-h-64 overflow-y-auto">
-                        <div className="space-y-2">
-                          {deptLog.submissionDates.map((dateEntry, idx) => (
-                            <div
-                              key={idx}
-                              className="flex items-center justify-between bg-white p-3 rounded-lg border border-slate-200 hover:border-blue-300 transition-colors"
-                            >
-                              <div className="flex items-center gap-3">
-                                <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
-                                <span className="font-medium text-slate-700">
-                                  {formatDateOnly(dateEntry.date)}
-                                </span>
+                  {filteredUhids.length === 0 ? (
+                    <div className="text-sm text-slate-500">No UHID records for this department.</div>
+                  ) : (
+                    <div className="bg-slate-50 rounded-xl p-3 sm:p-4">
+                      <div className="space-y-2">
+                        {paginatedUhids.map((entry, idx) => (
+                          <button
+                            key={`${deptLog.department._id}-${entry.uhid}`}
+                            type="button"
+                            onClick={() => loadPreviewData(entry.uhid, deptLog.department)}
+                            className="w-full text-left bg-white border border-slate-200 hover:border-violet-300 rounded-xl p-3 sm:p-4 transition-colors"
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className="w-8 h-8 rounded-lg bg-violet-100 text-violet-700 flex items-center justify-center font-semibold text-sm shrink-0">
+                                  {String(pageStart + idx + 1).padStart(2, '0')}
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="font-semibold text-violet-700 truncate">UHID: {entry.uhid}</p>
+                                  <p className="text-xs sm:text-sm text-slate-600 truncate">Patient: {entry.patientName}</p>
+                                </div>
                               </div>
-                              <div className="flex items-center gap-4 text-sm">
-                                <span className="text-slate-600">
-                                  {dateEntry.uniqueForms} form{dateEntry.uniqueForms !== 1 ? 's' : ''}
-                                </span>
-                                <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full font-semibold">
-                                  {dateEntry.count} submission{dateEntry.count !== 1 ? 's' : ''}
+                              <div className="flex items-center gap-4 sm:gap-6 text-right">
+                                <div>
+                                  <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Submissions</p>
+                                  <p className="text-sm font-bold text-slate-700">{entry.submissions}</p>
+                                </div>
+                                <div className="hidden sm:block">
+                                  <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Last Update</p>
+                                  <p className="text-xs text-slate-600">{entry.lastSubmissionAt ? formatDate(entry.lastSubmissionAt) : 'N/A'}</p>
+                                </div>
+                                <span className="w-8 h-8 rounded-lg bg-slate-100 text-slate-500 flex items-center justify-center text-lg">
+                                  ›
                                 </span>
                               </div>
                             </div>
-                          ))}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs text-slate-500">
+                        <p>
+                          Showing {showingFrom}-{showingTo} of {filteredUhids.length} records
+                        </p>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            disabled={currentPage === 1}
+                            onClick={() => handleUhidPageChange(deptId, Math.max(1, currentPage - 1))}
+                            className="w-7 h-7 rounded-md border border-slate-200 disabled:opacity-40"
+                          >
+                            ‹
+                          </button>
+                          {Array.from({ length: totalPages }).map((_, i) => {
+                            const page = i + 1
+                            const active = page === currentPage
+                            return (
+                              <button
+                                key={`${deptId}-page-${page}`}
+                                type="button"
+                                onClick={() => handleUhidPageChange(deptId, page)}
+                                className={`w-7 h-7 rounded-md text-xs ${
+                                  active ? 'bg-violet-600 text-white' : 'border border-slate-200 text-slate-600'
+                                }`}
+                              >
+                                {page}
+                              </button>
+                            )
+                          })}
+                          <button
+                            type="button"
+                            disabled={currentPage === totalPages}
+                            onClick={() => handleUhidPageChange(deptId, Math.min(totalPages, currentPage + 1))}
+                            className="w-7 h-7 rounded-md border border-slate-200 disabled:opacity-40"
+                          >
+                            ›
+                          </button>
                         </div>
                       </div>
-                    </div>
-                  )}
-
-                  {/* Recently Edited Forms */}
-                  {deptLog.recentlyEdited && deptLog.recentlyEdited.length > 0 && (
-                    <div>
-                      <h4 className="text-base font-semibold text-slate-900 mb-3">
-                        Recently Edited Forms
-                      </h4>
-                      <div className="bg-orange-50 rounded-lg p-4 max-h-96 overflow-y-auto">
-                        <div className="space-y-2">
-                          {deptLog.recentlyEdited.map((edited, idx) => (
-                            <div
-                              key={idx}
-                              className="bg-white p-4 rounded-lg border border-orange-200 hover:border-orange-400 transition-colors"
-                            >
-                              <div className="flex items-start justify-between mb-2">
-                                <div>
-                                  <div className="flex items-center gap-2 mb-1">
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        loadPreviewData(edited.uhid)
-                                      }}
-                                      className="font-bold text-blue-600 hover:text-blue-800 hover:underline transition-colors"
-                                    >
-                                      UHID: {edited.uhid}
-                                    </button>
-                                    <span className="px-2 py-0.5 bg-orange-100 text-orange-700 text-xs font-semibold rounded">
-                                      EDITED
-                                    </span>
-                                  </div>
-                                  <p className="text-sm text-slate-600">
-                                    Patient: {edited.patientName}
-                                  </p>
-                                </div>
-                              </div>
-                              <div className="grid grid-cols-2 gap-2 text-xs text-slate-600 mt-2 pt-2 border-t border-slate-200">
-                                <div>
-                                  <span className="font-medium">Submitted:</span>{' '}
-                                  {formatDate(edited.submittedAt)}
-                                </div>
-                                <div>
-                                  <span className="font-medium">Edited:</span>{' '}
-                                  {formatDate(edited.editedAt)} ({getTimeAgo(edited.editedAt)})
-                                </div>
-                                <div>
-                                  <span className="font-medium">By:</span> {edited.submittedBy}
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* All Recent Submissions */}
-                  {deptLog.allSubmissions && deptLog.allSubmissions.length > 0 && (
-                    <div>
-                      <h4 className="text-base font-semibold text-slate-900 mb-3">
-                        Recent Submissions (Last 100)
-                      </h4>
-                      <div className="bg-slate-50 rounded-lg p-4 max-h-96 overflow-y-auto">
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-sm">
-                            <thead>
-                              <tr className="bg-slate-200 text-left">
-                                <th className="px-3 py-2 font-semibold text-slate-700">UHID</th>
-                                <th className="px-3 py-2 font-semibold text-slate-700">
-                                  Patient Name
-                                </th>
-                                <th className="px-3 py-2 font-semibold text-slate-700">
-                                  Submitted At
-                                </th>
-                                <th className="px-3 py-2 font-semibold text-slate-700">By</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {deptLog.allSubmissions.map((sub, idx) => (
-                                <tr
-                                  key={idx}
-                                  className="border-b border-slate-200 hover:bg-white transition-colors"
-                                >
-                                  <td className="px-3 py-2">
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        loadPreviewData(sub.uhid)
-                                      }}
-                                      className="font-medium text-blue-600 hover:text-blue-800 hover:underline transition-colors"
-                                    >
-                                      {sub.uhid}
-                                    </button>
-                                  </td>
-                                  <td className="px-3 py-2 text-slate-600">{sub.patientName}</td>
-                                  <td className="px-3 py-2 text-slate-600">
-                                    {formatDate(sub.submittedAt)}
-                                  </td>
-                                  <td className="px-3 py-2">
-                                    {sub.isEdited ? (
-                                      <span className="px-2 py-1 bg-orange-100 text-orange-700 text-xs font-semibold rounded">
-                                        Edited
-                                      </span>
-                                    ) : (
-                                      <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded">
-                                        New
-                                      </span>
-                                    )}
-                                  </td>
-                                  <td className="px-3 py-2 text-slate-600 text-xs">
-                                    {sub.submittedBy}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Empty State */}
-                  {deptLog.totalSubmissions === 0 && (
-                    <div className="text-center py-8 text-slate-500">
-                      <div className="text-4xl mb-2">📭</div>
-                      <p>No submissions found for this department</p>
                     </div>
                   )}
                 </div>
@@ -817,12 +817,18 @@ export function DepartmentLogs() {
                   ) : selectedUhid && !selectedIPID ? (
                     <span className="text-slate-500">UHID: {selectedUhid}</span>
                   ) : null}
+                  {selectedDepartment?.name && (
+                    <span className="text-xs text-slate-500">
+                      Department: {selectedDepartment.name} ({selectedDepartment.code || 'N/A'})
+                    </span>
+                  )}
                 </p>
               </div>
               <button
                 onClick={() => {
                   setPreviewModalOpen(false)
                   setSelectedUhid('')
+                  setSelectedDepartment(null)
                   setPreviewData(null)
                 }}
                 className="ml-4 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full p-2 transition-colors text-2xl font-bold w-10 h-10 flex items-center justify-center"
@@ -892,26 +898,90 @@ export function DepartmentLogs() {
                               <div className="p-5">
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                                   {entry.groups.map((group, gIdx) => {
-                                    const checklistName = group.submissions?.[0]?.formTemplate?.name || 'Checklist'
+                                    const baseSubmissions = group.submissions || []
+                                    const primaryFormId = baseSubmissions?.[0]?.formTemplate?._id || baseSubmissions?.[0]?.formTemplate || null
+                                    const primaryFormName = baseSubmissions?.[0]?.formTemplate?.name || null
+
+                                    // Important: evaluate per checklist card (form), not all submissions in same IPID/time bucket
+                                    const checklistSubmissions = baseSubmissions.filter((sub) => {
+                                      const subFormId = sub?.formTemplate?._id || sub?.formTemplate || null
+                                      const subFormName = sub?.formTemplate?.name || null
+                                      if (primaryFormId && subFormId) return String(primaryFormId) === String(subFormId)
+                                      if (primaryFormName && subFormName) return String(primaryFormName) === String(subFormName)
+                                      return true
+                                    })
+
+                                    const checklistName = checklistSubmissions?.[0]?.formTemplate?.name || baseSubmissions?.[0]?.formTemplate?.name || 'Checklist'
                                     const dateStr = group.date ? new Date(group.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'
-                                    const timeStr = group.auditTime || (group.submissions?.[0]?.submittedAt ? new Date(group.submissions[0].submittedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '')
+                                    const timeStr = group.auditTime || (checklistSubmissions?.[0]?.submittedAt ? new Date(checklistSubmissions[0].submittedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '')
+                                    const yesNoResponses = (checklistSubmissions || [])
+                                      .map((sub) => {
+                                        const responseType = String(sub?.checklistItemId?.responseType || '').trim().toUpperCase()
+                                        const value = String(sub.responseValue || sub.yesNoNa || '').trim().toUpperCase()
+
+                                        // Primary rule: explicit YES_NO response type
+                                        if (responseType === 'YES_NO') return value
+
+                                        // Fallback rule: infer YES/NO questions by value when responseType is missing
+                                        if (value === 'YES' || value === 'NO') return value
+
+                                        return null
+                                      })
+                                      .filter(Boolean)
+
+                                    const allYes =
+                                      yesNoResponses.length > 0 &&
+                                      yesNoResponses.every((value) => value === 'YES')
                                     return (
                                       <button
                                         key={gIdx}
                                         type="button"
-                                        onClick={() => handleGroupClick(group)}
-                                        className="group flex items-start gap-3 text-left p-4 rounded-xl border border-slate-200 bg-white hover:border-indigo-300 hover:bg-indigo-50/50 shadow-sm hover:shadow transition-all duration-200"
+                                        onClick={() => {
+                                          if (group.__fromDepartmentLogs) {
+                                            handleFallbackGroupClick(group)
+                                          } else {
+                                            handleGroupClick({ ...group, submissions: checklistSubmissions })
+                                          }
+                                        }}
+                                        className={`group flex items-start gap-3 text-left p-4 rounded-xl border shadow-sm hover:shadow transition-all duration-200 ${
+                                          allYes
+                                            ? 'border-emerald-300 bg-emerald-50/70 hover:border-emerald-400 hover:bg-emerald-100/60'
+                                            : 'border-slate-200 bg-white hover:border-indigo-300 hover:bg-indigo-50/50'
+                                        }`}
                                       >
-                                        <span className="flex-shrink-0 w-10 h-10 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center group-hover:bg-indigo-200">
+                                        <span
+                                          className={`flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center ${
+                                            allYes
+                                              ? 'bg-emerald-100 text-emerald-700 group-hover:bg-emerald-200'
+                                              : 'bg-indigo-100 text-indigo-600 group-hover:bg-indigo-200'
+                                          }`}
+                                        >
                                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                           </svg>
                                         </span>
                                         <div className="min-w-0 flex-1">
-                                          <span className="block font-semibold text-slate-800 text-sm leading-tight group-hover:text-indigo-700">{checklistName}</span>
+                                          <span
+                                            className={`block font-semibold text-sm leading-tight ${
+                                              allYes
+                                                ? 'text-emerald-800 group-hover:text-emerald-900'
+                                                : 'text-slate-800 group-hover:text-indigo-700'
+                                            }`}
+                                          >
+                                            {checklistName}
+                                          </span>
                                           <span className="block text-[10px] text-slate-400 mt-1">{dateStr} · {timeStr}</span>
+                                          {allYes && (
+                                            <span className="inline-block mt-1 text-[10px] font-semibold text-emerald-700">
+                                              All answers are YES
+                                            </span>
+                                          )}
                                         </div>
-                                        <span className="flex-shrink-0 text-slate-400 group-hover:text-indigo-500 transition-colors">
+                                        <span
+                                          className={`flex-shrink-0 transition-colors ${
+                                            allYes ? 'text-emerald-500 group-hover:text-emerald-700' : 'text-slate-400 group-hover:text-indigo-500'
+                                          }`}
+                                        >
                                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                                           </svg>
@@ -1013,8 +1083,26 @@ export function DepartmentLogs() {
                         </h3>
                       </div>
                       <div className="p-5">
-                        {deptData.sections && deptData.sections.length > 0 ? (
-                          deptData.sections.map((section, sectionIdx) => (
+                        {(() => {
+                          const allSections = deptData.sections || []
+                          const nonGenericSections = allSections.filter((section) => {
+                            const name = String(section.sectionName || '').trim().toLowerCase()
+                            return name !== 'general' && name !== 'other' && name !== 'archived'
+                          })
+
+                          // Prefer real form sections. If none exist, fall back to generic sections
+                          // so checklist data never appears empty when rows are actually present.
+                          const sectionsToRender = nonGenericSections.length > 0 ? nonGenericSections : allSections
+
+                          if (sectionsToRender.length === 0) {
+                            return (
+                              <p className="text-slate-500 text-sm">
+                                No section-wise checklist data available for this department.
+                              </p>
+                            )
+                          }
+
+                          return sectionsToRender.map((section, sectionIdx) => (
                             <div key={sectionIdx} className={sectionIdx > 0 ? "mt-6 pt-6 border-t border-slate-200" : ""}>
                               <h4 className="font-bold text-slate-800 mb-3 text-sm uppercase tracking-wide border-b-2 border-blue-200 pb-2">
                                 {section.sectionName}
@@ -1023,14 +1111,13 @@ export function DepartmentLogs() {
                                 <table className="w-full text-sm border-collapse" style={{ tableLayout: 'fixed' }}>
                                   <thead className="bg-slate-100">
                                     <tr>
+                                      <th className="px-4 py-3 text-left font-semibold text-slate-700 align-top w-12">#</th>
                                       <th className="px-4 py-3 text-left font-semibold text-slate-700 align-top min-w-[200px]">
                                         Item
                                       </th>
                                       <th className="px-4 py-3 text-center font-semibold text-slate-700 align-top w-[100px]">
                                         Response
                                       </th>
-                                      {section.items.some(item => (item.checklistItemId?.responseType || 'YES_NO') !== 'TEXT') && (
-                                        <>
                                       <th className="px-4 py-3 text-left font-semibold text-slate-700 align-top min-w-[150px]">
                                         Remarks
                                       </th>
@@ -1040,35 +1127,23 @@ export function DepartmentLogs() {
                                       <th className="px-4 py-3 text-left font-semibold text-slate-700 align-top min-w-[150px]">
                                         Preventive
                                       </th>
-                                        </>
-                                      )}
                                     </tr>
                                   </thead>
                                   <tbody className="divide-y divide-slate-200">
                                     {section.items.map((item, itemIdx) => {
-                                      const responseType = item.checklistItemId?.responseType || 'YES_NO'
-                                      const isTextType = responseType === 'TEXT'
-                                      
                                       return (
                                       <tr key={itemIdx} className="hover:bg-slate-50 transition-colors">
+                                        <td className="px-4 py-3 align-top text-slate-500 font-medium">{itemIdx + 1}</td>
                                         <td className="px-4 py-3 align-top text-slate-800">
                                           <div className="font-medium leading-relaxed">
                                             {item.checklistItemId?.label || 'N/A'}
                                           </div>
                                         </td>
-                                          <td className={`px-4 py-3 align-top ${isTextType ? 'text-left' : 'text-center'}`} colSpan={isTextType ? 4 : 1}>
-                                            {isTextType ? (
-                                              <div className="break-words whitespace-pre-wrap bg-blue-50 border border-blue-200 rounded p-2 text-slate-700">
-                                                {item.responseValue || 'N/A'}
-                                              </div>
-                                            ) : (
+                                        <td className="px-4 py-3 align-top text-center">
                                           <span className="font-semibold text-slate-700">
                                             {item.responseValue || item.yesNoNa || 'N/A'}
                                           </span>
-                                            )}
                                         </td>
-                                          {!isTextType && (
-                                            <>
                                         <td className="px-4 py-3 align-top text-slate-600">
                                           <div className="break-words max-w-[200px]">
                                             {item.remarks && item.remarks !== '-' ? item.remarks : (
@@ -1090,8 +1165,6 @@ export function DepartmentLogs() {
                                             )}
                                           </div>
                                         </td>
-                                            </>
-                                          )}
                                       </tr>
                                       )
                                     })}
@@ -1100,9 +1173,7 @@ export function DepartmentLogs() {
                               </div>
                             </div>
                           ))
-                        ) : (
-                          <p className="text-slate-500 text-sm">No data available for this department.</p>
-                        )}
+                        })()}
                         
                         {/* Signature Section */}
                         <div className="mt-8 pt-6 border-t-2 border-slate-300">
@@ -1117,17 +1188,33 @@ export function DepartmentLogs() {
                                 </label>
                                 <div className="border-b-2 border-slate-400 pb-2 min-h-[30px]">
                                   <span className="text-slate-800 font-medium">
-                                    {deptData.submittedBy?.name || 'N/A'}
+                                    {typeof deptData.submittedBy === 'object' && deptData.submittedBy?.name
+                                      ? deptData.submittedBy.name
+                                      : typeof deptData.submittedBy === 'string'
+                                        ? deptData.submittedBy
+                                        : 'N/A'}
                                   </span>
                                 </div>
                               </div>
+                              {typeof deptData.submittedBy === 'object' && deptData.submittedBy?.designation && (
+                                <div>
+                                  <label className="block text-xs font-semibold text-slate-600 mb-2">
+                                    Designation
+                                  </label>
+                                  <div className="border-b-2 border-slate-400 pb-2 min-h-[30px]">
+                                    <span className="text-slate-800 font-medium">
+                                      {deptData.submittedBy.designation}
+                                    </span>
+                                  </div>
+                                </div>
+                              )}
                               <div>
                                 <label className="block text-xs font-semibold text-slate-600 mb-2">
                                   Signature
                                 </label>
                                 <div className="border-b-2 border-slate-400 pb-2 min-h-[30px] flex items-end">
                                   <span className="text-slate-600 italic text-sm">
-                                    {deptData.submittedBy?.name ? 'Signed' : 'Not available'}
+                                    {(typeof deptData.submittedBy === 'object' && deptData.submittedBy?.name) || (typeof deptData.submittedBy === 'string' && deptData.submittedBy) ? 'Signed' : 'Not available'}
                                   </span>
                                 </div>
                               </div>
@@ -1201,6 +1288,7 @@ export function DepartmentLogs() {
                 onClick={() => {
                   setPreviewModalOpen(false)
                   setSelectedUhid('')
+                  setSelectedDepartment(null)
                   setPreviewData(null)
                   setSelectedIPID(null)
                   setSelectedGroup(null)

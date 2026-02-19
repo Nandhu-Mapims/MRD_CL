@@ -800,7 +800,7 @@ export function SimpleFormBuilder() {
                                   }}
                                   className="w-full border border-slate-300 rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
                                 >
-                                  <option value="YES_NO">Yes or No</option>
+                                  <option value="YES_NO">Yes, No, or N/A</option>
                                   <option value="MULTI_SELECT">Multi Select - Options</option>
                                   <option value="TEXT">Text Box</option>
                                 </select>

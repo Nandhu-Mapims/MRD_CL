@@ -26,7 +26,8 @@
     "reset-all": "node src/scripts/resetAndSeedAll.js",
     "seed:detailed": "node src/scripts/seedDetailedData.js",
     "seed:multidept": "node src/scripts/seedMultiDeptSubmissions.js",
-    "seed:ward-unit": "node src/scripts/seedWardUnit.js"
+    "seed:ward-unit": "node src/scripts/seedWardUnit.js",
+    "correct-submission-depts": "node src/scripts/correctSubmissionDepartmentsFromForm.js"
   },
   "keywords": [],
   "author": "",

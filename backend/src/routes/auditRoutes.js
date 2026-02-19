@@ -12,6 +12,9 @@ router.get('/patient-checklists', auditController.getPatientChecklists);
 // Check for duplicate submission (before submitting)
 router.get('/check-duplicate', auth(['admin', 'auditor']), auditController.checkDuplicateSubmission);
 
+// Get existing patient name for UHID (UHID unique per patient - for form warning)
+router.get('/patient-by-uhid/:uhid', auth(['admin', 'auditor']), auditController.getPatientByUhid);
+
 // Get submissions by UHID (for patient report) - Must be before catch-all routes
 router.get('/uhid/:uhid', auth(['admin', 'auditor', 'chief']), auditController.getSubmissionsByUHID);
 

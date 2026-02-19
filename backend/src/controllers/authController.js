@@ -241,14 +241,47 @@ exports.listUsers = async (req, res) => {
 exports.updateUser = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, email, role, isActive, departmentId, designation } = req.body;
-    const update = { name, email, role, isActive, designation: designation?.trim() || '' };
+    const { name, email, role, isActive, departmentId, designation, password } = req.body;
+
+    const update = {
+      name: name?.trim(),
+      email: email?.toLowerCase().trim(),
+      role,
+      isActive,
+      designation: designation?.trim() || '',
+    };
+
+    if (update.email && !validateEmail(update.email)) {
+      return res.status(400).json({ message: 'Invalid email format' });
+    }
+
+    if (password && String(password).trim() !== '') {
+      const passwordValidation = validatePassword(password);
+      if (!passwordValidation.valid) {
+        return res.status(400).json({ message: passwordValidation.message });
+      }
+      update.passwordHash = await bcrypt.hash(password, 10);
+    }
+
+    if (update.email) {
+      const duplicate = await User.findOne({
+        email: update.email,
+        _id: { $ne: id },
+      }).select('_id');
+      if (duplicate) {
+        return res.status(400).json({ message: 'Email already registered' });
+      }
+    }
+
     if (role === 'admin') {
       update.department = undefined;
     } else if ((role === 'auditor' || role === 'chief') && departmentId) {
       update.department = departmentId;
+    } else if (role === 'auditor' || role === 'chief') {
+      update.department = undefined;
     }
-    const user = await User.findByIdAndUpdate(id, update, { new: true })
+
+    const user = await User.findByIdAndUpdate(id, update, { new: true, runValidators: true })
       .select('-passwordHash')
       .populate('department', 'name code');
     if (!user) return res.status(404).json({ message: 'User not found' });
@@ -266,6 +299,30 @@ exports.deleteUser = async (req, res) => {
     res.status(204).send();
   } catch (err) {
     console.error('deleteUser error', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Change password for logged-in user (admin, auditor, chief)
+exports.changePassword = async (req, res) => {
+  try {
+    const userId = req.user?.id || req.user?._id;
+    if (!userId) return res.status(401).json({ message: 'Not authenticated' });
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ message: 'Current password and new password are required' });
+    }
+    const user = await User.findById(userId).select('passwordHash');
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    const match = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!match) return res.status(401).json({ message: 'Current password is incorrect' });
+    const validation = validatePassword(newPassword);
+    if (!validation.valid) return res.status(400).json({ message: validation.message });
+    user.passwordHash = await bcrypt.hash(newPassword, 10);
+    await user.save();
+    res.json({ message: 'Password changed successfully' });
+  } catch (err) {
+    console.error('changePassword error', err);
     res.status(500).json({ message: 'Server error' });
   }
 };

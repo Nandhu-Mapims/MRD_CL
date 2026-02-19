@@ -8,6 +8,9 @@ const auth = require('../middleware/auth');
 // router.post('/register-admin', authController.registerAdmin); // REMOVED FOR SECURITY
 router.post('/login', authController.login);
 
+// Change password (admin, auditor, chief)
+router.patch('/change-password', auth(['admin', 'auditor', 'chief']), authController.changePassword);
+
 // Admin-only routes
 router.post('/users', auth('admin'), authController.registerUser);
 // Unit Chief dropdown: list chief users (admin, auditor, chief)

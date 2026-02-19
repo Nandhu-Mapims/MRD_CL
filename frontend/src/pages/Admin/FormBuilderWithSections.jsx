@@ -1,5 +1,10 @@
 import { useEffect, useState } from 'react'
 import { apiClient } from '../../api/client'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
+import { Separator } from '@/components/ui/separator'
 
 export function FormBuilderWithSections() {
   const [forms, setForms] = useState([])
@@ -252,7 +257,7 @@ export function FormBuilderWithSections() {
             Create forms with sections and add checklist items to each section
           </p>
         </div>
-        <button
+        <Button
           onClick={() => {
             setEditingForm(null)
             setFormData({
@@ -265,10 +270,10 @@ export function FormBuilderWithSections() {
             setShowFormModal(true)
             setSelectedForm(null)
           }}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg shadow-md transition-colors"
+          className="bg-indigo-600 hover:bg-indigo-700 text-white"
         >
           + Create New Form
-        </button>
+        </Button>
       </div>
 
       {/* Info Banner */}
@@ -352,9 +357,9 @@ export function FormBuilderWithSections() {
                   </svg>
                   <span className="text-sm font-semibold text-slate-800">Assigned Departments</span>
                   {selectedForm.departments && selectedForm.departments.length > 0 && (
-                    <span className="px-2 py-0.5 bg-blue-600 text-white text-xs font-medium rounded-full">
+                    <Badge className="px-2 py-0.5 bg-blue-600 text-white text-xs font-medium rounded-full">
                       {selectedForm.departments.length} department{selectedForm.departments.length !== 1 ? 's' : ''}
-                    </span>
+                    </Badge>
                   )}
                 </div>
                 <select
@@ -399,7 +404,7 @@ export function FormBuilderWithSections() {
                     const deptObj = typeof dept === 'object' ? dept : departments.find((d) => d._id === dept)
                     if (!deptObj) return null
                     return (
-                      <span
+                      <Badge
                         key={deptObj._id}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-semibold shadow-sm hover:bg-blue-700 transition-colors"
                       >
@@ -428,7 +433,7 @@ export function FormBuilderWithSections() {
                         >
                           ×
                         </button>
-                      </span>
+                      </Badge>
                     )
                   })}
                 </div>
@@ -446,12 +451,12 @@ export function FormBuilderWithSections() {
             </div>
 
             <div className="flex gap-2">
-              <button
+              <Button
                 onClick={() => setShowSectionModal(true)}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-sm"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white"
               >
                 + Add Section
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -517,18 +522,22 @@ export function FormBuilderWithSections() {
                                 </div>
                               </div>
                               <div className="flex gap-2">
-                                <button
+                                <Button
                                   onClick={() => handleEditItem(item)}
-                                  className="text-blue-600 hover:text-blue-700 text-sm px-2 py-1 rounded"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-blue-600 hover:text-blue-700"
                                 >
                                   Edit
-                                </button>
-                                <button
+                                </Button>
+                                <Button
                                   onClick={() => handleDeleteItem(item._id)}
-                                  className="text-blue-600 hover:text-blue-700 text-sm px-2 py-1 rounded"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-red-600 hover:text-red-700"
                                 >
                                   Delete
-                                </button>
+                                </Button>
                               </div>
                             </div>
                           </div>
@@ -540,7 +549,7 @@ export function FormBuilderWithSections() {
           </div>
 
           {/* Add Item Button */}
-          <button
+          <Button
             onClick={() => {
               setEditingItem(null)
               setItemData({
@@ -556,10 +565,10 @@ export function FormBuilderWithSections() {
               })
               setShowItemModal(true)
             }}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg shadow-md transition-colors"
+            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white"
           >
             + Add Checklist Item to Form
-          </button>
+          </Button>
         </div>
       )}
 
@@ -573,12 +582,11 @@ export function FormBuilderWithSections() {
             <form onSubmit={editingForm ? handleUpdateForm : handleCreateForm} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Form Name *</label>
-                <input
+                <Input
                   type="text"
                   required
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2"
                   placeholder="e.g., MAPIMS - Case Sheet Audit Checklist"
                 />
               </div>
@@ -656,13 +664,13 @@ export function FormBuilderWithSections() {
                 )}
               </div>
               <div className="flex gap-3 pt-4">
-                <button
+                <Button
                   type="submit"
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg"
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white"
                 >
                   {editingForm ? 'Update' : 'Create'} Form
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
                   onClick={() => {
                     setShowFormModal(false)
@@ -675,10 +683,10 @@ export function FormBuilderWithSections() {
                       sections: [],
                     })
                   }}
-                  className="bg-slate-200 hover:bg-slate-300 text-slate-700 px-6 py-2 rounded-lg"
+                  variant="outline"
                 >
                   Cancel
-                </button>
+                </Button>
               </div>
             </form>
           </div>
@@ -693,49 +701,46 @@ export function FormBuilderWithSections() {
             <form onSubmit={handleAddSection} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Section Name *</label>
-                <input
+                <Input
                   type="text"
                   required
                   value={sectionData.name}
                   onChange={(e) => setSectionData({ ...sectionData, name: e.target.value })}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2"
                   placeholder="e.g., ADMISSION SLIP, CONSENT, OT"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
-                <input
+                <Input
                   type="text"
                   value={sectionData.description}
                   onChange={(e) => setSectionData({ ...sectionData, description: e.target.value })}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Order</label>
-                <input
+                <Input
                   type="number"
                   value={sectionData.order}
                   onChange={(e) =>
                     setSectionData({ ...sectionData, order: parseInt(e.target.value) || 0 })
                   }
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2"
                 />
               </div>
               <div className="flex gap-3 pt-4">
-                <button
+                <Button
                   type="submit"
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg"
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white"
                 >
                   Add Section
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
                   onClick={() => setShowSectionModal(false)}
-                  className="bg-slate-200 hover:bg-slate-300 text-slate-700 px-6 py-2 rounded-lg"
+                  variant="outline"
                 >
                   Cancel
-                </button>
+                </Button>
               </div>
             </form>
           </div>
@@ -752,12 +757,11 @@ export function FormBuilderWithSections() {
             <form onSubmit={editingItem ? handleUpdateItem : handleCreateItem} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Item Label *</label>
-                <input
+                <Input
                   type="text"
                   required
                   value={itemData.label}
                   onChange={(e) => setItemData({ ...itemData, label: e.target.value })}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2"
                   placeholder="e.g., PATIENT NAME, DATE OF ADMISSION"
                 />
               </div>
@@ -816,7 +820,7 @@ export function FormBuilderWithSections() {
                   onChange={(e) => setItemData({ ...itemData, responseType: e.target.value })}
                   className="w-full border border-slate-300 rounded-lg px-3 py-2"
                 >
-                  <option value="YES_NO">Yes or No</option>
+                  <option value="YES_NO">Yes, No, or N/A</option>
                   <option value="MULTI_SELECT">Multi Select - Options</option>
                   <option value="TEXT">Text Box</option>
                 </select>
@@ -826,12 +830,11 @@ export function FormBuilderWithSections() {
                   <label className="block text-sm font-medium text-slate-700 mb-1">
                     Options (comma-separated) *
                   </label>
-                  <input
+                  <Input
                     type="text"
                     required={itemData.responseType === 'MULTI_SELECT'}
                     value={itemData.responseOptions || ''}
                     onChange={(e) => setItemData({ ...itemData, responseOptions: e.target.value })}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2"
                     placeholder="Option1, Option2, Option3"
                   />
                 </div>
@@ -850,32 +853,31 @@ export function FormBuilderWithSections() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Order</label>
-                <input
+                <Input
                   type="number"
                   value={itemData.order}
                   onChange={(e) =>
                     setItemData({ ...itemData, order: parseInt(e.target.value) || 0 })
                   }
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2"
                 />
               </div>
               <div className="flex gap-3 pt-4">
-                <button
+                <Button
                   type="submit"
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg"
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white"
                 >
                   {editingItem ? 'Update' : 'Create'} Item
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
                   onClick={() => {
                     setShowItemModal(false)
                     setEditingItem(null)
                   }}
-                  className="bg-slate-200 hover:bg-slate-300 text-slate-700 px-6 py-2 rounded-lg"
+                  variant="outline"
                 >
                   Cancel
-                </button>
+                </Button>
               </div>
             </form>
           </div>

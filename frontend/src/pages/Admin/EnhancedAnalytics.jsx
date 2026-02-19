@@ -298,13 +298,13 @@ export function EnhancedAnalytics() {
         <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-slate-200">
           <div className="bg-gradient-to-r from-indigo-700 to-purple-700 text-white px-6 py-4">
             <h3 className="text-lg font-bold">🏆 Department Performance Ranking</h3>
-            <p className="text-indigo-100 text-sm">Ranked by compliance rate</p>
+            <p className="text-indigo-100 text-sm">By form&apos;s assigned department · ranked by compliance rate</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-indigo-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-bold text-slate-700 uppercase">Rank</th>
+                  <th className="px-6 py-3 text-left text-xs font-bold text-slate-700 uppercase w-12">#</th>
                   <th className="px-6 py-3 text-left text-xs font-bold text-slate-700 uppercase">Department</th>
                   <th className="px-6 py-3 text-center text-xs font-bold text-slate-700 uppercase">Cases</th>
                   <th className="px-6 py-3 text-center text-xs font-bold text-slate-700 uppercase">Compliance Rate</th>

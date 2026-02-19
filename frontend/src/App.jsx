@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Layout } from './components/Layout'
 import { LoginPage } from './pages/LoginPage'
+import { ChangePasswordPage } from './pages/ChangePasswordPage'
 import { DepartmentManagement } from './pages/Admin/DepartmentManagement'
 import { FormBuilder } from './pages/Admin/FormBuilder'
 import { FormBuilderWithSections } from './pages/Admin/FormBuilderWithSections'
@@ -32,6 +33,14 @@ function App() {
       <Layout>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route
+            path="/change-password"
+            element={
+              <ProtectedRoute roles={['admin', 'auditor', 'chief']}>
+                <ChangePasswordPage />
+              </ProtectedRoute>
+            }
+          />
 
           <Route
             path="/admin/departments"

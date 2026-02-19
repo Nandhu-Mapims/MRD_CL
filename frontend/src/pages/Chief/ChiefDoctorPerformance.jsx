@@ -82,8 +82,15 @@ export function ChiefDoctorPerformance() {
 
   if (error) {
     return (
-      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-        <p className="text-red-700">{error}</p>
+      <div className="bg-red-50 border border-red-200 rounded-xl p-6 max-w-md">
+        <p className="text-red-700 font-medium">{error}</p>
+        <button
+          type="button"
+          onClick={() => { setError(''); loadPerformanceData() }}
+          className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700"
+        >
+          Retry
+        </button>
       </div>
     )
   }
@@ -120,9 +127,12 @@ export function ChiefDoctorPerformance() {
     <div className="space-y-6">
       {/* Header */}
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm px-5 py-4 sm:py-5">
-        <h1 className="text-2xl sm:text-3xl font-semibold text-slate-900">Auditor Performance Analytics</h1>
+        <h1 className="text-2xl sm:text-3xl font-semibold text-slate-900">Auditor Performance</h1>
         <p className="mt-1 text-sm text-slate-600">Track auditor productivity and documentation thoroughness</p>
-        <p className="text-xs text-slate-500 mt-1">Chief: {user?.name}</p>
+        <p className="mt-1 text-xs text-indigo-600 bg-indigo-50 rounded px-2 py-1 inline-block">
+          Performance of auditors who submitted forms with you as Unit Chief.
+        </p>
+        <p className="text-xs text-slate-500 mt-2">Logged in as: {user?.name}</p>
       </div>
 
       {/* Summary Stats */}
@@ -192,7 +202,8 @@ export function ChiefDoctorPerformance() {
         {/* Documentation Thoroughness Distribution */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
           <h3 className="text-lg font-semibold text-slate-800 mb-4">Documentation Thoroughness Distribution</h3>
-          <p className="text-xs text-slate-500 mb-2">% of NO responses that have remarks documented</p>
+          <p className="text-xs text-slate-500 mb-1">% of NO responses that have remarks documented</p>
+          <p className="text-xs text-slate-400 mb-2">Thoroughness = when they marked NO, how often they filled remarks</p>
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
               <Pie
@@ -309,8 +320,9 @@ export function ChiefDoctorPerformance() {
             <tbody>
               {sortedDoctors.length === 0 ? (
                 <tr>
-                  <td colSpan="10" className="p-8 text-center text-slate-600">
-                    No auditor performance data available yet.
+                  <td colSpan="10" className="p-8 text-center">
+                    <p className="text-slate-600 font-medium">No auditor performance data yet</p>
+                    <p className="text-slate-500 text-sm mt-1">This appears when auditors submit forms with your name as Unit Chief.</p>
                   </td>
                 </tr>
               ) : (

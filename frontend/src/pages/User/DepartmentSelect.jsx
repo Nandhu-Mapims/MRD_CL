@@ -1,30 +1,26 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { apiClient } from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 
 export function DepartmentSelect() {
   const { user } = useAuth()
-  const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    if (!user) {
+      setLoading(false)
+      return
+    }
     ;(async () => {
-      // Admin can see all departments
-      if (user?.role === 'admin') {
-        const data = await apiClient.get('/departments')
-        const clinicalDepts = data.filter(
-          (d) => d.isActive && d.code !== 'ANAE' && d.code !== 'NUS'
-        )
+      // Admin is redirected to /admin/dashboard by HomeRedirect; no need to fetch here
+      if (user.role === 'admin') {
         setLoading(false)
-        // For now, admin also needs to select, but we could auto-redirect to dashboard
         return
       }
 
       // Regular users will see forms in the navigation menu
       setLoading(false)
     })()
-  }, [user, navigate])
+  }, [user])
 
   // If regular user without department assignment, show message
   if ((user?.role === 'auditor' || user?.role === 'chief') && !user?.department) {

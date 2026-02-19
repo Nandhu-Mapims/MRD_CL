@@ -406,8 +406,8 @@ export function MultiDepartmentForm() {
                                     </label>
 
                                     {/* Response */}
-                                    <div className="flex gap-4 mb-3">
-                                      {['YES', 'NO'].map((option) => (
+                                    <div className="flex gap-4 mb-3 flex-wrap">
+                                      {['YES', 'NO', 'N/A'].map((option) => (
                                         <label
                                           key={option}
                                           className={`flex items-center gap-2 cursor-pointer ${
@@ -419,7 +419,7 @@ export function MultiDepartmentForm() {
                                             name={`response_${key}`}
                                             value={option}
                                             checked={
-                                              (answer.responseValue || answer.yesNoNa || '').toUpperCase() ===
+                                              (answer.responseValue || answer.yesNoNa || '').toUpperCase().replace(/^NA$/, 'N/A') ===
                                               option
                                             }
                                             onChange={(e) =>

@@ -262,7 +262,32 @@ function SubMenuItem({ to, icon, label, isActive }) {
 export function Layout({ children }) {
   const { user, logout } = useAuth()
   const location = useLocation()
+  const mainContentRef = useRef(null)
   const isAdmin = user?.role === 'admin'
+
+  // #region agent log
+  useEffect(() => {
+    if (!mainContentRef.current) return
+    const el = mainContentRef.current
+    const cs = getComputedStyle(el)
+    const bodyCs = getComputedStyle(document.body)
+    const htmlCs = getComputedStyle(document.documentElement)
+    const payload = {
+      location: 'Layout.jsx:main-content',
+      message: 'Layout main content computed styles',
+      data: {
+        mainContentTextAlign: cs.textAlign,
+        bodyTextAlign: bodyCs.textAlign,
+        htmlTextAlign: htmlCs.textAlign,
+        documentDir: document.documentElement.getAttribute('dir') || '(not set)',
+        pathname: location.pathname,
+      },
+      timestamp: Date.now(),
+      hypothesisId: 'H1-H5',
+    }
+    fetch('http://127.0.0.1:7242/ingest/d2807f7f-5428-4368-9347-b5373051ed00', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).catch(() => {})
+  }, [location.pathname])
+  // #endregion
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [configMenuOpen, setConfigMenuOpen] = useState(false)
   const [createFormsMenuOpen, setCreateFormsMenuOpen] = useState(false)
@@ -327,7 +352,7 @@ export function Layout({ children }) {
                 <img
                   src="/Logo-Checklist.png"
                   alt="Hospital Audit System"
-                  className="max-h-full max-w-full w-auto object-contain animate-logo-fade-in animate-logo-breathe animate-logo-glow group-hover:scale-105 transition-transform duration-300 origin-center"
+                  className="max-h-full max-w-full w-auto object-contain animate-logo-fade-in animate-logo-breathe animate-logo-glow group-hover:scale-105 transition-transform  origin-center"
                 />
               </span>
               <div className="hidden sm:block min-w-0">
@@ -542,6 +567,12 @@ export function Layout({ children }) {
                             label="User Manual"
                             isActive={isActive('/user-manual')}
                           />
+                          <SidebarMenuItem
+                            to="/change-password"
+                            icon="🔐"
+                            label="Change password"
+                            isActive={isActive('/change-password')}
+                          />
                         </div>
                       </>
                     ) : (
@@ -667,6 +698,12 @@ export function Layout({ children }) {
                             label="User Manual"
                             isActive={isActive('/user-manual')}
                           />
+                          <SidebarMenuItem
+                            to="/change-password"
+                            icon="🔐"
+                            label="Change password"
+                            isActive={isActive('/change-password')}
+                          />
                         </div>
                       </>
                     )}
@@ -719,8 +756,8 @@ export function Layout({ children }) {
         </>
 
         {/* Main Content */}
-        <main className={`flex-1 transition-all duration-300 ${user ? 'lg:ml-72' : ''}`}>
-          <div className="p-4 sm:p-6 md:p-8 max-w-[100rem] w-full mx-auto min-h-[calc(100vh-6rem)]">
+        <main className={`flex-1 min-w-0 overflow-auto transition-all duration-300 ${user ? 'lg:ml-72' : ''}`}>
+          <div ref={mainContentRef} className="p-4 sm:p-6 md:p-8 max-w-[100rem] w-full mx-auto min-h-[calc(100vh-6rem)] text-left min-w-0">
             {children}
           </div>
         </main>

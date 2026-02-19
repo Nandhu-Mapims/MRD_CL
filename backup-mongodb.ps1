@@ -1,72 +1,91 @@
-# MongoDB Backup Script - Creates/updates backup files in mongodb-backup-full
-# Requires: MongoDB tools (mongodump) installed and in PATH
-
 param(
-    [Parameter(Mandatory = $false)]
-    [string]$Host = $env:MONGO_HOST ?? "localhost",
-
-    [Parameter(Mandatory = $false)]
-    [string]$Port = $env:MONGO_PORT ?? "27017",
-
-    [Parameter(Mandatory = $false)]
-    [string]$Database = $env:MONGO_DATABASE ?? "mrd_audit",
-
-    [Parameter(Mandatory = $false)]
-    [string]$User = $env:MONGO_ROOT_USERNAME ?? "admin",
-
-    [Parameter(Mandatory = $false)]
-    [string]$Password = $env:MONGO_ROOT_PASSWORD ?? "",
-
-    [Parameter(Mandatory = $false)]
-    [string]$OutDir = "mongodb-backup-full"
+  [string]$MongoHost = $(if ($env:MONGO_HOST) { $env:MONGO_HOST } else { "localhost" }),
+  [int]$MongoPort = $(if ($env:MONGO_PORT) { [int]$env:MONGO_PORT } else { 27017 }),
+  [string]$MongoDatabase = $(if ($env:MONGO_DATABASE) { $env:MONGO_DATABASE } else { "MRD_CL" }),
+  [string]$MongoUser = $(if ($env:MONGO_USER) { $env:MONGO_USER } elseif ($env:MONGO_ROOT_USERNAME) { $env:MONGO_ROOT_USERNAME } else { "" }),
+  [string]$MongoPassword = $(if ($env:MONGO_PASSWORD) { $env:MONGO_PASSWORD } elseif ($env:MONGO_ROOT_PASSWORD) { $env:MONGO_ROOT_PASSWORD } else { "" }),
+  [string]$MongoAuthDb = $(if ($env:MONGO_AUTH_DB) { $env:MONGO_AUTH_DB } else { "admin" }),
+  [string]$OutDir = $(if ($env:OUT_DIR) { $env:OUT_DIR } else { "mongodb-backup-full" }),
+  [string]$MongodumpPath = ""
 )
 
 $ErrorActionPreference = "Stop"
 
-Write-Host "=========================================" -ForegroundColor Cyan
-Write-Host "MongoDB Backup (Update backup files)" -ForegroundColor Cyan
-Write-Host "=========================================" -ForegroundColor Cyan
+Write-Host "========================================="
+Write-Host "MongoDB Backup (Update backup files)"
+Write-Host "========================================="
+Write-Host ""
+Write-Host "Backup Configuration:"
+Write-Host "  Host: $MongoHost"
+Write-Host "  Port: $MongoPort"
+Write-Host "  Database: $MongoDatabase"
+Write-Host "  Output: $OutDir/$MongoDatabase"
 Write-Host ""
 
-$outPath = Join-Path (Get-Location) $OutDir
-if (-not (Test-Path $OutDir)) {
-    New-Item -ItemType Directory -Path $OutDir -Force | Out-Null
+$mongodumpCmd = Get-Command mongodump -ErrorAction SilentlyContinue
+$mongodumpExe = $null
+
+if ($mongodumpCmd) {
+  $mongodumpExe = $mongodumpCmd.Source
+} else {
+  $candidatePaths = @(
+    "C:\Program Files\MongoDB\Tools\100\bin\mongodump.exe",
+    "C:\Program Files (x86)\MongoDB\Tools\100\bin\mongodump.exe",
+    "C:\Program Files\MongoDB\Server\8.0\bin\mongodump.exe",
+    "C:\Program Files\MongoDB\Server\7.0\bin\mongodump.exe",
+    "C:\Program Files\MongoDB\Server\6.0\bin\mongodump.exe"
+  )
+
+  $mongodumpExe = $candidatePaths | Where-Object { Test-Path $_ } | Select-Object -First 1
 }
 
-Write-Host "Backup Configuration:" -ForegroundColor Cyan
-Write-Host "  Host: $Host" -ForegroundColor Gray
-Write-Host "  Port: $Port" -ForegroundColor Gray
-Write-Host "  Database: $Database" -ForegroundColor Gray
-Write-Host "  Output: $OutDir\$Database" -ForegroundColor Gray
-Write-Host ""
+if ($MongodumpPath -and (Test-Path $MongodumpPath)) {
+  $mongodumpExe = $MongodumpPath
+}
 
-$mongodumpArgs = @(
-    "--host", $Host,
-    "--port", $Port,
-    "--db", $Database,
-    "--out", $outPath
+if (-not $mongodumpExe) {
+  $searchRoots = @("C:\Program Files\MongoDB", "C:\Program Files (x86)\MongoDB")
+  foreach ($root in $searchRoots) {
+    if (Test-Path $root) {
+      $found = Get-ChildItem -Path $root -Filter "mongodump.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+      if ($found) {
+        $mongodumpExe = $found.FullName
+        break
+      }
+    }
+  }
+}
+
+if (-not $mongodumpExe) {
+  throw "mongodump command not found. Install MongoDB Database Tools and add to PATH, or run with -MongodumpPath."
+}
+
+Write-Host "Using mongodump: $mongodumpExe"
+
+if (-not (Test-Path $OutDir)) {
+  New-Item -ItemType Directory -Path $OutDir | Out-Null
+}
+
+$dumpArgs = @(
+  "--host", $MongoHost,
+  "--port", "$MongoPort",
+  "--db", $MongoDatabase,
+  "--out", $OutDir
 )
 
-if ($Password) {
-    $mongodumpArgs += @("--username", $User, "--password", $Password, "--authenticationDatabase", "admin")
+if ($MongoUser -and $MongoPassword) {
+  $dumpArgs += @(
+    "--username", $MongoUser,
+    "--password", $MongoPassword,
+    "--authenticationDatabase", $MongoAuthDb
+  )
 }
 
-Write-Host "Running mongodump..." -ForegroundColor Yellow
-try {
-    & mongodump @mongodumpArgs
-    if ($LASTEXITCODE -eq 0) {
-        Write-Host ""
-        Write-Host "=========================================" -ForegroundColor Cyan
-        Write-Host "Backup completed successfully" -ForegroundColor Green
-        Write-Host "=========================================" -ForegroundColor Cyan
-        Write-Host "  Location: $OutDir\$Database" -ForegroundColor Gray
-        Write-Host ""
-    } else {
-        Write-Host "Backup failed. Check MongoDB is running and credentials are correct." -ForegroundColor Red
-        exit 1
-    }
-} catch {
-    Write-Host "Error: $_" -ForegroundColor Red
-    Write-Host "Ensure mongodump is installed (MongoDB Database Tools)." -ForegroundColor Yellow
-    exit 1
-}
+& $mongodumpExe @dumpArgs
+
+Write-Host ""
+Write-Host "========================================="
+Write-Host "Backup completed successfully"
+Write-Host "========================================="
+Write-Host "  Location: $OutDir/$MongoDatabase"
+Write-Host ""

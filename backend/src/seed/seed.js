@@ -54,21 +54,9 @@ const HOD_NAMES = [
   { name: 'Dr. Divya Menon', deptCode: 'QUALITY' },
 ];
 
-// Auditor / department user names - one per department (clinical, MRD, Quality, etc.)
-const DEPARTMENT_AUDITORS = [
-  { name: 'Dr. Rama Krishna', deptCode: 'OG' },
-  { name: 'Dr. Siva Prasad', deptCode: 'GM' },
-  { name: 'Dr. Venkatesh', deptCode: 'ORTHO' },
-  { name: 'Dr. Lakshmi', deptCode: 'PED' },
-  { name: 'Dr. Ramesh', deptCode: 'OPHTHAL' },
-  { name: 'Dr. Anjali', deptCode: 'CS' },
-  { name: 'Dr. Mohan', deptCode: 'ENT' },
-  { name: 'Dr. Priya', deptCode: 'GS' },
-  { name: 'Dr. Kumar', deptCode: 'ANAE' },
-  { name: 'Dr. Geetha', deptCode: 'NUS' },
-  { name: 'Mr. Suresh Kumar', deptCode: 'MRD' },
-  { name: 'Ms. Meera Joseph', deptCode: 'QUALITY' },
-];
+// Auditors = MRD staff only (Medical Records Department); keep a small set for seed
+const MRD_STAFF_NAMES = ['Rajan Nair', 'Meera Joseph', 'Suresh Kumar'];
+const MRD_DESIGNATION = 'MRD Staff';
 
 // Sample patient names
 const FIRST_NAMES = [
@@ -101,7 +89,7 @@ const randomAddress = () => {
 };
 
 const generateUHID = (index) => `UHID${String(index).padStart(6, '0')}`;
-const generateIPID = (index) => `IPID${String(index).padStart(6, '0')}`;
+const generateIPID = (index) => `IP${String(index).padStart(4, '0')}`; // IP0001, IP0002, ... (unique per admission)
 
 const randomDiagnosis = () => {
   const diagnoses = [
@@ -173,42 +161,37 @@ const RUN = async () => {
     });
     console.log(`   ✅ Created admin: ${adminEmail}`);
 
-    // Department users (doctors) with specific names assigned to departments
+    // Auditors = MRD staff only; all in Medical Records Department (MRD)
+    const mrdDept = deptCodeMap.get('MRD');
     const doctorUsers = [];
-    const userMap = new Map(); // departmentId -> [users]
+    const userMap = new Map(); // departmentId -> [users] (used for submission submitter; MRD holds all auditors)
 
-    for (let i = 0; i < createdDepts.length; i++) {
-      const dept = createdDepts[i];
-      
-      // Find auditor/department user assigned to this department
-      const auditorInfo = DEPARTMENT_AUDITORS.find(d => d.deptCode === dept.code);
-      const auditorName = auditorInfo ? auditorInfo.name : `User ${dept.code}`;
+    if (mrdDept) {
+      const mrdAuditorUsers = [];
+      for (let i = 0; i < MRD_STAFF_NAMES.length; i++) {
+        const name = MRD_STAFF_NAMES[i];
+        const firstName = name.split(' ')[0].toLowerCase();
+        const auditorEmail = `${firstName}.mrd@hospital.com`;
+        const auditorPassword = `${firstName.charAt(0).toUpperCase()}${firstName.substring(1)}@123`;
+        const passwordHash = await bcrypt.hash(auditorPassword, 10);
 
-      // Generate email from first name (e.g., "Dr. Rama Krishna" -> "rama@hospital.com", "Mr. Suresh Kumar" -> "suresh.mrd@hospital.com")
-      const nameWithoutPrefix = auditorName.replace(/^(Dr\.|Mr\.|Ms\.)\s*/i, '').trim();
-      const firstName = nameWithoutPrefix.split(' ')[0].toLowerCase();
-      const emailLocal = dept.code === 'MRD' ? `${firstName}.mrd` : dept.code === 'QUALITY' ? `${firstName}.quality` : firstName;
-      const auditorEmail = `${emailLocal}@hospital.com`;
-      const auditorPassword = `${firstName.charAt(0).toUpperCase()}${firstName.substring(1)}@123`;
-      const passwordHash = await bcrypt.hash(auditorPassword, 10);
+        const user = await User.create({
+          name,
+          email: auditorEmail,
+          passwordHash,
+          role: 'auditor',
+          designation: MRD_DESIGNATION,
+          department: mrdDept._id,
+          isActive: true,
+        });
 
-      const user = await User.create({
-        name: auditorName,
-        email: auditorEmail,
-        passwordHash,
-        role: 'auditor',
-        department: dept._id,
-        isActive: true,
-      });
-
-      doctorUsers.push({ name: auditorName, dept: dept.name, email: auditorEmail, password: auditorPassword });
-
-      if (!userMap.has(dept._id.toString())) {
-        userMap.set(dept._id.toString(), []);
+        doctorUsers.push({ name, dept: mrdDept.name, email: auditorEmail, password: auditorPassword });
+        mrdAuditorUsers.push(user);
+        console.log(`   ✅ Created MRD auditor: ${name} (${auditorEmail}) - ${mrdDept.name}`);
       }
-      userMap.get(dept._id.toString()).push(user);
-
-      console.log(`   ✅ Created auditor: ${auditorName} (${auditorEmail}) for ${dept.name}`);
+      userMap.set(mrdDept._id.toString(), mrdAuditorUsers);
+    } else {
+      console.log('   ⚠️  MRD department not found; no auditor users created.');
     }
     console.log('');
 
@@ -248,6 +231,7 @@ const RUN = async () => {
         email: chiefEmail,
         passwordHash: chiefPasswordHash,
         role: 'chief',
+        designation: 'Doctor',
         department: chiefDept._id,
         isActive: true,
       });
@@ -289,6 +273,7 @@ const RUN = async () => {
         email: hodEmail,
         passwordHash: hodPasswordHash,
         role: 'chief', // HOD uses 'chief' role to access department logs and doctor performance
+        designation: 'Doctor',
         department: dept._id,
         isActive: true,
       });
@@ -430,7 +415,8 @@ const RUN = async () => {
     sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
     const today = new Date();
     
-    const numPatients = 50; // Increased from 30 to 50 for more data
+    const numPatients = 50; // 50 patients; each gets 2–5 admissions (IPIDs) per UHID
+    let ipidCounter = 1; // Global unique IPID index (IP0001, IP0002, ...)
     
     for (let i = 1; i <= numPatients; i++) {
       const firstName = FIRST_NAMES[Math.floor(Math.random() * FIRST_NAMES.length)];
@@ -453,8 +439,8 @@ const RUN = async () => {
       });
       patients.push(patient);
 
-      // Create 1-2 admissions per patient
-      const numAdmissions = Math.random() > 0.7 ? 2 : 1;
+      // Min 2, max 5 IPIDs (admissions) per UHID
+      const numAdmissions = 2 + Math.floor(Math.random() * 4);
       
       for (let j = 0; j < numAdmissions; j++) {
         const admissionDate = randomDate(sixMonthsAgo, today);
@@ -464,7 +450,10 @@ const RUN = async () => {
           : null;
         
         const dept = clinicalDepts[Math.floor(Math.random() * clinicalDepts.length)];
-        const ipid = generateIPID(admissions.length + 1);
+        const ipid = generateIPID(ipidCounter++);
+
+        const ward = WARDS[Math.floor(Math.random() * WARDS.length)];
+        const unitNo = UNITS[Math.floor(Math.random() * UNITS.length)];
 
         const admission = await Admission.create({
           ipid,
@@ -472,8 +461,8 @@ const RUN = async () => {
           uhid: patient.uhid,
           admissionDate,
           dischargeDate,
-          ward: WARDS[Math.floor(Math.random() * WARDS.length)],
-          unitNo: UNITS[Math.floor(Math.random() * UNITS.length)],
+          ward,
+          unitNo,
           admissionType: Math.random() > 0.5 ? 'Emergency' : 'Elective',
           status: isDischarged ? 'Discharged' : 'Admitted',
           department: dept._id,
@@ -517,12 +506,14 @@ const RUN = async () => {
     
     let submissionCount = 0;
     
+    const mrdDeptIdForSubmissions = mrdDept ? mrdDept._id.toString() : null;
+    const mrdAuditors = mrdDeptIdForSubmissions ? userMap.get(mrdDeptIdForSubmissions) : [];
+
     for (const admission of admissions) {
       const deptId = admission.department.toString();
       const dept = deptIdMap.get(deptId);
-      const users = userMap.get(deptId);
       
-      if (!users || users.length === 0) continue;
+      if (!mrdAuditors || mrdAuditors.length === 0) continue;
       
       // Find form for this department
       const form = formTemplates.find(f => 
@@ -534,8 +525,8 @@ const RUN = async () => {
       const items = checklistItemsByForm.get(form._id.toString());
       if (!items) continue;
       
-      // Select random user from department
-      const submittingUser = users[Math.floor(Math.random() * users.length)];
+      // MRD staff (auditors) submit for all departments
+      const submittingUser = mrdAuditors[Math.floor(Math.random() * mrdAuditors.length)];
       
       // Select random chief (prefer chief from same department if available)
       const deptChiefs = createdChiefs.filter(c => {
@@ -674,7 +665,7 @@ const RUN = async () => {
     console.log('   Please change all default passwords after first login!');
     console.log('\n📝 PASSWORD PATTERN:');
     console.log('   Admin:    TataTiago@2026');
-    console.log('   Doctors:  {FirstName}@123 (e.g., Rama@123, Siva@123)');
+    console.log('   Auditors: {FirstName}@123 (e.g., Rajan@123, Meera@123)');
     console.log('   Chiefs:   Chief{DEPT_CODE}@123 (e.g., ChiefOG@123)');
     console.log('   HODs:     HOD{DEPT_CODE}@123 (e.g., HODOG@123, HODGM@123)');
     console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');

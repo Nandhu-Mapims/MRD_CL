@@ -99,6 +99,9 @@ export function ChiefAnalytics() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Analytics</h1>
           <p className="mt-1 text-sm text-slate-500">Corrective & preventive actions – overview and trends</p>
+          <p className="mt-1 text-xs text-indigo-600 bg-indigo-50 rounded px-2 py-1 inline-block">
+            These numbers are for audits where you were selected as Unit Chief.
+          </p>
         </div>
         {data?.generatedAt && (
           <p className="text-xs text-slate-400">
@@ -110,9 +113,9 @@ export function ChiefAnalytics() {
       {/* KPI strip – clear numbers */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <KpiCard
-          label="Checklist items"
+          label="Checklist responses"
           value={s.totalSubmissions ?? 0}
-          sub="Total reviewed"
+          sub="Total (one per question answered)"
           accent="indigo"
         />
         <KpiCard
@@ -174,7 +177,10 @@ export function ChiefAnalytics() {
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
-              <div className="flex items-center justify-center h-full text-slate-400 text-sm">No activity in the last 7 days</div>
+              <div className="flex flex-col items-center justify-center h-full text-slate-400 text-sm gap-1">
+                <span>No activity in the last 7 days</span>
+                <span className="text-xs">Data will appear when auditors submit forms with you as Unit Chief.</span>
+              </div>
             )}
           </div>
         </div>
@@ -208,7 +214,10 @@ export function ChiefAnalytics() {
                 </PieChart>
               </ResponsiveContainer>
             ) : (
-              <div className="text-slate-400 text-sm">No responses yet</div>
+              <div className="flex flex-col items-center justify-center text-slate-400 text-sm gap-1">
+                <span>No responses yet</span>
+                <span className="text-xs">Data will appear when auditors submit with you as Unit Chief.</span>
+              </div>
             )}
           </div>
         </div>
@@ -217,8 +226,8 @@ export function ChiefAnalytics() {
       {/* By department – advanced table + bar */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-100">
-          <h2 className="text-base font-semibold text-slate-800">By department</h2>
-          <p className="text-xs text-slate-500 mt-0.5">Submissions and actions per department</p>
+          <h2 className="text-base font-semibold text-slate-800">By form&apos;s department</h2>
+          <p className="text-xs text-slate-500 mt-0.5">Submissions and actions per department the form is tagged to</p>
         </div>
         <div className="p-4">
           {byDept.length > 0 ? (
@@ -240,6 +249,7 @@ export function ChiefAnalytics() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-slate-200 text-slate-600 font-medium">
+                      <th className="text-left py-3 px-2 w-12">#</th>
                       <th className="text-left py-3 px-2">Department</th>
                       <th className="text-right py-3 px-2">Items</th>
                       <th className="text-right py-3 px-2">NO</th>
@@ -248,8 +258,9 @@ export function ChiefAnalytics() {
                     </tr>
                   </thead>
                   <tbody>
-                    {byDept.map((row) => (
+                    {byDept.map((row, idx) => (
                       <tr key={row.departmentName} className="border-b border-slate-100 hover:bg-slate-50">
+                        <td className="py-2.5 px-2 text-slate-500 font-medium">{idx + 1}</td>
                         <td className="py-2.5 px-2 font-medium text-slate-800">{row.departmentName}</td>
                         <td className="py-2.5 px-2 text-right text-slate-700">{row.totalSubmissions}</td>
                         <td className="py-2.5 px-2 text-right text-amber-700">{row.noCount}</td>
@@ -262,7 +273,10 @@ export function ChiefAnalytics() {
               </div>
             </>
           ) : (
-            <div className="py-12 text-center text-slate-500 text-sm">No department data yet</div>
+            <div className="py-12 text-center text-slate-500 text-sm">
+              <p>No department data yet</p>
+              <p className="text-xs mt-1">Data will appear when auditors submit forms with you as Unit Chief.</p>
+            </div>
           )}
         </div>
       </div>

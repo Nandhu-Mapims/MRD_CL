@@ -216,6 +216,7 @@ export function ChiefDoctorManagement() {
             <table className="w-full">
               <thead className="bg-slate-100 border-b border-slate-200">
                 <tr>
+                  <th className="text-left p-3 text-sm font-semibold text-slate-700 w-12">#</th>
                   <th className="text-left p-3 text-sm font-semibold text-slate-700">Order</th>
                   <th className="text-left p-3 text-sm font-semibold text-slate-700">Name</th>
                   <th className="text-left p-3 text-sm font-semibold text-slate-700">Designation</th>
@@ -225,8 +226,9 @@ export function ChiefDoctorManagement() {
                 </tr>
               </thead>
               <tbody>
-                {chiefDoctors.map((chief) => (
+                {chiefDoctors.map((chief, idx) => (
                   <tr key={chief._id} className="border-b border-slate-100 hover:bg-slate-50">
+                    <td className="p-3 text-slate-500 font-medium text-sm">{idx + 1}</td>
                     <td className="p-3 text-sm text-slate-600">{chief.order}</td>
                     <td className="p-3 text-sm font-medium text-slate-800">{chief.name}</td>
                     <td className="p-3 text-sm text-slate-600">{chief.designation || 'Unit Chief'}</td>

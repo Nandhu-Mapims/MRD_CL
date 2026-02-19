@@ -12,14 +12,15 @@ function sanitizeUriForLog(uri) {
 
 const connectDB = async (retries = 10, delay = 2000) => {
   const sanitized = sanitizeUriForLog(MONGO_URI);
-  console.log('Attempting to connect to MongoDB at', sanitized);
+  const dbName = (MONGO_URI.match(/\/([^/?]+)(\?|$)/) || [])[1] || '(unknown)';
+  console.log('Attempting to connect to MongoDB at', sanitized, '→ database:', dbName);
 
   for (let i = 0; i < retries; i++) {
     try {
       await mongoose.connect(MONGO_URI, {
         serverSelectionTimeoutMS: 5000,
       });
-      console.log('✅ MongoDB connected successfully');
+      console.log('✅ MongoDB connected successfully (database:', dbName + ')');
       return;
     } catch (err) {
       const errorMsg = err.message || err.toString();

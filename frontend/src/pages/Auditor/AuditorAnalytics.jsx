@@ -177,7 +177,7 @@ export function AuditorAnalytics() {
 
       {stats?.departmentDistribution && stats.departmentDistribution.length > 0 && (
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-          <h3 className="text-lg font-semibold text-slate-800 mb-4">Submissions by Department</h3>
+          <h3 className="text-lg font-semibold text-slate-800 mb-4">Submissions by department (form&apos;s assigned)</h3>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={stats.departmentDistribution}>
               <CartesianGrid strokeDasharray="3 3" />

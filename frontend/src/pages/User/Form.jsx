@@ -15,8 +15,13 @@ export function Form() {
   const [submitting, setSubmitting] = useState(false)
   const [message, setMessage] = useState('')
   const [uhid, setUhid] = useState('')
-  const [ipid, setIpid] = useState('')
+  const [ipid, setIpid] = useState('IP0001')
   const [patientName, setPatientName] = useState('')
+  const [loadingUhidLookup, setLoadingUhidLookup] = useState(false)
+  const [existingIpidMode, setExistingIpidMode] = useState(false)
+  const [existingIpidAdmissionUhid, setExistingIpidAdmissionUhid] = useState('') // UHID from admission when IPID was loaded
+  const [ipidExistsMessage, setIpidExistsMessage] = useState('')
+  const [loadingIpidLookup, setLoadingIpidLookup] = useState(false)
   const [ward, setWard] = useState('')
   const [unitNo, setUnitNo] = useState('')
   const [unitChief, setUnitChief] = useState('')
@@ -31,6 +36,10 @@ export function Form() {
   const [duplicateExists, setDuplicateExists] = useState(false)
   const [checkingDuplicate, setCheckingDuplicate] = useState(false)
   const [duplicateMessage, setDuplicateMessage] = useState('')
+  const [lastDuplicateSubmittedAt, setLastDuplicateSubmittedAt] = useState(null) // for 24h countdown
+  const [duplicateCountdown, setDuplicateCountdown] = useState('') // fallback text
+  const [countdownTimer, setCountdownTimer] = useState(null) // { h, m, s } remaining time, updates every second when in 24h cooldown
+  const [uhidNameMismatch, setUhidNameMismatch] = useState(null) // Set only on Submit when UHID exists with different patient name
   const [showRestoreDraftModal, setShowRestoreDraftModal] = useState(false)
   const [draftToRestore, setDraftToRestore] = useState(null)
   const [lastDraftSavedAt, setLastDraftSavedAt] = useState(null)
@@ -287,7 +296,9 @@ export function Form() {
                 const draft = JSON.parse(raw)
                 if (draft.formTemplateId === formTemplateId) {
                   setUhid(draft.uhid || '')
-                  setIpid(draft.ipid || '')
+                  const draftIpid = draft.ipid || ''
+                  const digits = draftIpid.replace(/^IP/i, '').replace(/\D/g, '')
+                  setIpid(draftIpid && draftIpid.toUpperCase().startsWith('IP') ? 'IP' + (digits || '0') : 'IP0001')
                   setPatientName(draft.patientName || '')
                   setWard(draft.ward || '')
                   setUnitNo(draft.unitNo || '')
@@ -362,37 +373,141 @@ export function Form() {
   }, [formTemplateId, user])
 
 
-  // Check for duplicate submission when UHID and IPID are entered
+  // Clear UHID name mismatch warning when user edits UHID or Patient Name (so they can correct and submit)
+  useEffect(() => {
+    if (uhidNameMismatch) setUhidNameMismatch(null)
+  }, [uhid, patientName])
+
+  // UHID onBlur: fetch patient name by UHID
+  const handleUhidBlur = async () => {
+    const trimmed = uhid.trim().toUpperCase()
+    if (!trimmed) return
+    setLoadingUhidLookup(true)
+    try {
+      const res = await apiClient.get(`/audits/patient-by-uhid/${encodeURIComponent(trimmed)}`)
+      if (res?.exists && res.patientName) setPatientName(res.patientName)
+    } catch (e) {
+      console.warn('UHID lookup failed', e)
+    } finally {
+      setLoadingUhidLookup(false)
+    }
+  }
+
+  // IPID: enforce "IP" prefix + digits only
+  const handleIpidChange = (e) => {
+    let raw = e.target.value.toUpperCase()
+    if (!raw.startsWith('IP')) raw = 'IP' + raw
+    const after = raw.replace(/^IP/, '')
+    const digits = after.replace(/\D/g, '')
+    setIpid(digits === '' ? 'IP' : 'IP' + digits)
+  }
+
+  // IPID valid = "IP" + at least one digit (e.g. IP0001)
+  const ipidInvalid = ipid.trim() !== '' && !/^IP\d+$/i.test(ipid.trim())
+  // IPID is globally unique: when loaded admission's UHID doesn't match form UHID, block submit
+  const ipidUhidMismatch = existingIpidMode && existingIpidAdmissionUhid && uhid.trim() !== '' && uhid.trim().toUpperCase() !== existingIpidAdmissionUhid
+
+  // IPID onBlur: if admission exists, fetch and lock patient/ward/unit fields; when UHID matches, show "IPID already exists for this UHID"
+  const handleIpidBlur = async () => {
+    const normalized = ipid.trim().toUpperCase()
+    if (!normalized || normalized === 'IP' || normalized === 'IP0') return
+    setLoadingIpidLookup(true)
+    setIpidExistsMessage('')
+    try {
+      const adm = await apiClient.get(`/admissions/ipid/${encodeURIComponent(normalized)}`)
+      if (adm) {
+        if (adm.patient?.patientName) setPatientName(adm.patient.patientName)
+        if (adm.ward) setWard(adm.ward)
+        if (adm.unitNo) setUnitNo(adm.unitNo)
+        const admissionUhid = (adm.uhid || adm.patient?.uhid || '').toString().trim().toUpperCase()
+        setExistingIpidAdmissionUhid(admissionUhid)
+        setExistingIpidMode(true)
+        const formUhid = uhid.trim().toUpperCase()
+        if (formUhid && admissionUhid && formUhid === admissionUhid) {
+          setIpidExistsMessage('IPID already exists for this UHID. Data loaded; fields are locked.')
+        } else {
+          setIpidExistsMessage('This IPID already exists. Data loaded. Enter a new IPID to fill a new admission.')
+        }
+      }
+    } catch (err) {
+      if (err.response?.status === 404) {
+        setExistingIpidMode(false)
+        setIpidExistsMessage('')
+        setExistingIpidAdmissionUhid('')
+      }
+    } finally {
+      setLoadingIpidLookup(false)
+    }
+  }
+
+  // When UHID changes and we're in existing-IPID mode, update message to "IPID already exists for this UHID" when they match
+  useEffect(() => {
+    if (!existingIpidMode || !existingIpidAdmissionUhid) return
+    const formUhid = uhid.trim().toUpperCase()
+    if (formUhid && formUhid === existingIpidAdmissionUhid) {
+      setIpidExistsMessage('IPID already exists for this UHID. Data loaded; fields are locked.')
+    } else if (formUhid && formUhid !== existingIpidAdmissionUhid) {
+      setIpidExistsMessage(`IPID is unique. This IPID is already used for UHID ${existingIpidAdmissionUhid}. Use that UHID only for this existing admission, or enter a new IPID.`)
+    } else {
+      setIpidExistsMessage('This IPID already exists. Data loaded. Enter a new IPID to fill a new admission.')
+    }
+  }, [existingIpidMode, existingIpidAdmissionUhid, uhid])
+
+  // Check for duplicate submission when UHID and IPID are entered (use same department as submit: form's department)
   useEffect(() => {
     const checkDuplicate = async () => {
-      // Only check if both UHID and IPID are provided and user has a department
-      if (!uhid.trim() || !ipid.trim() || !user?.department || loading) {
+      if (!uhid.trim() || !ipid.trim() || loading) {
         setDuplicateExists(false)
         setDuplicateMessage('')
+        setLastDuplicateSubmittedAt(null)
+        setDuplicateCountdown('')
+        setCountdownTimer(null)
         return
       }
 
-      let userDeptId = null
+      let departmentIdForCheck = null
       if (user?.department) {
-        userDeptId = typeof user.department === 'object' 
+        const userDeptId = typeof user.department === 'object' 
           ? (user.department.id || user.department._id) 
           : user.department
+        // Backend uses form's department when user's dept is not in form's departments (e.g. auditor MRD submitting OG form)
+        if (formTemplate?.departments?.length) {
+          const formDeptIds = formTemplate.departments.map((d) => (d && (d._id || d.id) ? String(d._id || d.id) : String(d)))
+          const userDeptStr = String(userDeptId)
+          departmentIdForCheck = formDeptIds.includes(userDeptStr) ? userDeptId : (formTemplate.departments[0]._id || formTemplate.departments[0].id || formTemplate.departments[0])
+        } else {
+          departmentIdForCheck = userDeptId
+        }
+      }
+      if (!user?.department && user?.role === 'admin' && formTemplate?.departments?.length) {
+        departmentIdForCheck = formTemplate.departments[0]._id || formTemplate.departments[0].id || formTemplate.departments[0]
       }
 
-      if (!userDeptId) {
+      if (!departmentIdForCheck) {
+        setDuplicateExists(false)
+        setDuplicateMessage('')
+        setLastDuplicateSubmittedAt(null)
+        setDuplicateCountdown('')
+        setCountdownTimer(null)
         return
       }
 
       setCheckingDuplicate(true)
       try {
-        const response = await apiClient.get(
-          `/audits/check-duplicate?uhid=${encodeURIComponent(uhid.trim().toUpperCase())}&ipid=${encodeURIComponent(ipid.trim().toUpperCase())}&departmentId=${encodeURIComponent(userDeptId)}`
-        )
+        const params = new URLSearchParams({
+          uhid: uhid.trim().toUpperCase(),
+          ipid: ipid.trim().toUpperCase(),
+          departmentId: departmentIdForCheck,
+        })
+        if (formTemplateId) params.set('formTemplateId', formTemplateId)
+        const response = await apiClient.get(`/audits/check-duplicate?${params.toString()}`)
         
         if (response.exists) {
           setDuplicateExists(true)
-          const submittedDate = response.submittedAt 
-            ? new Date(response.submittedAt).toLocaleString('en-GB', {
+          const submittedAt = response.submittedAt ? new Date(response.submittedAt) : null
+          setLastDuplicateSubmittedAt(submittedAt)
+          const submittedDate = submittedAt
+            ? submittedAt.toLocaleString('en-GB', {
                 day: '2-digit',
                 month: 'short',
                 year: 'numeric',
@@ -401,16 +516,26 @@ export function Form() {
               })
             : 'previously'
           const submittedBy = response.submittedBy?.name || 'another user'
-          setDuplicateMessage(`No Duplicate IPID: A checklist has already been submitted for this UHID (${uhid.trim().toUpperCase()}) and IPID (${ipid.trim().toUpperCase()}) by your department. Submitted by ${submittedBy} on ${submittedDate}. Only one submission is allowed per department for the same admission.`)
+          const baseMsg = response.message || 'For this same checklist, wait 24 hours from your last submission. You can submit a different checklist (another form/department) for this UHID+IPID at any time.'
+          setDuplicateMessage(
+            submittedAt
+              ? `${baseMsg} Last submitted by ${submittedBy} on ${submittedDate}.`
+              : baseMsg
+          )
         } else {
           setDuplicateExists(false)
           setDuplicateMessage('')
+          setLastDuplicateSubmittedAt(null)
+          setDuplicateCountdown('')
+          setCountdownTimer(null)
         }
       } catch (err) {
         console.error('Error checking duplicate:', err)
-        // Don't block form if check fails - let backend handle it on submit
         setDuplicateExists(false)
         setDuplicateMessage('')
+        setLastDuplicateSubmittedAt(null)
+        setDuplicateCountdown('')
+        setCountdownTimer(null)
       } finally {
         setCheckingDuplicate(false)
       }
@@ -422,12 +547,42 @@ export function Form() {
     }, 500) // Wait 500ms after user stops typing
 
     return () => clearTimeout(timeoutId)
-  }, [uhid, ipid, user, loading])
+  }, [uhid, ipid, user, loading, formTemplateId, formTemplate])
+
+  // 24h countdown: update every second when duplicate exists; when elapsed, allow submit again
+  useEffect(() => {
+    if (!duplicateExists || !lastDuplicateSubmittedAt) {
+      setDuplicateCountdown('')
+      setCountdownTimer(null)
+      return
+    }
+    const nextAllowedAt = new Date(lastDuplicateSubmittedAt.getTime() + 24 * 60 * 60 * 1000)
+    const update = () => {
+      const now = new Date()
+      const remainingMs = nextAllowedAt.getTime() - now.getTime()
+      if (remainingMs <= 0) {
+        setDuplicateCountdown('You can submit this checklist now.')
+        setCountdownTimer(null)
+        setDuplicateExists(false)
+        setLastDuplicateSubmittedAt(null)
+        setDuplicateMessage('')
+        return
+      }
+      const h = Math.floor(remainingMs / (1000 * 60 * 60))
+      const m = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60))
+      const s = Math.floor((remainingMs % (1000 * 60)) / 1000)
+      setCountdownTimer({ h, m, s })
+      setDuplicateCountdown(`Submit again in ${h}h ${m}m ${s}s`)
+    }
+    update()
+    const interval = setInterval(update, 1000)
+    return () => clearInterval(interval)
+  }, [duplicateExists, lastDuplicateSubmittedAt])
 
   // Reset form to new mode
   const resetToNewForm = () => {
     setUhid('')
-    setIpid('')
+    setIpid('IP0001')
     setPatientName('')
     setWard('')
     setUnitNo('')
@@ -435,6 +590,13 @@ export function Form() {
     setMessage('')
     setDuplicateExists(false)
     setDuplicateMessage('')
+    setLastDuplicateSubmittedAt(null)
+    setDuplicateCountdown('')
+    setCountdownTimer(null)
+    setUhidNameMismatch(null)
+    setExistingIpidMode(false)
+    setExistingIpidAdmissionUhid('')
+    setIpidExistsMessage('')
     clearDraft()
     const init = {}
     items.forEach((it) => {
@@ -459,7 +621,9 @@ export function Form() {
   const handleRestoreDraft = () => {
     if (!draftToRestore) return
     setUhid(draftToRestore.uhid || '')
-    setIpid(draftToRestore.ipid || '')
+    const draftIpid = draftToRestore.ipid || ''
+    const digits = draftIpid.replace(/^IP/i, '').replace(/\D/g, '')
+    setIpid(draftIpid && draftIpid.toUpperCase().startsWith('IP') ? (digits === '' ? 'IP' : 'IP' + digits) : draftIpid || 'IP0001')
     setPatientName(draftToRestore.patientName || '')
     setWard(draftToRestore.ward || '')
     setUnitNo(draftToRestore.unitNo || '')
@@ -473,6 +637,9 @@ export function Form() {
         : { yesNoNa: '', responseValue: '', remarks: '' }
     })
     setAnswers(merged)
+    setExistingIpidMode(false)
+    setExistingIpidAdmissionUhid('')
+    setIpidExistsMessage('')
     setDraftToRestore(null)
     setShowRestoreDraftModal(false)
   }
@@ -510,6 +677,11 @@ export function Form() {
       setMessage('Please enter IPID (In-Patient ID)')
       return
     }
+    // IPID must be "IP" followed by at least one digit (e.g. IP0001)
+    if (!/^IP\d+$/i.test(ipid.trim())) {
+      setMessage('IPID must be IP followed by numbers (e.g. IP0001)')
+      return
+    }
     if (!patientName.trim()) {
       setMessage('Please enter Patient Name')
       return
@@ -528,6 +700,26 @@ export function Form() {
       return
     }
 
+    // Check UHID vs patient name only when user clicks Submit (show warning only then)
+    setUhidNameMismatch(null)
+    setMessage('')
+    try {
+      const res = await apiClient.get(`/audits/patient-by-uhid/${encodeURIComponent(uhid.trim().toUpperCase())}`)
+      if (res.exists && res.patientName) {
+        const existing = (res.patientName || '').trim().toUpperCase()
+        const entered = patientName.trim().toUpperCase()
+        if (existing && entered && existing !== entered) {
+          setUhidNameMismatch({ existingName: res.patientName })
+          setMessage(
+            `This UHID is already registered with patient name "${res.patientName}". UHID is unique per patient — use the correct patient name or verify the UHID.`
+          )
+          return
+        }
+      }
+    } catch (err) {
+      console.warn('UHID patient check failed', err)
+    }
+
     // Get user department ID
     let userDeptId = null
     if (user?.department) {
@@ -541,14 +733,15 @@ export function Form() {
       return
     }
 
-    // Validate responses
+    // Validate responses (YES_NO can be stored in responseValue or yesNoNa)
     for (const it of items) {
       const answer = answers[it._id]
       const responseType = it.responseType || 'YES_NO'
+      const value = (answer?.responseValue || answer?.yesNoNa || '').toString().trim()
       
       // Validate mandatory items
       if (it.isMandatory) {
-        if (!answer?.responseValue || !answer.responseValue.trim()) {
+        if (!value) {
           setMessage(`Response is required for mandatory item: ${it.label}`)
           setSubmitting(false)
           return
@@ -556,7 +749,7 @@ export function Form() {
       }
       
       // Validate that remarks are provided when NO is selected (for YES_NO type)
-      if (responseType === 'YES_NO' && answer?.responseValue === 'NO' && (!answer?.remarks || !answer.remarks.trim())) {
+      if (responseType === 'YES_NO' && value.toUpperCase() === 'NO' && (!answer?.remarks || !String(answer.remarks || '').trim())) {
         setMessage(`Remarks are required when "NO" is selected for: ${it.label}`)
         setSubmitting(false)
         return
@@ -573,8 +766,15 @@ export function Form() {
     setSubmitting(true)
     setMessage('')
     try {
+      // Use form's department (form tag) for logs/reports; fallback to user's department
+      let departmentIdForSubmit = userDeptId
+      if (formTemplate?.departments?.length) {
+        const formDeptIds = formTemplate.departments.map((d) => d && (d._id || d.id) ? String(d._id || d.id) : String(d))
+        const userDeptStr = userDeptId ? String(userDeptId) : ''
+        departmentIdForSubmit = formDeptIds.includes(userDeptStr) ? userDeptId : (formTemplate.departments[0]._id || formTemplate.departments[0].id || formTemplate.departments[0])
+      }
       const payload = {
-        departmentId: userDeptId,
+        departmentId: departmentIdForSubmit,
         formTemplateId: formTemplateId,
         uhid: uhid.trim(),
         ipid: ipid.trim(),
@@ -599,8 +799,12 @@ export function Form() {
       resetToNewForm()
     } catch (err) {
       const errorMsg = err.response?.data?.message || 'Failed to submit form'
-      if (errorMsg.includes('No Duplicate IPID') || errorMsg.includes('already been submitted')) {
-        setMessage('Duplicate: A checklist has already been submitted for this UHID, IPID, and Department. Only one submission per admission per department is allowed.')
+      if (errorMsg.includes('wait 24 hours') || errorMsg.includes('same checklist form')) {
+        setMessage(errorMsg)
+      } else if (errorMsg.includes('No Duplicate IPID') || errorMsg.includes('already been submitted')) {
+        setMessage('For the same checklist form, please wait 24 hours from your last submission. You can submit a different form for this admission at any time.')
+      } else if (errorMsg.includes('UHID is already registered') || errorMsg.includes('unique per patient')) {
+        setMessage(errorMsg)
       } else if (errorMsg.includes('UHID already exists') || errorMsg.includes('duplicate')) {
         setMessage('This UHID already exists in the system. Please verify the UHID or contact admin.')
       } else {
@@ -782,7 +986,68 @@ export function Form() {
               <span className="text-xs font-normal text-slate-600 ml-2">(All fields are mandatory)</span>
             </h3>
           </div>
-          <div className="p-4">
+          <div className="px-4 pt-3">
+            {existingIpidMode && (
+              <div className="mb-4 p-3 bg-red-50 border-2 border-red-400 rounded-lg text-sm text-red-900 flex items-start gap-2">
+                <svg className="w-5 h-5 shrink-0 mt-0.5 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+                <div>
+                  <div className="font-semibold">
+                    {ipidUhidMismatch
+                      ? `IPID is unique. This IPID is already used for UHID ${existingIpidAdmissionUhid}. Use that UHID only for this existing admission, or enter a new IPID.`
+                      : 'This IPID already exists. Patient details are loaded and the fields below are locked.'}
+                  </div>
+                  {!ipidUhidMismatch && (
+                    <>
+                      <p className="text-xs mt-2 text-red-800 font-normal">
+                        With the same UHID+IPID you can submit a <strong>different checklist</strong> (another form/department) at any time. For this <strong>same checklist</strong>, you can submit again 24 hours after your last submission.
+                      </p>
+                      <div className="mt-3 pt-3 border-t border-red-300">
+                        <span className="text-xs font-semibold text-red-800 block mb-2">
+                          {countdownTimer ? 'Remaining time (live) until you can submit this checklist again:' : duplicateCountdown ? '24h wait:' : 'Same-checklist 24h timer:'}
+                        </span>
+                        {countdownTimer ? (
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="inline-flex flex-col items-center bg-red-200 rounded-lg px-3 py-1.5 min-w-[2.75rem]">
+                              <span className="text-base font-bold font-mono tabular-nums text-red-900">{String(countdownTimer.h).padStart(2, '0')}</span>
+                              <span className="text-[10px] uppercase text-red-700 font-semibold">hrs</span>
+                            </span>
+                            <span className="text-red-600 font-bold">:</span>
+                            <span className="inline-flex flex-col items-center bg-red-200 rounded-lg px-3 py-1.5 min-w-[2.75rem]">
+                              <span className="text-base font-bold font-mono tabular-nums text-red-900">{String(countdownTimer.m).padStart(2, '0')}</span>
+                              <span className="text-[10px] uppercase text-red-700 font-semibold">min</span>
+                            </span>
+                            <span className="text-red-600 font-bold">:</span>
+                            <span className="inline-flex flex-col items-center bg-red-200 rounded-lg px-3 py-1.5 min-w-[2.75rem]">
+                              <span className="text-base font-bold font-mono tabular-nums text-red-900">{String(countdownTimer.s).padStart(2, '0')}</span>
+                              <span className="text-[10px] uppercase text-red-700 font-semibold">sec</span>
+                            </span>
+                          </div>
+                        ) : checkingDuplicate ? (
+                          <p className="text-xs text-red-700">Checking...</p>
+                        ) : (
+                          <p className="text-xs font-semibold text-red-800">
+                            {duplicateCountdown || 'You can submit this checklist now (no submission in the last 24 hours).'}
+                          </p>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+            <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900 flex items-start gap-2">
+              <svg className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92z" clipRule="evenodd" />
+              </svg>
+              <div>
+                <span className="font-semibold">UHID is unique</span> (one per patient).{' '}
+                <span className="font-semibold">IPID is unique</span> (one per admission). The same UHID can have multiple IPIDs (multiple admissions). Same UHID+IPID can be used for different forms; for the same checklist form, wait 24 hours before submitting again.
+              </div>
+            </div>
+          </div>
+          <div className="p-4 pt-0">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <div className="space-y-1.5">
                 <label className="block text-xs font-semibold text-slate-700">
@@ -793,6 +1058,7 @@ export function Form() {
                   type="text"
                   value={uhid}
                   onChange={(e) => setUhid(e.target.value.toUpperCase())}
+                  onBlur={handleUhidBlur}
                   placeholder="Enter UHID from OP Card"
                   className={`w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all ${
                     duplicateExists ? 'border-red-500 bg-red-50' : 'border-slate-300 hover:border-slate-400'
@@ -800,6 +1066,12 @@ export function Form() {
                   required
                   disabled={duplicateExists}
                 />
+                {loadingUhidLookup && (
+                  <p className="text-xs text-indigo-600 mt-1 flex items-center gap-1">
+                    <span className="inline-block animate-spin rounded-full h-3 w-3 border-2 border-indigo-600 border-t-transparent" />
+                    Fetching patient name...
+                  </p>
+                )}
               </div>
               <div className="space-y-1.5">
                 <label className="block text-xs font-semibold text-slate-700">
@@ -809,29 +1081,83 @@ export function Form() {
                 <input
                   type="text"
                   value={ipid}
-                  onChange={(e) => setIpid(e.target.value.toUpperCase())}
-                  placeholder="Enter IPID from Admission Slip"
-                  className={`w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all ${
-                    duplicateExists ? 'border-red-500 bg-red-50' : 'border-slate-300 hover:border-slate-400'
+                  onChange={handleIpidChange}
+                  onBlur={handleIpidBlur}
+                  placeholder="IP + numbers (e.g. IP0001)"
+                  className={`w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all font-mono ${
+                    duplicateExists ? 'border-red-500 bg-red-50' : ipidInvalid ? 'border-amber-500 bg-amber-50' : 'border-slate-300 hover:border-slate-400'
                   }`}
                   required
+                  pattern="[iI][pP][0-9]+"
+                  title="IP followed by numbers (e.g. IP0001)"
                   disabled={duplicateExists}
+                  aria-invalid={ipidInvalid}
                 />
+                {ipidInvalid && (
+                  <p className="text-xs text-amber-700 mt-1">
+                    IPID must be IP followed by numbers (e.g. IP0001)
+                  </p>
+                )}
+                {loadingIpidLookup && (
+                  <p className="text-xs text-indigo-600 mt-1 flex items-center gap-1">
+                    <span className="inline-block animate-spin rounded-full h-3 w-3 border-2 border-indigo-600 border-t-transparent" />
+                    Checking IPID...
+                  </p>
+                )}
+                {ipidExistsMessage && (
+                  <div className={`mt-2 p-3 rounded-md text-xs ${ipidUhidMismatch ? 'bg-red-50 border-2 border-red-400 text-red-900' : 'bg-amber-50 border border-amber-300 text-amber-900'}`}>
+                    {ipidUhidMismatch && (
+                      <span className="font-semibold flex items-center gap-1 mb-1">
+                        <svg className="w-4 h-4 text-red-600 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                        </svg>
+                        IPID is unique
+                      </span>
+                    )}
+                    {ipidExistsMessage}
+                  </div>
+                )}
                 {checkingDuplicate && (
                   <div className="text-xs text-indigo-600 mt-1.5 flex items-center gap-2">
                     <span className="inline-block animate-spin rounded-full h-3 w-3 border-2 border-indigo-600 border-t-transparent"></span>
                     Checking for existing submission...
                   </div>
                 )}
-                {duplicateExists && duplicateMessage && (
+                {(duplicateExists || duplicateCountdown || countdownTimer) && (duplicateMessage || duplicateCountdown || countdownTimer) && (
                   <div className="mt-2 p-3 bg-red-50 border-2 border-red-300 rounded-md text-xs text-red-800">
                     <div className="font-bold mb-1 flex items-center gap-1">
                       <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                       </svg>
-                      Duplicate Submission Detected
+                      {duplicateExists ? 'Same checklist: wait 24 hours' : 'You can submit now'}
                     </div>
-                    <div className="leading-relaxed">{duplicateMessage}</div>
+                    {duplicateMessage && <div className="leading-relaxed">{duplicateMessage}</div>}
+                    {countdownTimer && (
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <span className="text-red-700 font-medium">Time remaining:</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="inline-flex flex-col items-center bg-red-200 rounded-lg px-3 py-1.5 min-w-[3rem]">
+                            <span className="text-lg font-bold font-mono tabular-nums text-red-900">{String(countdownTimer.h).padStart(2, '0')}</span>
+                            <span className="text-[10px] uppercase text-red-700 font-semibold">hrs</span>
+                          </span>
+                          <span className="text-red-600 font-bold">:</span>
+                          <span className="inline-flex flex-col items-center bg-red-200 rounded-lg px-3 py-1.5 min-w-[3rem]">
+                            <span className="text-lg font-bold font-mono tabular-nums text-red-900">{String(countdownTimer.m).padStart(2, '0')}</span>
+                            <span className="text-[10px] uppercase text-red-700 font-semibold">min</span>
+                          </span>
+                          <span className="text-red-600 font-bold">:</span>
+                          <span className="inline-flex flex-col items-center bg-red-200 rounded-lg px-3 py-1.5 min-w-[3rem]">
+                            <span className="text-lg font-bold font-mono tabular-nums text-red-900">{String(countdownTimer.s).padStart(2, '0')}</span>
+                            <span className="text-[10px] uppercase text-red-700 font-semibold">sec</span>
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                    {duplicateCountdown && !countdownTimer && (
+                      <div className="mt-2 font-mono font-semibold text-red-900 bg-red-100/80 rounded px-2 py-1 inline-block">
+                        {duplicateCountdown}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -839,16 +1165,29 @@ export function Form() {
                 <label className="block text-xs font-semibold text-slate-700">
                   Patient Name <span className="text-red-500">*</span>
                 </label>
+                {uhidNameMismatch && (
+                  <div className="mt-2 p-3 bg-amber-50 border-2 border-amber-300 rounded-md text-xs text-amber-900">
+                    <div className="font-bold mb-1 flex items-center gap-1">
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92z" clipRule="evenodd" />
+                      </svg>
+                      UHID already registered with a different patient name
+                    </div>
+                    <div className="leading-relaxed">
+                      This UHID is already in the system with patient name <strong>"{uhidNameMismatch.existingName}"</strong>. UHID is unique per patient. Use the correct name or verify the UHID.
+                    </div>
+                  </div>
+                )}
                 <input
                   type="text"
                   value={patientName}
                   onChange={(e) => setPatientName(e.target.value)}
                   className={`w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all ${
-                    duplicateExists ? 'border-red-500 bg-red-50' : 'border-slate-300 hover:border-slate-400'
-                  }`}
+                    duplicateExists || existingIpidMode ? 'border-red-500 bg-red-50' : 'border-slate-300 hover:border-slate-400'
+                  } ${existingIpidMode ? 'bg-slate-100' : ''}`}
                   placeholder="Enter Patient Name"
                   required
-                  disabled={duplicateExists}
+                  disabled={duplicateExists || existingIpidMode}
                 />
               </div>
               <div className="space-y-1.5">
@@ -859,10 +1198,10 @@ export function Form() {
                   value={ward}
                   onChange={(e) => setWard(e.target.value)}
                   className={`w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all ${
-                    duplicateExists ? 'border-red-500 bg-red-50' : 'border-slate-300 hover:border-slate-400'
-                  }`}
+                    duplicateExists || existingIpidMode ? 'border-red-500 bg-red-50' : 'border-slate-300 hover:border-slate-400'
+                  } ${existingIpidMode ? 'bg-slate-100' : ''}`}
                   required
-                  disabled={duplicateExists}
+                  disabled={duplicateExists || existingIpidMode}
                 >
                   <option value="">Select Ward</option>
                   {wards.map((w) => (
@@ -878,10 +1217,10 @@ export function Form() {
                   value={unitNo}
                   onChange={(e) => setUnitNo(e.target.value)}
                   className={`w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all ${
-                    duplicateExists ? 'border-red-500 bg-red-50' : 'border-slate-300 hover:border-slate-400'
-                  }`}
+                    duplicateExists || existingIpidMode ? 'border-red-500 bg-red-50' : 'border-slate-300 hover:border-slate-400'
+                  } ${existingIpidMode ? 'bg-slate-100' : ''}`}
                   required
-                  disabled={duplicateExists}
+                  disabled={duplicateExists || existingIpidMode}
                 >
                   <option value="">Select Unit No</option>
                   {units.map((u) => (
@@ -897,10 +1236,10 @@ export function Form() {
                   value={unitChief}
                   onChange={(e) => setUnitChief(e.target.value)}
                   className={`w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all ${
-                    duplicateExists ? 'border-red-500 bg-red-50' : 'border-slate-300 hover:border-slate-400'
-                  }`}
+                    duplicateExists || existingIpidMode ? 'border-red-500 bg-red-50' : 'border-slate-300 hover:border-slate-400'
+                  } ${existingIpidMode ? 'bg-slate-100' : ''}`}
                   required
-                  disabled={duplicateExists}
+                  disabled={duplicateExists || existingIpidMode}
                 >
                   <option value="">Select Unit Chief</option>
                   {chiefDoctors.map((chief) => (
@@ -941,8 +1280,9 @@ export function Form() {
                   <table className="w-full min-w-[640px]">
                     <thead className="bg-slate-100 border-b-2 border-slate-200">
                       <tr>
+                        <th className="text-left px-2 sm:px-4 py-2 sm:py-3 font-bold text-[10px] sm:text-xs text-slate-700 uppercase tracking-wide w-12">#</th>
                         <th className="text-left px-2 sm:px-4 py-2 sm:py-3 font-bold text-[10px] sm:text-xs text-slate-700 uppercase tracking-wide w-[35%]">Checklist Item</th>
-                        <th className="text-center px-2 sm:px-4 py-2 sm:py-3 font-bold text-[10px] sm:text-xs text-slate-700 uppercase tracking-wide w-[15%]">Response</th>
+                        <th className="text-center px-2 sm:px-4 py-2 sm:py-3 font-bold text-[10px] sm:text-xs text-slate-700 uppercase tracking-wide w-[15%] min-w-[150px]">Response</th>
                         <th className="text-left px-2 sm:px-4 py-2 sm:py-3 font-bold text-[10px] sm:text-xs text-slate-700 uppercase tracking-wide w-[25%]">Remarks</th>
                       </tr>
                     </thead>
@@ -956,6 +1296,7 @@ export function Form() {
                           
                           return (
                             <tr key={it._id} className={`hover:bg-blue-50 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}`}>
+                              <td className="px-2 sm:px-4 py-2 sm:py-3 align-top text-slate-500 font-medium">{idx + 1}</td>
                               <td className="px-2 sm:px-4 py-2 sm:py-3 align-top">
                                 <div className="font-semibold text-xs sm:text-sm text-slate-800 mb-1">{it.label}</div>
                                 <div className="flex items-center gap-2 flex-wrap">
@@ -1001,24 +1342,25 @@ export function Form() {
                                     ))}
                                   </select>
                                 ) : (
-                                  <div className="flex items-center justify-center gap-4">
-                                    {['YES', 'NO'].map((opt) => (
-                                      <label key={opt} className="flex items-center gap-2 cursor-pointer group">
+                                  <div className="flex items-center justify-center gap-3 flex-nowrap">
+                                    {['YES', 'NO', 'N/A'].map((opt) => (
+                                      <label key={opt} className="flex items-center gap-1.5 cursor-pointer group shrink-0">
                                         <input
                                           type="radio"
                                           name={`resp_${it._id}`}
                                           value={opt}
                                           checked={currentValue === opt}
                                           onChange={(e) => {
-                                            updateAnswer(it._id, 'responseValue', e.target.value)
-                                            updateAnswer(it._id, 'yesNoNa', e.target.value)
-                                            if (e.target.value === 'YES') {
+                                            const val = e.target.value
+                                            updateAnswer(it._id, 'responseValue', val)
+                                            updateAnswer(it._id, 'yesNoNa', val === 'YES' || val === 'NO' ? val : '')
+                                            if (val === 'YES' || val === 'N/A') {
                                               updateAnswer(it._id, 'remarks', '')
                                             }
                                           }}
                                           className="w-4 h-4 text-blue-600 border-2 border-slate-300 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                                         />
-                                        <span className="text-sm font-medium text-slate-700 group-hover:text-blue-600 transition-colors">{opt}</span>
+                                        <span className="text-sm font-medium text-slate-700 group-hover:text-blue-600 transition-colors whitespace-nowrap">{opt}</span>
                                       </label>
                                     ))}
                                   </div>
@@ -1037,7 +1379,7 @@ export function Form() {
                                         required
                                       />
                                     ) : (
-                                      <span className="text-xs text-slate-400 italic">N/A</span>
+                                      <span className="text-xs text-slate-400 italic">—</span>
                                     )}
                                   </td>
                                 </>
@@ -1064,7 +1406,7 @@ export function Form() {
             </button>
             <button
               type="submit"
-              disabled={submitting || duplicateExists || checkingDuplicate}
+              disabled={submitting || duplicateExists || !!uhidNameMismatch || checkingDuplicate || ipidUhidMismatch}
               className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-semibold px-8 py-2.5 rounded-lg transition-all disabled:opacity-60 disabled:cursor-not-allowed shadow-sm text-sm flex items-center gap-2"
             >
               {submitting ? (
@@ -1078,6 +1420,13 @@ export function Form() {
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
                   </svg>
                   Duplicate - Cannot Submit
+                </>
+              ) : uhidNameMismatch ? (
+                <>
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92z" clipRule="evenodd" />
+                  </svg>
+                  UHID name mismatch — correct patient name or UHID
                 </>
               ) : (
                 <>

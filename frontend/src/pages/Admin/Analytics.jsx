@@ -452,10 +452,10 @@ export function Analytics() {
         <div className="bg-white rounded-xl shadow-sm p-5 sm:p-6 border border-slate-200">
           <div className="mb-4 sm:mb-5">
             <h3 className="text-base sm:text-lg font-semibold text-slate-900 mb-1">
-              Department Performance
+              Department performance (by form&apos;s assigned department)
             </h3>
             <p className="text-xs sm:text-sm text-slate-500">
-              Compliance rates by department
+              Compliance by form&apos;s department
             </p>
           </div>
           <ResponsiveContainer width="100%" height={350}>

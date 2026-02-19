@@ -1,6 +1,7 @@
 const AuditSubmission = require('../models/AuditSubmission');
 const Patient = require('../models/Patient');
 const Admission = require('../models/Admission');
+const FormTemplate = require('../models/FormTemplate');
 
 // User submit audit
 exports.submitAudit = async (req, res) => {
@@ -24,7 +25,7 @@ exports.submitAudit = async (req, res) => {
     const normalizedUHID = uhid.trim().toUpperCase();
     const normalizedPatientName = patientName.trim();
 
-    // Find or create patient (UHID is lifetime unique)
+    // Find or create patient (UHID is lifetime unique - one UHID = one patient)
     let patient = await Patient.findOne({ uhid: normalizedUHID });
     if (!patient) {
       patient = await Patient.create({
@@ -32,9 +33,17 @@ exports.submitAudit = async (req, res) => {
         patientName: normalizedPatientName,
       });
     } else {
-      // Update patient name if changed
-      if (patient.patientName !== normalizedPatientName) {
-        patient.patientName = normalizedPatientName;
+      // UHID already exists: do NOT allow a different patient name (UHID is unique per patient)
+      const existingName = (patient.patientName || '').trim();
+      const newName = normalizedPatientName;
+      if (existingName && newName && existingName.toUpperCase() !== newName.toUpperCase()) {
+        return res.status(400).json({
+          message: `This UHID is already registered with patient name "${existingName}". You entered "${newName}". UHID is unique per patient — please use the correct patient name or verify the UHID.`,
+        });
+      }
+      // Same name or existing name was empty: allow (optionally update if empty)
+      if (!existingName && newName) {
+        patient.patientName = newName;
         await patient.save();
       }
     }
@@ -69,10 +78,12 @@ exports.submitAudit = async (req, res) => {
         department: departmentId,
       });
     } else {
-      // Use existing admission
-      // Verify UHID matches
+      // Use existing admission - IPID is globally unique, one IPID = one patient (UHID)
       if (admission.uhid !== normalizedUHID) {
-        return res.status(400).json({ message: 'IPID belongs to a different patient. Please verify the UHID and IPID.' });
+        return res.status(400).json({
+          message: `IPID is unique. This IPID is already registered for UHID ${admission.uhid || 'N/A'}. Use that UHID or enter a new IPID for a new admission.`,
+          existingUhid: admission.uhid,
+        });
       }
       
       // Update ward/unit if changed
@@ -83,25 +94,46 @@ exports.submitAudit = async (req, res) => {
       }
     }
 
-    // Audit date and time for uniqueness: Dept+UHID+IPID+Date+Time (one entry per date+time)
+    // Analytics "by department" = form's department (the department the form is assigned to), not submitter's department
+    let departmentForSubmission = departmentId;
+    if (formTemplateId) {
+      const form = await FormTemplate.findById(formTemplateId).select('departments').lean();
+      if (form?.departments?.length) {
+        const bodyDeptStr = (departmentId && departmentId.toString) ? departmentId.toString() : String(departmentId);
+        const formDeptIds = form.departments.map((d) => (d && d._id ? d._id.toString() : d.toString()));
+        if (formDeptIds.includes(bodyDeptStr)) {
+          departmentForSubmission = departmentId;
+        } else {
+          departmentForSubmission = form.departments[0]._id || form.departments[0];
+        }
+      }
+    }
+
+    // Audit date and time (for record)
     const now = new Date();
     const auditDateStr = auditDateInput && typeof auditDateInput === 'string' ? auditDateInput.trim() : null;
     const auditTimeStr = auditTimeInput && typeof auditTimeInput === 'string' ? auditTimeInput.trim() : null;
     const auditDate = auditDateStr ? new Date(auditDateStr + 'T00:00:00.000Z') : new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
     const auditTime = auditTimeStr || now.getUTCHours().toString().padStart(2, '0') + ':' + now.getUTCMinutes().toString().padStart(2, '0');
 
-    // Check for duplicate: same UHID, IPID, Department, Date, and Time
-    const existingSubmission = await AuditSubmission.findOne({
+    // Duplicate rule: same UHID+IPID can be used for different forms. For the SAME checklist form (same form + dept), wait 24 hours.
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const duplicateQuery = {
       uhid: normalizedUHID,
       ipid: normalizedIPID,
-      department: departmentId,
-      auditDate,
-      auditTime,
-    });
+      department: departmentForSubmission,
+      submittedAt: { $gte: twentyFourHoursAgo },
+    };
+    if (formTemplateId) duplicateQuery.formTemplate = formTemplateId;
+
+    const existingSubmission = await AuditSubmission.findOne(duplicateQuery)
+      .sort({ submittedAt: -1 })
+      .populate('submittedBy', 'name email')
+      .lean();
 
     if (existingSubmission) {
       return res.status(400).json({
-        message: 'Duplicate: A checklist has already been submitted for this UHID, IPID, Department, Date and Time. Use a different date/time for another audit.',
+        message: 'For the same checklist form, please wait 24 hours from your last submission. You can submit a different form for this admission at any time.',
         existingSubmission: {
           submittedAt: existingSubmission.submittedAt,
           submittedBy: existingSubmission.submittedBy,
@@ -127,7 +159,7 @@ exports.submitAudit = async (req, res) => {
       const rawVal = (it.responseValue || it.yesNoNa || '').toString().trim().toUpperCase();
       const yesNoNaForSchema = rawVal === 'YES' || rawVal === 'NO' ? rawVal : undefined;
       return {
-        department: departmentId,
+        department: departmentForSubmission,
         formTemplate: formTemplateId || undefined,
         patient: patient._id,
         admission: admission._id,
@@ -471,12 +503,19 @@ exports.getSubmissionsByUHID = async (req, res) => {
       return res.status(404).json({ message: 'No submissions found for this UHID' });
     }
 
-    // Filter out submissions with invalid/null checklistItemId (items that were deleted)
-    submissions = submissions.filter(sub => sub.checklistItemId && sub.checklistItemId.label);
-
-    if (submissions.length === 0) {
-      return res.status(404).json({ message: 'No valid submissions found for this UHID (checklist items may have been deleted)' });
-    }
+    // Keep historical submissions even if checklist items were deleted.
+    // Provide a placeholder so old records are still visible in logs/checklist preview.
+    submissions = submissions.map((sub) => {
+      if (sub.checklistItemId && sub.checklistItemId.label) return sub;
+      const plain = sub.toObject ? sub.toObject() : sub;
+      plain.checklistItemId = {
+        _id: plain.checklistItemId?._id || plain.checklistItemId || null,
+        label: '[Deleted checklist item]',
+        section: 'General',
+        responseType: 'TEXT',
+      };
+      return plain;
+    });
 
     // Group by date + time + IPID (one audit session per date+time+IPID)
     const groupKey = (sub) => {
@@ -534,12 +573,19 @@ exports.getSubmissionsByIPID = async (req, res) => {
       return res.status(404).json({ message: 'No submissions found for this IPID' });
     }
 
-    // Filter out submissions with invalid/null checklistItemId (items that were deleted)
-    submissions = submissions.filter(sub => sub.checklistItemId && sub.checklistItemId.label);
-
-    if (submissions.length === 0) {
-      return res.status(404).json({ message: 'No valid submissions found for this IPID (checklist items may have been deleted)' });
-    }
+    // Keep historical submissions even if checklist items were deleted.
+    // Provide a placeholder so old records are still visible in logs/checklist preview.
+    submissions = submissions.map((sub) => {
+      if (sub.checklistItemId && sub.checklistItemId.label) return sub;
+      const plain = sub.toObject ? sub.toObject() : sub;
+      plain.checklistItemId = {
+        _id: plain.checklistItemId?._id || plain.checklistItemId || null,
+        label: '[Deleted checklist item]',
+        section: 'General',
+        responseType: 'TEXT',
+      };
+      return plain;
+    });
 
     res.json(submissions);
   } catch (err) {
@@ -548,10 +594,10 @@ exports.getSubmissionsByIPID = async (req, res) => {
   }
 };
 
-// Check if submission exists for UHID, IPID, Department, Date, and Time
+// Check if same form was submitted for this UHID+IPID+department within last 24 hours (different forms allowed)
 exports.checkDuplicateSubmission = async (req, res) => {
   try {
-    const { uhid, ipid, departmentId, auditDate: auditDateQuery, auditTime: auditTimeQuery } = req.query;
+    const { uhid, ipid, departmentId, formTemplateId } = req.query;
 
     if (!uhid || !ipid || !departmentId) {
       return res.status(400).json({ message: 'UHID, IPID, and Department ID are required' });
@@ -560,32 +606,25 @@ exports.checkDuplicateSubmission = async (req, res) => {
     const normalizedUHID = uhid.trim().toUpperCase();
     const normalizedIPID = ipid.trim().toUpperCase();
 
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const query = {
       uhid: normalizedUHID,
       ipid: normalizedIPID,
       department: departmentId,
+      submittedAt: { $gte: twentyFourHoursAgo },
     };
-
-    // Use server date/time when not provided (auto-fetch: same as submit will use)
-    const now = new Date();
-    const auditDate = auditDateQuery && auditTimeQuery
-      ? new Date(auditDateQuery.trim() + 'T00:00:00.000Z')
-      : new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
-    const auditTime = (auditDateQuery && auditTimeQuery)
-      ? auditTimeQuery.trim()
-      : (now.getUTCHours().toString().padStart(2, '0') + ':' + now.getUTCMinutes().toString().padStart(2, '0'));
-
-    query.auditDate = auditDate;
-    query.auditTime = auditTime;
+    if (formTemplateId) query.formTemplate = formTemplateId;
 
     const existingSubmission = await AuditSubmission.findOne(query)
+      .sort({ submittedAt: -1 })
       .populate('submittedBy', 'name email')
-      .select('submittedAt submittedBy auditDate auditTime');
+      .select('submittedAt submittedBy auditDate auditTime')
+      .lean();
 
     if (existingSubmission) {
       return res.json({
         exists: true,
-        message: 'A checklist has already been submitted for this UHID, IPID, Department, Date and Time.',
+        message: 'For the same checklist form, please wait 24 hours from your last submission. You can submit a different form for this admission at any time.',
         submittedAt: existingSubmission.submittedAt,
         submittedBy: existingSubmission.submittedBy,
         auditDate: existingSubmission.auditDate,
@@ -596,6 +635,28 @@ exports.checkDuplicateSubmission = async (req, res) => {
     return res.json({ exists: false });
   } catch (err) {
     console.error('checkDuplicateSubmission error', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+// Get existing patient name for UHID (for frontend warning: UHID is unique per patient)
+exports.getPatientByUhid = async (req, res) => {
+  try {
+    const { uhid } = req.params;
+    if (!uhid || !uhid.trim()) {
+      return res.status(400).json({ message: 'UHID is required' });
+    }
+    const normalizedUHID = uhid.trim().toUpperCase();
+    const patient = await Patient.findOne({ uhid: normalizedUHID }).select('patientName').lean();
+    if (!patient) {
+      return res.json({ exists: false, patientName: null });
+    }
+    return res.json({
+      exists: true,
+      patientName: patient.patientName || null,
+    });
+  } catch (err) {
+    console.error('getPatientByUhid error', err);
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 };

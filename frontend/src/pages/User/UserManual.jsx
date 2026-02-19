@@ -338,6 +338,7 @@ export function UserManual() {
             <table className="w-full text-sm border border-slate-200 rounded">
               <thead className="bg-slate-100">
                 <tr>
+                  <th className="text-left px-3 py-2 font-semibold text-slate-700 border-b w-12">#</th>
                   {item.value.headers.map((h, i) => (
                     <th key={i} className="text-left px-3 py-2 font-semibold text-slate-700 border-b">{h}</th>
                   ))}
@@ -346,6 +347,7 @@ export function UserManual() {
               <tbody>
                 {item.value.rows.map((row, i) => (
                   <tr key={i} className="border-b border-slate-100">
+                    <td className="px-3 py-2 text-slate-500 font-medium">{i + 1}</td>
                     {row.map((cell, j) => (
                       <td key={j} className="px-3 py-2 text-slate-600">{cell}</td>
                     ))}
